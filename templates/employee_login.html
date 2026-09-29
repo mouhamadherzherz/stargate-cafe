@@ -19,6 +19,22 @@
         <div class="absolute -right-12 -top-12 w-44 h-44 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
         <div class="absolute -left-12 -bottom-12 w-44 h-44 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
+        <!-- Live OTA Update Alert on Login Screen -->
+        <div id="loginOtaAlert" class="hidden bg-gradient-to-r from-amber-600 via-rose-600 to-purple-700 border border-amber-400/50 rounded-2xl p-3.5 text-center text-xs shadow-xl space-y-2 relative z-20 animate-pulse">
+            <div class="font-black text-amber-200 flex items-center justify-center gap-1.5 text-sm">
+                <span>🚀</span>
+                <span>يتوفر تحديث رسمي جديد للنظام (<span id="loginOtaVer">v4.4.0</span>)!</span>
+            </div>
+            <p class="text-[11px] text-slate-100" id="loginOtaMsg">إصلاح شامل للحسابات وتسكير اليومية والخزينة.</p>
+            <button onclick="startLoginOtaUpdate()" id="btnLoginOta" class="w-full bg-white hover:bg-amber-400 text-slate-950 font-black py-2 px-3 rounded-xl transition text-xs shadow-lg flex items-center justify-center gap-2 cursor-pointer transform active:scale-95">
+                <i class="fa-solid fa-cloud-arrow-down text-indigo-700 text-sm"></i>
+                <span>تحديث البرنامج الآن (بضغطة واحدة)</span>
+            </button>
+            <div id="loginOtaProgress" class="hidden text-amber-200 font-mono text-[11px] pt-1">
+                جاري التنزيل والتثبيت...
+            </div>
+        </div>
+
         <!-- Brand Header -->
         <div class="text-center space-y-2 relative z-10">
             <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 flex items-center justify-center text-white text-3xl font-black shadow-xl shadow-indigo-600/30 mx-auto">
@@ -120,6 +136,53 @@
             inp.value = inp.value.slice(0, -1);
             inp.focus();
         }
+
+        // Live OTA Check on Login Screen
+        function checkLoginOta() {
+            fetch('/api/check_update')
+                .then(r => r.json())
+                .then(d => {
+                    if (d && d.available) {
+                        const alertBox = document.getElementById('loginOtaAlert');
+                        const ver = document.getElementById('loginOtaVer');
+                        const msg = document.getElementById('loginOtaMsg');
+                        if (ver && d.version) ver.innerText = 'v' + d.version;
+                        if (msg && d.message) msg.innerText = d.message;
+                        if (alertBox) alertBox.classList.remove('hidden');
+                    }
+                })
+                .catch(() => {});
+        }
+
+        function startLoginOtaUpdate() {
+            const btn = document.getElementById('btnLoginOta');
+            const prog = document.getElementById('loginOtaProgress');
+            if (btn) btn.disabled = true;
+            if (prog) {
+                prog.classList.remove('hidden');
+                prog.innerText = 'جاري تنزيل ملفات التحديث الرسمية وتثبيتها...';
+            }
+
+            fetch('/api/do_update', { method: 'POST' })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.success) {
+                        if (prog) prog.innerText = '✅ تم بنجاح! سيُعاد تشغيل البرنامج تلقائياً خلال لحظات...';
+                        setTimeout(() => location.reload(), 4000);
+                    } else {
+                        alert('تعذر التحديث: ' + (res.error || 'خطأ'));
+                        if (btn) btn.disabled = false;
+                        if (prog) prog.classList.add('hidden');
+                    }
+                })
+                .catch(err => {
+                    alert('خطأ: ' + err);
+                    if (btn) btn.disabled = false;
+                    if (prog) prog.classList.add('hidden');
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', checkLoginOta);
     </script>
 </body>
 </html>
