@@ -42,43 +42,75 @@ def _version_tuple(v):
         return (0,)
 
 def _background_update_check():
-    """يتحقق من التحديثات في الخلفية عبر Firebase و GitHub."""
-    import ssl, urllib.request as ur, json as js
+    """يتحقق من التحديثات في الخلفية عبر Firebase و GitHub API (بدون cache)."""
+    import ssl, urllib.request as ur, json as js, base64 as b64
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    
-    endpoints = [
-        'https://stargate-experts-default-rtdb.firebaseio.com/cafe_updates/latest.json',
-        'https://raw.githubusercontent.com/mouhamadherzherz/stargate-cafe/master/cafe_version.json'
-    ]
+
+    current = _get_current_version()
     best_remote = None
     best_data = None
-    current = _get_current_version()
-    
-    for url in endpoints:
+
+    # --- Endpoint 1: Firebase (fastest, no cache) ---
+    try:
+        firebase_url = 'https://stargate-experts-default-rtdb.firebaseio.com/cafe_updates/latest.json'
+        req = ur.Request(firebase_url, headers={'User-Agent': 'StargateCafe-OTA/4.6', 'Cache-Control': 'no-cache'})
+        with ur.urlopen(req, timeout=6, context=ctx) as r:
+            data = js.loads(r.read().decode('utf-8-sig'))
+        remote = data.get('version', '0')
+        if remote and remote != 'null':
+            best_remote = remote
+            best_data = data
+    except Exception:
+        pass
+
+    # --- Endpoint 2: GitHub API (no CDN cache, always fresh) ---
+    try:
+        api_url = 'https://api.github.com/repos/mouhamadherzherz/stargate-cafe/contents/cafe_version.json'
+        req = ur.Request(api_url, headers={
+            'User-Agent': 'StargateCafe-OTA/4.6',
+            'Accept': 'application/vnd.github+json',
+            'Cache-Control': 'no-cache'
+        })
+        with ur.urlopen(req, timeout=8, context=ctx) as r:
+            api_resp = js.loads(r.read().decode('utf-8'))
+        # Decode base64 content from GitHub API response
+        raw_content = b64.b64decode(api_resp.get('content', '').replace('\n', '')).decode('utf-8-sig')
+        data = js.loads(raw_content)
+        remote = data.get('version', '0')
+        if not best_remote or _version_tuple(remote) > _version_tuple(best_remote):
+            best_remote = remote
+            best_data = data
+    except Exception:
+        pass
+
+    # --- Endpoint 3: Fallback raw CDN (may be cached) ---
+    if not best_remote:
         try:
-            req = ur.Request(url, headers={'User-Agent': 'StargateCafe-OTA/4.5'})
+            raw_url = 'https://raw.githubusercontent.com/mouhamadherzherz/stargate-cafe/master/cafe_version.json'
+            req = ur.Request(raw_url, headers={'User-Agent': 'StargateCafe-OTA/4.6'})
             with ur.urlopen(req, timeout=6, context=ctx) as r:
                 data = js.loads(r.read().decode('utf-8-sig'))
             remote = data.get('version', '0')
-            if best_remote is None or _version_tuple(remote) > _version_tuple(best_remote):
+            if remote:
                 best_remote = remote
                 best_data = data
         except Exception:
-            continue
+            pass
 
     if best_remote and _version_tuple(best_remote) > _version_tuple(current):
         _update_cache.update({
             'checked': True, 'available': True,
             'version': best_remote,
             'download_url': best_data.get('download_url', ''),
+            'changelog': best_data.get('changelog', ''),
             'message': f'يوجد تحديث رسمي جديد v{best_remote} (حالياً v{current}) - إصلاح الحسابات والخزينة.'
         })
     elif best_remote:
         _update_cache.update({'checked': True, 'available': False, 'version': current, 'message': f'البرنامج محدّث لآخر إصدار (v{current})'})
     else:
-        _update_cache.update({'checked': True, 'available': False, 'message': 'تعذر الاتصال بخادم التحديثات'})
+        _update_cache.update({'checked': True, 'available': False, 'message': 'تعذّر الاتصال بخادم التحديثات'})
 
 def _periodic_update_checker():
     import time
