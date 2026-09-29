@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <title>تسجيل دخول الموظف - {{ company_name or 'STARGATE CAFE' }}</title>
+    
+    <script src="{{ url_for('static', filename='js/tailwindcss.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.min.css') }}">
+    
+    <style>
+        body { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4 selection:bg-amber-500 selection:text-slate-950">
+
+    <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 relative overflow-hidden">
+        <div class="absolute -right-12 -top-12 w-44 h-44 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -left-12 -bottom-12 w-44 h-44 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <!-- Brand Header -->
+        <div class="text-center space-y-2 relative z-10">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 flex items-center justify-center text-white text-3xl font-black shadow-xl shadow-indigo-600/30 mx-auto">
+                ☕
+            </div>
+            <h1 class="text-xl font-black text-white tracking-wider flex items-center justify-center gap-1.5 pt-1">
+                <span class="text-amber-400">⚡</span> {{ company_name or 'STARGATE CAFE' }}
+            </h1>
+            <p class="text-xs text-slate-400 font-medium">تسجيل الدخول وبدء وردية الكاشير والمبيعات</p>
+        </div>
+
+                <!-- Shift Handover Notice if coming from closed shift -->
+        {% if session.get('handover_prev_employee') %}
+        <div class="bg-emerald-950/90 border border-emerald-500/50 p-3.5 rounded-2xl text-center space-y-1 animate-pulse">
+            <div class="text-xs text-emerald-300 font-black flex items-center justify-center gap-1.5">
+                <span>✅</span> تم تسليم وردية [{{ session.get('handover_prev_employee') }}] بنجاح
+            </div>
+            <div class="text-[11px] text-emerald-200/90 font-mono">
+                كاش الصندوق المسلّم: {{ session.get('handover_actual_cash', 0)|format_currency }} ل.ل {{ session.get('handover_diff_note', '') }}
+            </div>
+            <div class="text-[10px] text-slate-400 pt-0.5">
+                يرجى من الموظف المستلم إدخال رمز PIN لبدء الوردية الجديدة
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="p-3 rounded-2xl text-xs font-bold text-center border {% if category == 'danger' %}bg-rose-950/80 text-rose-300 border-rose-800{% else %}bg-amber-950/80 text-amber-300 border-amber-800{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Quick PIN Form with Numpad -->
+        <form method="POST" action="{{ url_for('employee_login') }}" class="space-y-4 relative z-10" id="loginForm">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5 text-center">أدخل رمز الدخول السريع (PIN)</label>
+                <div class="relative">
+                    <input type="password" name="pin" id="pinDisplay" autofocus autocomplete="off" required placeholder="••••" maxlength="8"
+                           class="w-full bg-slate-950 border-2 border-slate-700 focus:border-indigo-500 text-white text-center text-2xl font-mono tracking-widest py-3 rounded-2xl focus:outline-none transition">
+                    <button type="button" onclick="clearPin()" class="absolute left-3 top-3.5 text-slate-400 hover:text-white text-xs font-bold px-2 py-0.5 rounded-lg bg-slate-800 transition">
+                        مسح
+                    </button>
+                </div>
+            </div>
+
+            <!-- On-screen Quick Numpad -->
+            <div class="grid grid-cols-3 gap-2 pt-1 max-w-[280px] mx-auto">
+                {% for n in [1,2,3,4,5,6,7,8,9] %}
+                <button type="button" onclick="appendPin('{{ n }}')" class="h-12 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-indigo-500/50 text-white font-black text-lg font-mono transition active:scale-95 shadow-sm">
+                    {{ n }}
+                </button>
+                {% endfor %}
+                <button type="button" onclick="clearPin()" class="h-12 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-rose-400 font-bold text-xs transition active:scale-95">
+                    C
+                </button>
+                <button type="button" onclick="appendPin('0')" class="h-12 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-indigo-500/50 text-white font-black text-lg font-mono transition active:scale-95 shadow-sm">
+                    0
+                </button>
+                <button type="button" onclick="backspacePin()" class="h-12 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-400 font-bold text-xs transition active:scale-95">
+                    ⌫
+                </button>
+            </div>
+
+            <div class="pt-2">
+                <button type="submit" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black py-3.5 rounded-2xl text-sm transition shadow-lg shadow-indigo-600/30 active:scale-95 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    <span>فتح الوردية والدخول للكاشير</span>
+                </button>
+            </div>
+        </form>
+
+        <!-- Footer link to Admin Login -->
+        <div class="text-center pt-2 border-t border-slate-800">
+            <a href="{{ url_for('admin_login') }}" class="text-xs text-purple-400 hover:text-purple-300 font-bold transition flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span>تسجيل دخول الإدارة والحسابات</span>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        function appendPin(num) {
+            const inp = document.getElementById('pinDisplay');
+            if (inp.value.length < 8) {
+                inp.value += num;
+            }
+        }
+        function clearPin() {
+            document.getElementById('pinDisplay').value = '';
+            document.getElementById('pinDisplay').focus();
+        }
+        function backspacePin() {
+            const inp = document.getElementById('pinDisplay');
+            inp.value = inp.value.slice(0, -1);
+            inp.focus();
+        }
+    </script>
+</body>
+</html>

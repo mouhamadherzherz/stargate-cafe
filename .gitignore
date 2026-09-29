@@ -1,0 +1,26 @@
+# Database & sensitive data
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+STARGATE_STARTUP.log
+*.log
+
+# Backups
+Safe_Backups/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Build artifacts (PyInstaller)
+_internal/
+build/
+dist/
+
+# OS files
+Thumbs.db
+.DS_Store

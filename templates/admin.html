@@ -1,0 +1,1774 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+
+    <!-- Top Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 p-5 rounded-3xl border border-slate-800 shadow-lg">
+        <div class="flex items-center gap-3.5">
+            <div class="w-12 h-12 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center text-2xl font-black shadow-lg shadow-amber-500/20">
+                👑
+            </div>
+            <div>
+                <h2 class="text-lg font-black text-white">لوحة الإدارة والحسابات المركزية</h2>
+                <p class="text-xs text-slate-400">متابعة الأرباح، تسجيل المصاريف، تعديل الأسعار، وسعر كبسة الكمبيوتر</p>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Date Filter -->
+            <form method="GET" action="{{ url_for('admin_panel') }}" class="flex items-center gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
+                
+<div style="display: flex; gap: 5px; align-items: center;">
+    <a href="?date={{ today_business_date }}" class="btn btn-sm btn-outline-primary" title="الوردية الحالية">📅 اليوم</a>
+    <a href="?date={{ yesterday_business_date }}" class="btn btn-sm btn-outline-secondary" title="الوردية السابقة">📅 أمس</a>
+    <input type="date" name="date" class="form-control" value="{{ target_date or selected_date }}" style="width: auto;">
+    <button type="submit" class="btn btn-primary">🔍 عرض</button>
+</div>
+
+            </form>
+
+            <button type="button" onclick="openModal('addExpenseModal')" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-1.5 shadow-sm">
+                <i class="fa-solid fa-minus-circle"></i>
+                <span>تسجيل مصروف 💸</span>
+            </button>
+
+            <button type="button" onclick="openModal('settingsModal')" class="bg-slate-800 hover:bg-slate-700 text-amber-400 font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-1.5 border border-slate-700">
+                <i class="fa-solid fa-gear"></i>
+                <span>سعر GAMING والإعدادات ⚙️</span>
+            </button>
+
+            <button type="button" onclick="openModal('backupExportModal')" class="bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold px-3.5 py-2.5 rounded-2xl text-xs transition flex items-center gap-1.5 border border-cyan-500/40" title="النسخ الاحتياطي ونقل واستيراد وتصدير الداتا">
+                <i class="fa-solid fa-database"></i>
+                <span>النسخ والبيانات 💾</span>
+            </button>
+
+            <button type="button" onclick="openModal('changePasswordModal')" class="bg-slate-800 hover:bg-slate-700 text-purple-300 font-bold px-3.5 py-2.5 rounded-2xl text-xs transition flex items-center gap-1.5 border border-purple-500/40" title="تغيير كلمة سر الإدارة">
+                <i class="fa-solid fa-key"></i>
+                <span>تغيير كلمة السر 🔑</span>
+            </button>
+
+            <button type="button" onclick="openModal('factoryResetModal')" class="bg-rose-950/80 hover:bg-rose-900 text-rose-300 font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-1.5 border border-rose-800/80">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>ضبط المصنع ⚠️</span>
+            </button>
+
+            <a href="{{ url_for('admin_logout') }}" class="bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-rose-400 font-bold px-3.5 py-2.5 rounded-2xl text-xs transition flex items-center gap-1.5 border border-slate-700" title="تسجيل الخروج من الإدارة">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                <span>قفل الإدارة 🔒</span>
+            </a>
+
+            <a href="{{ url_for('print_daily', date=target_date) }}" target="_blank" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-1.5 shadow-md shadow-amber-500/20">
+                <i class="fa-solid fa-print"></i>
+                <span>طباعة إغلاق اليوم</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- GRAND PRODUCTION HERO CARDS FOR CHOSEN DATE -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
+        
+        <!-- Cafe -->
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between shadow-sm">
+            <div class="flex items-center justify-between text-xs font-bold text-amber-400 mb-2">
+                <span>☕ إنتاج القهوة</span>
+                <span class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-sm">☕</span>
+            </div>
+            <div class="text-xl font-black font-mono text-white">
+                {{ summary.cafe.total_lbp|format_currency }} <span class="text-[10px] font-normal text-slate-400">ل.ل</span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-800 text-[10px] text-slate-400 flex justify-between">
+                <span>{{ summary.cafe.cups_count }} كوب / صنف</span>
+                <span class="font-mono">{{ summary.cafe.total_usd|to_usd }}</span>
+            </div>
+        </div>
+
+                <!-- 🎮 GAMING & Computers Dedicated Account & Profit Card -->
+        <div class="bg-slate-900 border border-purple-500/50 p-4 rounded-3xl flex flex-col justify-between shadow-sm">
+            <div class="flex items-center justify-between text-xs font-bold text-purple-400 mb-2">
+                <span>🎮 حسابات وأرباح ألعاب وكمبيوتر</span>
+                <span class="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-sm">🎮</span>
+            </div>
+            <div class="text-xl font-black font-mono text-purple-300">
+                {{ summary.pc.total_lbp|format_currency }} <span class="text-[10px] font-normal text-slate-400">ل.ل</span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-800 text-[10px] text-purple-300 flex justify-between items-center">
+                <span class="font-bold">{{ summary.pc.clicks_count }} دور / ساعة</span>
+                <span class="font-mono font-bold text-emerald-400 bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-800/40">صافي الربح: 100%</span>
+            </div>
+            <div class="mt-1 text-[10px] font-mono text-slate-400 flex justify-between">
+                <span>المقابل بالدولار:</span>
+                <span class="font-bold text-purple-200">{{ summary.pc.total_usd|to_usd }}</span>
+            </div>
+        </div>
+
+        <!-- Pure Cash In Drawer -->
+        <div class="bg-slate-900 border border-emerald-500/40 p-4 rounded-3xl flex flex-col justify-between shadow-sm">
+            <div class="flex items-center justify-between text-xs font-bold text-emerald-400 mb-2">
+                <span>💵 نقدية الصندوق (كاش مستلم)</span>
+                <span class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm">💵</span>
+            </div>
+            <div class="text-xl font-black font-mono text-emerald-300">
+                {{ summary.total_revenue_lbp|format_currency }} <span class="text-[10px] font-normal text-slate-400">ل.ل</span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-800 text-[10px] text-slate-400 flex justify-between">
+                <span class="text-emerald-400 font-bold">المقبوض نقداً بالصندوق</span>
+                <span class="font-mono font-bold">{{ summary.total_revenue_usd|to_usd }}</span>
+            </div>
+        </div>
+
+        <!-- Total Production Value (Cash + Debts) -->
+        <div class="bg-slate-900 border border-indigo-500/40 p-4 rounded-3xl flex flex-col justify-between shadow-sm">
+            <div class="flex items-center justify-between text-xs font-bold text-indigo-400 mb-2">
+                <span>📦 إجمالي الإنتاج والمبيعات</span>
+                <span class="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-sm">📊</span>
+            </div>
+            <div class="text-xl font-black font-mono text-indigo-300">
+                {{ summary.total_production_lbp|format_currency }} <span class="text-[10px] font-normal text-slate-400">ل.ل</span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-800 text-[10px] text-slate-400 flex justify-between">
+                <span class="text-indigo-300 font-bold">شامل الكاش + الآجل</span>
+                <span class="font-mono font-bold">{{ summary.total_production_usd|to_usd }}</span>
+            </div>
+        </div>
+
+        <!-- Others Manual Items -->
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between shadow-sm">
+            <div class="flex items-center justify-between text-xs font-bold text-cyan-400 mb-2">
+                <span>✍️ مبيعات Others</span>
+                <span class="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-sm">✍️</span>
+            </div>
+            <div class="text-xl font-black font-mono text-cyan-300">
+                {{ summary.others.total_lbp|format_currency }} <span class="text-[10px] font-normal text-slate-400">ل.ل</span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-800 text-[10px] text-slate-400 flex justify-between">
+                <span class="text-cyan-300 font-bold">{{ summary.others.count }} صنف يدوي</span>
+                <span class="font-mono">{{ summary.others.total_usd|to_usd }}</span>
+            </div>
+        </div>
+
+        <!-- Expenses -->
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-3xl flex flex-col justify-between shadow-sm">
+            <div class="flex items-center justify-between text-xs font-bold text-rose-400 mb-2">
+                <span>💸 المصاريف المسجلة</span>
+                <span class="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-sm">🧾</span>
+            </div>
+            <div class="text-xl font-black font-mono text-rose-400">
+                {{ summary.expenses.total_lbp|format_currency }} <span class="text-[10px] font-normal text-slate-400">ل.ل</span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-800 text-[10px] text-slate-400 flex justify-between">
+                <span>{{ summary.expenses.expenses_count }} سند صرف</span>
+                <span class="font-mono">{{ summary.expenses.total_usd|to_usd }}</span>
+            </div>
+        </div>
+
+        <!-- Net Profit -->
+        <div class="bg-gradient-to-tr from-slate-900 to-emerald-950 border border-emerald-800/60 p-4 rounded-3xl flex flex-col justify-between shadow-sm">
+            <div class="flex items-center justify-between text-xs font-bold text-emerald-400 mb-2">
+                <span>📈 صافي الربح الحقيقي</span>
+                <span class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm">💎</span>
+            </div>
+            <div class="text-xl font-black font-mono text-emerald-300">
+                {{ summary.grand_totals.net_profit_lbp|format_currency }} <span class="text-[10px] font-normal text-emerald-200">ل.ل</span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-800 text-[10px] text-emerald-300 flex justify-between">
+                <span>المجموع: {{ summary.grand_totals.revenue_lbp|format_currency }} ل.ل</span>
+                <span class="font-mono font-bold">{{ summary.grand_totals.net_profit_usd|to_usd }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7-DAY REVENUE & PROFIT TREND CHART -->
+    <div class="bg-slate-900 p-5 rounded-3xl border border-slate-800 shadow-md">
+        <h3 class="font-black text-sm text-white mb-1 flex items-center gap-2">
+            <i class="fa-solid fa-chart-area text-emerald-400"></i> مؤشر الإنتاج المالي لآخر 7 أيام
+        </h3>
+        <p class="text-[11px] text-slate-400 mb-3">حركة الدخل المجمع (القهوة + الكمبيوتر + Others) وصافي الأرباح</p>
+        <div class="relative h-48 w-full">
+            <canvas id="weekChart"></canvas>
+        </div>
+    </div>
+
+    <!-- TABS: (1. سجل اليوم والمصاريف | 2. إدارة أسعار المنيو) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- 1. EXPENSES & ORDERS OF TODAY -->
+        <div class="space-y-4">
+            <!-- Expenses Table -->
+            <div class="bg-slate-900 rounded-3xl border border-slate-800 overflow-hidden shadow-sm">
+                <div class="p-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+                    <h4 class="font-black text-xs text-rose-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-receipt"></i> جدول مصاريف اليوم
+                    </h4>
+                    <span class="text-[10px] text-slate-400 font-mono">{{ summary.expenses.total_lbp|format_currency }} ل.ل</span>
+                </div>
+                <div class="overflow-x-auto max-h-60">
+                    <table class="w-full text-right text-xs">
+                        <thead class="bg-slate-900 text-slate-400 font-bold border-b border-slate-800 text-[11px]">
+                            <tr>
+                                <th class="py-2.5 px-3">بند المصروف</th>
+                                <th class="py-2.5 px-3">المبلغ</th>
+                                <th class="py-2.5 px-3 text-center">حذف</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60">
+                            {% for exp in summary.recent_expenses %}
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="py-2.5 px-3 font-bold text-white">{{ exp.title }}</td>
+                                <td class="py-2.5 px-3 font-mono font-bold text-rose-400">{{ exp.amount_lbp|format_currency }} ل.ل</td>
+                                <td class="py-2.5 px-3 text-center">
+                                    <form method="POST" action="{{ url_for('expense_delete', expense_id=exp.id) }}" onsubmit="return confirm('حذف المصروف؟');" class="inline">
+                                        <button type="submit" class="text-slate-500 hover:text-rose-400 p-1">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="3" class="text-center py-4 text-slate-500">لا توجد مصاريف مسجلة اليوم</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+                <!-- 🏦 Vault / Safe Balance Card -->
+                <div class="relative bg-gradient-to-br from-amber-500/20 to-yellow-600/10 border border-amber-500/30 rounded-2xl p-5 overflow-hidden group hover:border-amber-400/50 transition-all">
+                  <div class="absolute top-0 left-0 text-[70px] opacity-10 leading-none select-none">🏦</div>
+                  <div class="flex items-start justify-between mb-3">
+                    <div>
+                      <p class="text-xs font-bold text-amber-300 uppercase tracking-widest">🏦 الخزنة الخاصة</p>
+                      <p class="text-xs text-slate-500 mt-0.5">إجمالي المنقول للخزنة</p>
+                    </div>
+                    <a href="{{ url_for('safe_page') }}" class="text-xs text-amber-400 hover:text-amber-300 bg-amber-900/20 hover:bg-amber-900/40 px-2.5 py-1 rounded-lg font-bold transition">
+                      عرض الخزنة ←
+                    </a>
+                  </div>
+                  <div class="text-3xl font-black text-amber-400 mb-1">
+                    {{ "{:,.0f}".format(safe_balance.total_lbp if safe_balance else 0) }}
+                    <span class="text-base text-amber-300">ل.ل</span>
+                  </div>
+                  <div class="text-lg font-bold text-yellow-500">
+                    ≈ ${{ "{:,.2f}".format(safe_balance.total_usd if safe_balance else 0) }}
+                  </div>
+                  <div class="text-xs text-slate-500 mt-2">
+                    {{ (safe_balance.transfers_count if safe_balance else 0) }} عملية تحويل إجمالية
+                  </div>
+                  <div class="mt-3 pt-3 border-t border-amber-500/20">
+                    <p class="text-xs text-amber-300">اليوم: <span class="font-bold text-white">{{ "{:,.0f}".format(safe_daily.day_total_lbp if safe_daily else 0) }} ل.ل</span></p>
+                  </div>
+
+                  <!-- 1-Click Daily Safe Transfer Button in Admin -->
+                  {% if daily_transfer_status %}
+                  <div class="mt-2.5 pt-2.5 border-t border-amber-500/20 space-y-2">
+                    {% if daily_transfer_status.is_fully_transferred %}
+                    <div class="flex items-center justify-between text-[11px]">
+                      <span class="text-emerald-400 font-bold flex items-center gap-1">
+                        <i class="fa-solid fa-circle-check"></i> تم ترحيل نقدية اليوم للخزنة
+                      </span>
+                      <a href="{{ url_for('safe_page', date=target_date) }}" class="text-amber-300 hover:underline font-bold">كشف الخزنة ←</a>
+                    </div>
+                    {% else %}
+                    <div class="flex items-center justify-between text-[11px]">
+                      <span class="text-amber-300 font-bold">صافي مبيعات اليوم:</span>
+                      <span class="text-emerald-400 font-mono font-bold">{{ daily_transfer_status.recommended_transfer_lbp|format_currency }} ل.ل</span>
+                    </div>
+                    {% if daily_transfer_status.recommended_transfer_lbp > 0 or not daily_transfer_status.already_transferred %}
+                    <form action="{{ url_for('safe_transfer_daily') }}" method="POST">
+                      <input type="hidden" name="target_date" value="{{ target_date }}">
+                      <input type="hidden" name="amount_lbp" value="{{ daily_transfer_status.recommended_transfer_lbp }}">
+                      <input type="hidden" name="amount_usd" value="{{ daily_transfer_status.recommended_transfer_usd }}">
+                      <input type="hidden" name="note" value="ترحيل صافي مبيعات يوم {{ target_date }}">
+                      <button type="submit" class="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black py-2 px-3 rounded-xl text-xs transition shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 active:scale-95">
+                        <i class="fa-solid fa-arrow-down-to-bracket"></i>
+                        <span>نقل صافي اليوم للخزنة بنقرة واحدة 🏦</span>
+                      </button>
+                    </form>
+                    {% endif %}
+                    {% endif %}
+                  </div>
+                  {% endif %}
+                </div>
+
+
+            <!-- Recent Orders / Invoices Table of Today -->
+            <div class="bg-slate-900 rounded-3xl border border-slate-800 overflow-hidden shadow-sm">
+                <div class="p-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+                    <h4 class="font-black text-xs text-emerald-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-receipt"></i> جدول فواتير ومبيعات اليوم
+                    </h4>
+                    <span class="text-[10px] text-slate-400 font-mono">{{ orders|length }} فاتورة</span>
+                </div>
+                <div class="overflow-x-auto max-h-56">
+                    <table class="w-full text-right text-xs">
+                        <thead class="bg-slate-900 text-slate-400 font-bold border-b border-slate-800 text-[11px]">
+                            <tr>
+                                <th class="py-2 px-3">رقم الفاتورة</th>
+                                <th class="py-2 px-3">الموظف / الزبون</th>
+                            <th class="py-2 px-3">المنتجات والأصناف المباعة بالتفصيل 📦</th>
+                                <th class="py-2 px-3">المجموع</th>
+                                <th class="py-2 px-3 text-center">إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60">
+                            {% for ord in orders %}
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="py-2 px-3 font-mono font-bold text-white">{{ ord.order_number }}</td>
+                                <td class="py-2 px-3 text-[11px] text-slate-400">
+                                    <div>{{ ord.customer_name or 'زبون كاش' }}</div>
+                                    <div class="text-[9px] font-mono text-slate-500">{{ ord.created_at|format_date }}</div>
+                                </td>
+                            <td class="py-2 px-3 font-bold text-amber-300">
+                                <span class="bg-slate-950/90 px-2.5 py-1 rounded-xl border border-amber-500/20 block text-xs leading-relaxed">
+                                    {{ ord.items_summary or 'طلب عام' }}
+                                </span>
+                            </td>
+                                <td class="py-2 px-3 font-mono">
+                                    <div class="font-bold text-emerald-400">{{ ord.total_lbp|format_currency }} ل.ل</div>
+                                    <div class="text-[9px] text-slate-500">{{ ord.total_usd|to_usd }}</div>
+                                </td>
+                                <td class="py-2 px-3 text-center flex items-center justify-center gap-1.5 pt-3">
+                                    <a href="{{ url_for('order_receipt', order_id=ord.id) }}" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-amber-400 p-1.5 rounded-lg text-xs" title="طباعة الإيصال">
+                                        <i class="fa-solid fa-print"></i>
+                                    </a>
+                                    <form method="POST" action="{{ url_for('order_delete', order_id=ord.id) }}" onsubmit="return confirm('هل تريد حذف هذه الفاتورة؟');" class="inline">
+                                        <button type="submit" class="text-slate-500 hover:text-rose-400 p-1.5" title="حذف الفاتورة">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center py-4 text-slate-500">لا توجد فواتير مسجلة اليوم</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+       
+
+        
+    <!-- 🎮 GAMING & COMPUTERS SESSIONS & PROFIT TABLE -->
+    <div class="bg-slate-900 rounded-3xl border border-purple-800/50 overflow-hidden shadow-sm">
+        <div class="p-4 bg-slate-950 border-b border-purple-900/40 flex flex-wrap items-center justify-between gap-3">
+            <h4 class="font-black text-xs text-purple-300 flex items-center gap-2">
+                <span class="text-base">🎮</span> سجل حسابات وتفاصيل ألعاب والكمبيوتر (GAMING) لهذا اليوم
+            </h4>
+            <div class="flex items-center gap-2">
+                <span class="text-[11px] bg-purple-500/20 text-purple-300 font-mono font-bold px-2.5 py-1 rounded-xl">
+                    إجمالي الدخل: {{ summary.pc.total_lbp|format_currency }} ل.ل ({{ summary.pc.total_usd|to_usd }})
+                </span>
+                <span class="text-[11px] bg-emerald-500/20 text-emerald-300 font-mono font-bold px-2.5 py-1 rounded-xl">
+                    صافي الربح: {{ (summary.pc.profit_lbp or summary.pc.total_lbp)|format_currency }} ل.ل (100%)
+                </span>
+            </div>
+        </div>
+        <div class="overflow-x-auto max-h-72">
+            <table class="w-full text-right text-xs">
+                <thead class="bg-slate-900 text-slate-400 font-bold border-b border-slate-800 text-[11px]">
+                    <tr>
+                        <th class="py-2.5 px-3">الوقت / الإيصال</th>
+                        <th class="py-2.5 px-3">اللاعب / الزبون</th>
+                        <th class="py-2.5 px-3">الصنف / الجهاز</th>
+                        <th class="py-2.5 px-3">العدد / الأدوار</th>
+                        <th class="py-2.5 px-3">المبلغ المحصل (ل.ل)</th>
+                        <th class="py-2.5 px-3">المقابل ($)</th>
+                        <th class="py-2.5 px-3 text-emerald-400">الربح الصافي المستحق</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60">
+                    {% for pc in pc_logs %}
+                    <tr class="hover:bg-slate-800/40">
+                        <td class="py-2.5 px-3 font-mono text-slate-400">{{ pc.created_at[11:16] if pc.created_at else '--:--' }} <span class="text-[10px] text-slate-500">#{{ pc.order_number or pc.id }}</span></td>
+                        <td class="py-2.5 px-3 font-bold text-white">{{ pc.player_name or 'لاعب GAMING' }}</td>
+                        <td class="py-2.5 px-3 text-purple-300 font-bold">{{ pc.item_name }}</td>
+                        <td class="py-2.5 px-3 font-mono font-bold text-white">{{ pc.quantity }} دور</td>
+                        <td class="py-2.5 px-3 font-mono font-bold text-purple-400">{{ (pc.subtotal_lbp or pc.price_lbp)|format_currency }} ل.ل</td>
+                        <td class="py-2.5 px-3 font-mono text-slate-300">{{ (pc.subtotal_usd or pc.price_usd)|to_usd }}</td>
+                        <td class="py-2.5 px-3 font-mono font-black text-emerald-400 bg-emerald-950/20">{{ (pc.subtotal_lbp or pc.price_lbp)|format_currency }} ل.ل</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-6 text-slate-500">لا توجد حركات ألعاب مسجلة لهذا اليوم</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+
+    <!-- كشف كميات ومبيعات كل منتج على حدة -->
+        <div class="bg-slate-900 rounded-3xl border border-slate-800 overflow-hidden shadow-sm">
+            <div class="p-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+                <h4 class="font-black text-xs text-amber-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-boxes-stacked"></i> كشف مبيعات كل منتج وصنف اليوم (الكميات والمبالغ)
+                </h4>
+                <span class="text-[10px] text-slate-400 font-mono">{{ product_sales|length }} صنف</span>
+            </div>
+            <div class="overflow-x-auto max-h-56">
+                <table class="w-full text-right text-xs">
+                    <thead class="bg-slate-900 text-slate-400 font-bold border-b border-slate-800 text-[11px]">
+                        <tr>
+                            <th class="py-2 px-3">اسم المنتج المباع</th>
+                            <th class="py-2 px-3 text-center">الكمية المباعة</th>
+                            <th class="py-2 px-3">إجمالي المبيعات (ل.ل)</th>
+                            <th class="py-2 px-3">المقابل ($)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60">
+                        {% set safe_product_list = (product_sales.products_list if (product_sales is mapping and 'products_list' in product_sales) else (product_sales if (product_sales is sequence and product_sales is not string and product_sales is not mapping) else [])) %}
+                        {% for ps in safe_product_list %}
+                        {% if ps is mapping %}
+                        <tr class="hover:bg-slate-800/40">
+                            <td class="py-2 px-3 font-bold text-white flex items-center gap-1.5">
+                                <span class="text-amber-400">☕</span>
+                                <span>{{ ps.item_name }}</span>
+                            </td>
+                            <td class="py-2 px-3 text-center font-mono font-black text-cyan-300">
+                                <span class="bg-slate-950 px-2.5 py-0.5 rounded-lg border border-slate-800">
+                                    {{ (ps.get('total_qty', 0) if ps is mapping else 0)|int }} قطعة / كوب
+                                </span>
+                            </td>
+                            <td class="py-2 px-3 font-mono font-bold text-emerald-400">
+                                {{ (ps.get('total_lbp', 0) if ps is mapping else 0)|format_currency }} ل.ل
+                            </td>
+                            <td class="py-2 px-3 font-mono text-slate-400">
+                                {{ (ps.get('total_usd', 0) if ps is mapping else 0)|to_usd }}
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% else %}
+                        <tr><td colspan="4" class="text-center py-4 text-slate-500">لا توجد مبيعات أصناف مسجلة لهذا اليوم</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+ </div>
+
+        <!-- 2. MENU ITEMS & PRICING MANAGEMENT -->
+        <div class="bg-slate-900 rounded-3xl border border-slate-800 overflow-hidden shadow-sm flex flex-col">
+            <div class="p-3.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+                <div>
+                    <h4 class="font-black text-xs text-white flex items-center gap-1.5">
+                        <i class="fa-solid fa-mug-saucer text-amber-400"></i> إدارة قائمة المشروبات وتعديل الأسعار
+                    </h4>
+                    <span class="text-[10px] text-slate-400">انقر على أي سعر لتعديله فوراً في شاشة الكاشير</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="openModal('addCategoryModal')" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-folder-plus"></i> + قسم جديد
+                    </button>
+                    <button type="button" onclick="openModal('addDrinkModal')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-plus"></i> إضافة صنف
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto max-h-[480px]">
+                <table class="w-full text-right text-xs">
+                    <thead class="bg-slate-900 text-slate-400 font-bold border-b border-slate-800 text-[11px] sticky top-0">
+                        <tr>
+                            <th class="py-2 px-3">الصنف</th>
+                            <th class="py-2 px-3">القسم</th>
+                            <th class="py-2 px-3">السعر الحالي (ل.ل)</th>
+                            <th class="py-2 px-3 text-center">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60">
+                        {% for it in menu_items %}
+                        <tr class="hover:bg-slate-800/40">
+                            <td class="py-2 px-3 font-bold text-white flex items-center gap-2">
+                                {% if it.icon and (it.icon.startswith('/') or it.icon.startswith('http') or it.icon.startswith('data:')) %}
+                                <img src="{{ it.icon }}" alt="{{ it.name }}" onclick="openEditDrinkModal({{ it.id }}, '{{ it.name|replace("'", "\\'") }}', {{ it.category_id }}, {{ it.price_lbp }}, '{{ it.icon|replace("'", "%27") }}', {{ it.is_active }})" title="انقر لتكبير وتعديل صورة وسعر الصنف" class="w-16 h-16 rounded-2xl object-contain bg-slate-950 border-2 border-slate-700 p-1 hover:border-amber-400 shadow-md shrink-0 hover:scale-110 transition-all cursor-pointer">
+                                {% else %}
+                                <div onclick="openEditDrinkModal({{ it.id }}, '{{ it.name|replace("'", "\\'") }}', {{ it.category_id }}, {{ it.price_lbp }}, '{{ it.icon|replace("'", "%27") }}', {{ it.is_active }})" title="انقر لتعديل وإضافة صورة حقيقية للصنف" class="w-16 h-16 rounded-2xl bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-amber-400 flex items-center justify-center text-3xl shrink-0 hover:scale-110 transition-all cursor-pointer shadow-md">{{ it.icon or '☕' }}</div>
+                                {% endif %}
+                                <div>
+                                    <span>{{ it.name }}</span>
+                                    {% if not it.is_active %}<span class="text-[9px] bg-rose-950 text-rose-400 px-1.5 py-0.5 rounded mr-1">معطل</span>{% endif %}
+                                </div>
+                            </td>
+                            <td class="py-2 px-3 text-slate-400 text-[11px]">{{ it.category_name }}</td>
+                            <td class="py-2 px-3 font-mono font-bold text-amber-400">
+                                {{ it.price_lbp|format_currency }} ل.ل
+                            </td>
+                            <td class="py-2 px-3 text-center flex items-center justify-center gap-1">
+                                <button type="button" 
+                                        data-id="{{ it.id }}"
+                                        data-name="{{ it.name|e }}"
+                                        data-category-id="{{ it.category_id|default(0) }}"
+                                        data-price="{{ it.price_lbp }}"
+                                        data-icon="{{ it.icon|default('☕') }}"
+                                        data-is-active="{{ it.is_active|default(1) }}"
+                                        onclick="triggerEditDrink(this)"
+                                        class="bg-slate-800 hover:bg-slate-700 text-amber-300 px-2.5 py-1.5 rounded-lg text-xs font-bold border border-slate-700 cursor-pointer transition flex items-center gap-1">
+                                    <i class="fa-solid fa-pen-to-square"></i> تعديل
+                                </button>
+                                <form method="POST" action="{{ url_for('menu_item_delete', item_id=it.id) }}" onsubmit="return confirm('هل تريد حذف هذا الصنف من المنيو؟');" class="inline">
+                                    <button type="submit" class="text-slate-500 hover:text-rose-400 p-1">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4" class="text-center py-6 text-slate-500">لا توجد أصناف مضافة في المنيو بعد. اضغط على (+ إضافة صنف)</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🏷️ CATEGORIES MANAGEMENT CARD (أقسام وتصنيفات المنيو) -->
+    <div class="bg-slate-900 rounded-3xl border border-purple-500/30 p-5 shadow-lg space-y-4">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-300 flex items-center justify-center text-xl font-black">
+                    🏷️
+                </div>
+                <div>
+                    <h3 class="font-black text-sm text-white">إدارة الأقسام والتصنيفات (Categories)</h3>
+                    <p class="text-xs text-slate-400">إضافة أقسام جديدة للمشروبات والمنتجات لتنظيم شاشة الكاشير</p>
+                </div>
+            </div>
+            <button type="button" onclick="openModal('addCategoryModal')" class="bg-purple-600 hover:bg-purple-500 text-white font-black px-4 py-2 rounded-2xl text-xs flex items-center gap-1.5 shadow-md shadow-purple-600/30">
+                <i class="fa-solid fa-plus-circle"></i>
+                <span>+ إضافة تصنيف جديد</span>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {% for cat in categories %}
+            <div class="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-between group hover:border-purple-500/60 transition shadow-sm">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">{{ cat.icon or '🏷️' }}</span>
+                    <div>
+                        <h4 class="font-bold text-xs text-white">{{ cat.name }}</h4>
+                        <span class="text-[10px] text-purple-300 font-mono">{{ cat.items_count or 0 }} صنف</span>
+                    </div>
+                </div>
+                {% if 'computer' not in cat.name.lower() and 'كمبيوتر' not in cat.name.lower() %}
+                <form method="POST" action="{{ url_for('menu_category_delete', cat_id=cat.id) }}" onsubmit="return confirm('هل تريد حذف هذا القسم وجميع أصنافه التابعة له؟');" class="opacity-0 group-hover:opacity-100 transition">
+                    <button type="submit" class="text-slate-500 hover:text-rose-400 p-1" title="حذف القسم">
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="col-span-full text-center py-6 bg-slate-950/60 rounded-2xl border border-dashed border-slate-800">
+                <span class="text-3xl block mb-2 opacity-50">🏷️</span>
+                <p class="text-xs text-slate-400 font-bold">لا توجد تصنيفات مضافة بعد</p>
+                <p class="text-[11px] text-slate-500 mt-1">اضغط على (+ إضافة تصنيف جديد) لإنشاء أقسامك الخاصة</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- 💾 BACKUP & RESTORE SECTION (النسخ الاحتياطي واستعادة البيانات) -->
+    <div class="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-blue-500/40 p-5 rounded-3xl shadow-lg space-y-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center text-xl font-black">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-sm text-white">النسخ الاحتياطي وحفظ الداتا (Backup & Restore)</h3>
+                    <p class="text-xs text-slate-400">حفظ نسخة كاملة من البيانات كملف على جهازك واستعادتها في أي وقت</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+            
+            <!-- 1. Download Backup File -->
+            <div class="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 flex flex-col justify-between space-y-3">
+                <div>
+                    <h4 class="font-black text-xs text-emerald-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-download"></i> 1. تصدير وتحميل نسخة احتياطية (ملف الداتا)
+                    </h4>
+                    <p class="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                        قم بتحميل ملف يحتوي على كافة المبيعات، الفواتير، ديون الزبائن، قائمة المشروبات، والإعدادات، لحفظه بأمان على الكمبيوتر أو فلاشة (USB).
+                    </p>
+                </div>
+                <div>
+                    <a href="{{ url_for('backup_download') }}" class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-slate-950 font-black py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20">
+                        <i class="fa-solid fa-floppy-disk text-sm"></i>
+                        <span>💾 تحميل ملف النسخة الاحتياطية الآن</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- 2. Restore from Backup File -->
+            <div class="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 flex flex-col justify-between space-y-3">
+                <div>
+                    <h4 class="font-black text-xs text-blue-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-upload"></i> 2. استرجاع الداتا من ملف نسخة احتياطية
+                    </h4>
+                    <p class="text-[11px] text-slate-400 mt-1.5 leading-relaxed">
+                        في حال حدوث أي عطل أو عند الانتقال لجهاز جديد، اختر ملف النسخة الاحتياطية (.db) المحفوظ لديك لاسترجاع جميع البيانات فوراً.
+                    </p>
+                </div>
+                <form method="POST" action="{{ url_for('backup_restore') }}" enctype="multipart/form-data" onsubmit="return confirm('تنبيه: استعادة النسخة الاحتياطية ستستبدل البيانات الحالية بالبيانات الموجودة في الملف المرفوع. هل تريد المتابعة؟')" class="space-y-2">
+                    <div class="flex items-center gap-2">
+                        <input type="file" name="backup_file" accept=".db,.sqlite,.bak" required class="flex-1 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-xl p-1.5 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-white hover:file:bg-slate-700 cursor-pointer">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-black py-2 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md shadow-blue-600/20">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        <span>🔄 استعادة البيانات من الملف</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🔴 DANGER ZONE: FACTORY RESET & DATA CLEARING -->
+    <div class="bg-gradient-to-r from-rose-950/40 via-slate-900 to-slate-900 border border-rose-900/60 p-5 rounded-3xl shadow-lg space-y-3">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-xl font-black">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <div>
+                    <h3 class="font-black text-sm text-white">منطقة الأمان واستعادة ضبط المصنع (Factory Reset)</h3>
+                    <p class="text-xs text-slate-400">تصفير الحسابات اليومية أو استعادة النظام الأصلي بالكامل</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+            <!-- Reset Daily Transactions Only -->
+            <div class="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 flex flex-col justify-between space-y-3">
+                <div>
+                    <h4 class="font-black text-xs text-amber-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-broom"></i> 1. تصفير المبيعات والفواتير والمصاريف فقط
+                    </h4>
+                    <p class="text-[11px] text-slate-400 mt-1">
+                        يحذف جميع الفواتير والمبيعات والمصاريف لبدء يوم جديد نظيف 100%، مع **الحفاظ على قائمة المشروبات وأسعار المنيو والإعدادات**.
+                    </p>
+                </div>
+                <button type="button" onclick="openModal('resetTransactionsModal')" class="bg-amber-600/90 hover:bg-amber-500 text-slate-950 font-black py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-sm">
+                    <i class="fa-solid fa-broom"></i>
+                    <span>تصفير حركات المبيعات والمصاريف</span>
+                </button>
+            </div>
+
+            <!-- Full Factory Reset -->
+            <div class="p-4 rounded-2xl bg-slate-950/80 border border-rose-900/60 flex flex-col justify-between space-y-3">
+                <div>
+                    <h4 class="font-black text-xs text-rose-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-fire"></i> 2. استعادة ضبط المصنع بالكامل (Full Reset)
+                    </h4>
+                    <p class="text-[11px] text-slate-400 mt-1">
+                        يمسح كل شيء في النظام، ويعيد بناء قاعدة البيانات من الصفر مع **إعادة منيو القهوة اللبنانية الافتراضي والإعدادات الأصلية**.
+                    </p>
+                </div>
+                <button type="button" onclick="openModal('fullFactoryResetModal')" class="bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md shadow-rose-600/30">
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>استعادة ضبط المصنع بالكامل ⚠️</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODALS ================= -->
+
+<!-- 1. Modal: Settings & PC Pricing -->
+<div id="settingsModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-800 text-white">
+        <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+            <h3 class="font-black text-sm">إعدادات المحل وسعر GAMING ⚙️</h3>
+            <button type="button" onclick="closeModal('settingsModal')" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        <form method="POST" action="{{ url_for('settings_update') }}" class="space-y-3">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">اسم المحل / الكافيه</label>
+                <input type="text" name="company_name" value="{{ company_name }}" class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-amber-500">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">سعر كبسة / دور GAMING (ل.ل)</label>
+                <input type="number" step="any" min="0" name="pc_price_per_click_lbp" value="{{ pc_price_lbp }}" class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none font-mono font-bold text-purple-400">
+                <span class="text-[10px] text-slate-500 mt-0.5 block">السعر الافتراضي عند الضغط على كمبيوتر في الكاشير</span>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">سعر صرف الدولار (1$ = ل.ل)</label>
+                <input type="number" step="any" min="0" name="exchange_rate" value="{{ exchange_rate }}" class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none font-mono">
+            </div>
+
+            <div class="flex items-center gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition">حفظ الإعدادات</button>
+                <button type="button" onclick="closeModal('settingsModal')" class="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 2. Modal: Add Expense -->
+<div id="addExpenseModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-800 text-white">
+        <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+            <h3 class="font-black text-sm text-rose-400">تسجيل مصروف جديد 💸</h3>
+            <button type="button" onclick="closeModal('addExpenseModal')" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+        <form method="POST" action="{{ url_for('expense_add') }}" class="space-y-3">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">بند المصروف *</label>
+                <input type="text" name="title" required placeholder="مثال: شراء بن، حليب، خبز، صيانة..." class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">المبلغ بالليرة (ل.ل) *</label>
+                <input type="number" step="any" min="0" name="amount_lbp" required placeholder="مثال: 150000" class="w-full bg-slate-950 text-rose-300 font-mono font-bold text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none">
+            </div>
+            <div class="flex items-center gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-black py-2.5 rounded-xl text-xs transition">تسجيل المصروف</button>
+                <button type="button" onclick="closeModal('addExpenseModal')" class="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 3. Modal: Add Menu Item (STUDIO PRO) -->
+<!-- 3. Modal: Add Menu Item (STUDIO PRO) -->
+<div id="addDrinkModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-slate-900 rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-amber-500/30 text-white my-8 relative">
+        <div class="flex items-center justify-between mb-5 pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+                <span class="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-xl shadow-inner border border-amber-500/30">☕</span>
+                <div>
+                    <h3 class="font-black text-base text-white">إضافة منتج جديد للمنيو</h3>
+                    <p class="text-[11px] text-slate-400">ارفع صورة احترافية عالية الدقة وحدد السعر والتصنيف</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeModal('addDrinkModal')" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('menu_item_add') }}" enctype="multipart/form-data" class="space-y-4">
+            <!-- Basic Info: Name & Category -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">اسم المنتج / المشروب *</label>
+                    <input type="text" name="name" id="addDrinkNameInput" required placeholder="مثال: إسبريسو سنغل..." oninput="updateAddLivePreview()" class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2.5 border border-slate-700 focus:outline-none focus:border-amber-400 font-bold">
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs font-bold text-slate-300">القسم / التصنيف *</label>
+                        <button type="button" onclick="closeModal('addDrinkModal'); openModal('addCategoryModal');" class="text-[10px] text-purple-400 hover:text-purple-300 font-bold">+ قسم جديد</button>
+                    </div>
+                    <select name="category_id" id="addDrinkCategorySelect" required onchange="updateAddLivePreview()" class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2.5 border border-slate-700 focus:outline-none focus:border-amber-400">
+                        {% for cat in categories %}
+                        <option value="{{ cat.id }}" data-icon="{{ cat.icon }}" data-name="{{ cat.name }}">{{ cat.icon }} {{ cat.name }}</option>
+                        {% else %}
+                        <option value="" disabled selected>لا توجد أقسام - اضغط + قسم جديد</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Studio Image Uploader (High-End POS Studio) -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs font-black text-amber-300 flex items-center gap-1.5">
+                        <i class="fa-solid fa-camera text-amber-400"></i>
+                        <span>صورة المنتج (استوديو رفع الصور الاحترافية)</span>
+                    </label>
+                    <span class="text-[10px] text-emerald-400 font-bold bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-800/60">
+                        ✨ دقة فائقة HD
+                    </span>
+                </div>
+
+                <!-- Dropzone Canvas -->
+                <div id="addDrinkDropzone" 
+                     ondragover="handleDragOver(event, 'addDrinkDropzone')" 
+                     ondragleave="handleDragLeave(event, 'addDrinkDropzone')" 
+                     ondrop="handleDrop(event, 'addDrinkFileInput', 'addDrinkDropzone', 'addDrinkImgPreview', 'addDrinkPreviewContainer', 'addDrinkPlaceholder', 'addLivePreviewImg')"
+                     class="relative group border-2 border-dashed border-amber-500/40 hover:border-amber-400 bg-slate-950/70 hover:bg-slate-950 rounded-2xl p-4 text-center transition-all duration-200 overflow-hidden min-h-[190px] flex flex-col items-center justify-center cursor-pointer">
+                    
+                    <input type="hidden" name="image_base64" id="addDrinkImageBase64">
+                    <input type="file" name="image_file" id="addDrinkFileInput" accept="image/*" onchange="previewSelectedImage(this, 'addDrinkImgPreview', 'addDrinkPreviewContainer', 'addDrinkPlaceholder', 'addLivePreviewImg')" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30">
+                    
+                    <!-- 1. Loaded Image View -->
+                    <div id="addDrinkPreviewContainer" class="hidden w-full flex-col items-center justify-center space-y-2.5 z-20">
+                        <div class="relative w-full max-w-xs h-48 rounded-2xl overflow-hidden border-2 border-amber-400 shadow-2xl shadow-amber-500/20 bg-slate-900">
+                            <img id="addDrinkImgPreview" src="" alt="معاينة صورة الصنف" class="max-h-full max-w-full object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-xl">
+                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none"></div>
+                            <span class="absolute top-2 right-2 text-[10px] font-bold text-amber-300 bg-slate-950/90 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                                📷 صورة الصنف
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-bold text-emerald-400 bg-emerald-950/90 px-3 py-1 rounded-full border border-emerald-800 flex items-center gap-1">
+                                <i class="fa-solid fa-circle-check"></i> تم اختيار الصورة بنجاح
+                            </span>
+                            <button type="button" onclick="clearSelectedImage('addDrinkFileInput', 'addDrinkImgPreview', 'addDrinkPreviewContainer', 'addDrinkPlaceholder', 'addLivePreviewImg', 'addDrinkIconInput')" class="relative z-40 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-950/80 hover:bg-rose-900/90 px-3 py-1 rounded-full border border-rose-800 transition">
+                                <i class="fa-solid fa-trash-can"></i> إزالة الصورة
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-slate-400">انقر هنا أو اسحب صورة جديدة لتغييرها</p>
+                    </div>
+
+                    <!-- 2. Placeholder View (When No Image) -->
+                    <div id="addDrinkPlaceholder" class="flex flex-col items-center justify-center py-4 space-y-2 pointer-events-none">
+                        <div class="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center text-3xl group-hover:scale-110 transition-transform shadow-inner">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-black text-white group-hover:text-amber-300 transition-colors">اسحب وأفلت صورة المنتج هنا، أو اضغط للاختيار من الكمبيوتر</p>
+                            <p class="text-[10px] text-slate-400 mt-1">يدعم JPG, PNG, WEBP, GIF عالية الوضوح</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fallback / Fast Emoji Picker -->
+                <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2">
+                    <span class="text-[10px] text-slate-400 font-bold shrink-0">أو رمز سريع:</span>
+                    <input type="text" name="icon" id="addDrinkIconInput" value="☕" oninput="updateAddLivePreview()" class="w-10 bg-slate-900 text-white text-center text-sm rounded-lg py-1 border border-slate-700">
+                    <div class="flex items-center gap-1.5 overflow-x-auto py-0.5 text-sm">
+                        {% for ic in ['☕', '🍵', '🥤', '🧋', '🍹', '🥐', '🍰', '🍪', '🍕', '🍔', '🥪', '🍫', '🍿', '💧', '🍦'] %}
+                        <button type="button" onclick="selectEmojiForAdd('{{ ic }}')" class="w-7 h-7 rounded-lg bg-slate-900 hover:bg-amber-500/30 text-white flex items-center justify-center hover:scale-110 transition">
+                            {{ ic }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Price in LBP & USD -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">السعر بالليرة (ل.ل) *</label>
+                    <input type="number" step="any" min="0" name="price_lbp" id="addDrinkPriceInput" required placeholder="مثال: 150000" oninput="syncAddPrice('lbp')" class="w-full bg-slate-950 text-amber-300 font-mono font-bold text-xs rounded-xl px-3 py-2.5 border border-slate-700 focus:border-amber-400">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">السعر بالدولار ($ تقريبي)</label>
+                    <input type="number" step="any" min="0" id="addDrinkPriceUSDInput" placeholder="مثال: 1.70" oninput="syncAddPrice('usd')" class="w-full bg-slate-950 text-emerald-400 font-mono font-bold text-xs rounded-xl px-3 py-2.5 border border-slate-700 focus:border-emerald-400">
+                </div>
+            </div>
+
+            <!-- Live Cashier Card Preview Box -->
+            <div class="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
+                <span class="text-[11px] font-black text-amber-400 flex items-center gap-1">
+                    <i class="fa-solid fa-eye"></i> معاينة مباشرة: هكذا سيظهر الصنف في شاشة الكاشير
+                </span>
+                
+                <div class="max-w-[220px] mx-auto rounded-2xl bg-slate-950 border-2 border-amber-400/60 shadow-xl overflow-hidden text-right">
+                    <div class="relative w-full h-28 bg-slate-900 overflow-hidden flex items-center justify-center">
+                        <img id="addLivePreviewImg" src="" alt="" class="hidden w-full h-full object-cover">
+                        <span id="addLivePreviewIcon" class="text-4xl">☕</span>
+                        <span id="addLivePreviewCat" class="absolute top-1.5 right-1.5 text-[9px] font-bold text-white bg-slate-950/80 px-2 py-0.5 rounded-full border border-white/10">مشروبات</span>
+                    </div>
+                    <div class="p-2.5 space-y-1">
+                        <h5 id="addLivePreviewName" class="font-black text-xs text-white truncate">اسم المنتج</h5>
+                        <div class="flex items-baseline justify-between pt-1 border-t border-slate-800">
+                            <span id="addLivePreviewLBP" class="font-mono font-black text-xs text-amber-400">0 ل.ل</span>
+                            <span id="addLivePreviewUSD" class="font-mono text-[10px] font-bold text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2.5 pt-2">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-3 rounded-xl text-xs transition shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span>حفظ ونشر المنتج بالمنيو</span>
+                </button>
+                <button type="button" onclick="closeModal('addDrinkModal')" class="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Add New Category (إضافة تصنيف وقسم جديد) -->
+<div id="addCategoryModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-purple-500/50 text-white space-y-4">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center text-sm">🏷️</span>
+                <h3 class="font-black text-sm">إضافة قسم / تصنيف جديد</h3>
+            </div>
+            <button type="button" onclick="closeModal('addCategoryModal')" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('menu_category_add') }}" class="space-y-3.5">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">اسم القسم / التصنيف: *</label>
+                <input type="text" name="name" required placeholder="مثال: قهوة ساخنة، عصائر طبيعية، حلويات..." class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2.5 border border-slate-700 focus:outline-none focus:border-purple-500">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">أيقونة القسم (اختر أو اكتب إيموجي):</label>
+                <div class="flex items-center gap-2">
+                    <input type="text" name="icon" id="categoryIconInput" value="☕" class="w-14 bg-slate-950 text-white text-center text-xl rounded-xl py-1.5 border border-slate-700">
+                    <div class="flex-1 flex items-center gap-1.5 overflow-x-auto py-1 text-base bg-slate-950 px-2 rounded-xl border border-slate-800">
+                        <button type="button" onclick="document.getElementById('categoryIconInput').value='☕'" class="hover:scale-125 transition">☕</button>
+                        <button type="button" onclick="document.getElementById('categoryIconInput').value='🧋'" class="hover:scale-125 transition">🧋</button>
+                        <button type="button" onclick="document.getElementById('categoryIconInput').value='🫖'" class="hover:scale-125 transition">🫖</button>
+                        <button type="button" onclick="document.getElementById('categoryIconInput').value='🥤'" class="hover:scale-125 transition">🥤</button>
+                        <button type="button" onclick="document.getElementById('categoryIconInput').value='🍹'" class="hover:scale-125 transition">🍹</button>
+                        <button type="button" onclick="document.getElementById('categoryIconInput').value='💧'" class="hover:scale-125 transition">💧</button>
+                        <button type="button" onclick="document.getElementById('categoryIconInput').value='🍰'" class="hover:scale-125 transition">🍰</button>
+                        <button type="button" onclick="document.getElementById('categoryIconInput').value='🍔'" class="hover:scale-125 transition">🍔</button>
+                        <button type="button" onclick="document.getElementById('categoryIconInput').value='🍿'" class="hover:scale-125 transition">🍿</button>
+                        <button type="button" onclick="document.getElementById('categoryIconInput').value='🎮'" class="hover:scale-125 transition">🎮</button>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">ترتيب الظهور في الكاشير:</label>
+                <input type="number" name="sort_order" value="1" min="0" class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 font-mono">
+            </div>
+
+            <div class="flex items-center gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-black py-2.5 rounded-xl text-xs transition shadow-md shadow-purple-600/30">
+                    + إضافة القسم الآن 🏷️
+                </button>
+                <button type="button" onclick="closeModal('addCategoryModal')" class="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 4. Modal: Edit Menu Item (STUDIO PRO) -->
+<!-- 4. Modal: Edit Menu Item (STUDIO PRO) -->
+<div id="editDrinkModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-slate-900 rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-amber-500/30 text-white my-8 relative">
+        <div class="flex items-center justify-between mb-5 pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-2.5">
+                <span class="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-xl shadow-inner border border-amber-500/30">✏️</span>
+                <div>
+                    <h3 class="font-black text-base text-white">تعديل المنتج وصورته وسعره</h3>
+                    <p class="text-[11px] text-slate-400">تحديث فوري لبيانات الصنف والصورة المعروضة في الكاشير</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeModal('editDrinkModal')" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <form id="editDrinkForm" method="POST" action="" enctype="multipart/form-data" class="space-y-4">
+            <!-- Basic Info: Name & Category -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">اسم المنتج *</label>
+                    <input type="text" name="name" id="editDrinkName" required oninput="updateEditLivePreview()" class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2.5 border border-slate-700 font-bold focus:border-amber-400">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">التصنيف</label>
+                    <select name="category_id" id="editDrinkCategory" required onchange="updateEditLivePreview()" class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2.5 border border-slate-700 focus:border-amber-400">
+                        {% for cat in categories %}
+                        <option value="{{ cat.id }}" data-icon="{{ cat.icon }}" data-name="{{ cat.name }}">{{ cat.icon }} {{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Studio Image Uploader (Edit Mode) -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs font-black text-amber-300 flex items-center gap-1.5">
+                        <i class="fa-solid fa-camera text-amber-400"></i>
+                        <span>صورة الصنف (Photo Studio)</span>
+                    </label>
+                    <span class="text-[10px] text-amber-400 font-bold bg-amber-950/80 px-2.5 py-0.5 rounded-full border border-amber-800/60">مظهر احترافي فائق</span>
+                </div>
+
+                <!-- Dropzone Canvas for Edit -->
+                <div id="editDrinkDropzone" 
+                     ondragover="handleDragOver(event, 'editDrinkDropzone')" 
+                     ondragleave="handleDragLeave(event, 'editDrinkDropzone')" 
+                     ondrop="handleDrop(event, 'editDrinkFileInput', 'editDrinkDropzone', 'editDrinkImgPreview', 'editDrinkCurrentImgContainer', 'editDrinkPlaceholder', 'editLivePreviewImg')"
+                     class="relative group border-2 border-dashed border-slate-700 hover:border-amber-400 bg-slate-950/70 hover:bg-slate-950 rounded-2xl p-4 text-center transition-all duration-200 overflow-hidden min-h-[190px] flex flex-col items-center justify-center cursor-pointer">
+                    
+                    <input type="hidden" name="image_base64" id="editDrinkImageBase64">
+                    <input type="file" name="image_file" id="editDrinkFileInput" accept="image/*" onchange="previewSelectedImage(this, 'editDrinkImgPreview', 'editDrinkCurrentImgContainer', 'editDrinkPlaceholder', 'editLivePreviewImg')" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30">
+                    <input type="hidden" name="current_icon" id="editDrinkCurrentIcon">
+
+                    <!-- Loaded / Current Image View -->
+                    <div id="editDrinkCurrentImgContainer" class="hidden w-full flex-col items-center justify-center space-y-2.5 z-20">
+                        <div class="relative w-full max-w-xs h-48 rounded-2xl overflow-hidden border-2 border-amber-400 shadow-2xl shadow-amber-500/20 bg-slate-900">
+                            <img id="editDrinkImgPreview" src="" alt="صورة المنتج" class="max-h-full max-w-full object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-xl">
+                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none"></div>
+                            <span class="absolute top-2 right-2 text-[10px] font-bold text-amber-300 bg-slate-950/90 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                                📷 صورة الصنف الحالية
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-bold text-emerald-400 bg-emerald-950/90 px-3 py-1 rounded-full border border-emerald-800 flex items-center gap-1">
+                                <i class="fa-solid fa-circle-check"></i> صورة الصنف جاهزة
+                            </span>
+                            <button type="button" onclick="removeDrinkImageAction('edit')" class="relative z-40 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-950/80 hover:bg-rose-900/90 px-3 py-1 rounded-full border border-rose-800 transition">
+                                <i class="fa-solid fa-trash-can"></i> إزالة الصورة
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-slate-400">انقر هنا أو اسحب صورة جديدة لاستبدالها</p>
+                    </div>
+
+                    <!-- Placeholder View (When Reverted to Emoji) -->
+                    <div id="editDrinkPlaceholder" class="flex flex-col items-center justify-center py-4 space-y-2 pointer-events-none">
+                        <div class="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center text-3xl group-hover:scale-110 transition-transform shadow-inner">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-black text-white group-hover:text-amber-300 transition-colors">انقر هنا لاختيار صورة للمنتج من جهازك، أو اسحب الصورة هنا</p>
+                            <p class="text-[10px] text-slate-400 mt-1">يدعم صور PNG, JPG, JPEG, WebP عالية الدقة</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fallback / Emoji Picker for Edit -->
+                <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2">
+                    <span class="text-[10px] text-slate-400 font-bold shrink-0">أيقونة أو إيموجي:</span>
+                    <input type="text" name="icon" id="editDrinkIcon" class="w-10 bg-slate-900 text-white text-center text-sm rounded-lg py-1 border border-slate-700" placeholder="☕" oninput="updateEditLivePreview()">
+                    <div class="flex items-center gap-1.5 overflow-x-auto py-0.5 text-sm">
+                        {% for ic in ['☕', '🍵', '🥤', '🧋', '🍹', '🥐', '🍰', '🍪', '🍕', '🍔', '🥪', '🍫', '🍿', '💧', '🍦'] %}
+                        <button type="button" onclick="selectEmojiForEdit('{{ ic }}')" class="w-7 h-7 rounded-lg bg-slate-900 hover:bg-amber-500/30 text-white flex items-center justify-center hover:scale-110 transition">
+                            {{ ic }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Price in LBP & USD -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">السعر بالليرة (ل.ل) *</label>
+                    <input type="number" step="any" min="0" name="price_lbp" id="editDrinkPrice" required oninput="syncEditPrice('lbp')" class="w-full bg-slate-950 text-amber-300 font-mono font-bold text-xs rounded-xl px-3 py-2.5 border border-slate-700 focus:border-amber-400">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">السعر بالدولار ($ تقريبي)</label>
+                    <input type="number" step="any" min="0" id="editDrinkPriceUSD" oninput="syncEditPrice('usd')" class="w-full bg-slate-950 text-emerald-400 font-mono font-bold text-xs rounded-xl px-3 py-2.5 border border-slate-700 focus:border-emerald-400">
+                </div>
+            </div>
+
+            <!-- Active Checkbox -->
+            <div class="flex items-center gap-2 p-2 bg-slate-950/60 rounded-xl border border-slate-800">
+                <input type="checkbox" name="is_active" id="editDrinkActive" value="1" class="rounded text-amber-500 w-4 h-4">
+                <label for="editDrinkActive" class="text-xs font-bold text-slate-300 cursor-pointer">متاح ونشط في شاشة الكاشير للطلب المباشر</label>
+            </div>
+
+            <!-- Live Cashier Card Preview Box -->
+            <div class="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
+                <span class="text-[11px] font-black text-amber-400 flex items-center gap-1">
+                    <i class="fa-solid fa-eye"></i> معاينة مباشرة: هكذا سيظهر الصنف في شاشة الكاشير
+                </span>
+                
+                <div class="max-w-[220px] mx-auto rounded-2xl bg-slate-950 border-2 border-amber-400/60 shadow-xl overflow-hidden text-right">
+                    <div class="relative w-full h-28 bg-slate-900 overflow-hidden flex items-center justify-center">
+                        <img id="editLivePreviewImg" src="" alt="" class="hidden w-full h-full object-cover">
+                        <span id="editLivePreviewIcon" class="text-4xl">☕</span>
+                        <span id="editLivePreviewCat" class="absolute top-1.5 right-1.5 text-[9px] font-bold text-white bg-slate-950/80 px-2 py-0.5 rounded-full border border-white/10">مشروبات</span>
+                    </div>
+                    <div class="p-2.5 space-y-1">
+                        <h5 id="editLivePreviewName" class="font-black text-xs text-white truncate">اسم المنتج</h5>
+                        <div class="flex items-baseline justify-between pt-1 border-t border-slate-800">
+                            <span id="editLivePreviewLBP" class="font-mono font-black text-xs text-amber-400">0 ل.ل</span>
+                            <span id="editLivePreviewUSD" class="font-mono text-[10px] font-bold text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2.5 pt-2">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-3 rounded-xl text-xs transition shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-check"></i>
+                    <span>حفظ التعديلات وتحديث الصنف</span>
+                </button>
+                <button type="button" onclick="closeModal('editDrinkModal')" class="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 5. Modal: Reset Transactions Only Confirmation -->
+<div id="resetTransactionsModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-amber-500/50 text-white space-y-4">
+        <div class="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 mx-auto flex items-center justify-center text-3xl">
+            <i class="fa-solid fa-broom"></i>
+        </div>
+        <div class="text-center">
+            <h3 class="text-base font-black text-white">تصفير المبيعات وحركات اليوم؟</h3>
+            <p class="text-xs text-slate-300 mt-2 leading-relaxed">
+                سيتم مسح وتصفير كافة الفواتير، المبيعات، استخدامات الكمبيوتر، والمصاريف المسجلة للبدء من الصفر.
+                <br>
+                <strong class="text-amber-400 block mt-1">✓ قائمة المشروبات وأسعار المنيو ستبقى محفوظة كما هي.</strong>
+            </p>
+        </div>
+
+        <form method="POST" action="{{ url_for('admin_factory_reset') }}" class="space-y-3 pt-2">
+            <input type="hidden" name="reset_type" value="transactions_only">
+            <div>
+                <label class="block text-xs font-bold text-amber-300 mb-1">أدخل كلمة سر الإدارة للتأكيد: *</label>
+                <div class="relative">
+                    <input type="password" id="resetPinInput" name="admin_pin" required placeholder="••••••••" class="w-full bg-slate-950 border-2 border-amber-500/80 text-white font-mono text-center text-sm rounded-xl py-2 px-9 focus:outline-none focus:border-amber-400">
+                    <button type="button" onclick="togglePasswordVisibility('resetPinInput', this)" class="absolute left-3 top-2.5 text-slate-400 hover:text-amber-300 text-xs">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <button type="submit" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 px-4 rounded-xl text-xs transition shadow-md">
+                    نعم، تصفير المبيعات 🧹
+                </button>
+                <button type="button" onclick="closeModal('resetTransactionsModal')" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 6. Modal: Full Factory Reset Confirmation -->
+<div id="fullFactoryResetModal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border-2 border-rose-600 text-white space-y-4">
+        <div class="w-16 h-16 rounded-2xl bg-rose-600/20 text-rose-500 mx-auto flex items-center justify-center text-3xl animate-pulse">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div class="text-center space-y-2">
+            <h3 class="text-base font-black text-rose-400">تحذير أمني: استعادة ضبط المصنع بالكامل</h3>
+            <p class="text-xs text-slate-300 leading-relaxed">
+                هل أنت متأكد من رغبتك في مسح وإلغاء كل شيء؟
+            </p>
+            <div class="p-3 bg-rose-950/60 rounded-2xl border border-rose-800/80 text-[11px] text-rose-200 text-right space-y-1">
+                <div>• سيتم حذف جميع المنتجات والأقسام بالكامل (تصفير شامل).</div>
+                <div>• سيتم حذف جميع الفواتير والمبيعات والمصاريف والديون.</div>
+                <div>• سيصبح السيستم فارغاً ونظيفاً تماماً وجاهزاً للبدء من الصفر.</div>
+            </div>
+        </div>
+
+        <form method="POST" action="{{ url_for('admin_factory_reset') }}" class="space-y-3 pt-2">
+            <input type="hidden" name="reset_type" value="full">
+            <div>
+                <label class="block text-xs font-bold text-rose-300 mb-1">أدخل كلمة سر الإدارة للتأكيد: *</label>
+                <div class="relative">
+                    <input type="password" id="factoryPinInput" name="admin_pin" required placeholder="••••••••" class="w-full bg-slate-950 border-2 border-rose-500/80 text-white font-mono text-center text-sm rounded-xl py-2 px-9 focus:outline-none focus:border-rose-400">
+                    <button type="button" onclick="togglePasswordVisibility('factoryPinInput', this)" class="absolute left-3 top-2.5 text-slate-400 hover:text-rose-300 text-xs">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <button type="submit" class="bg-rose-600 hover:bg-rose-500 text-white font-black py-2.5 px-4 rounded-xl text-xs transition shadow-lg shadow-rose-600/30">
+                    نعم، استعادة ضبط المصنع ⚠️
+                </button>
+                <button type="button" onclick="closeModal('fullFactoryResetModal')" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs">
+                    تراجع وإلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Change Admin Password (تغيير كلمة سر الإدارة) -->
+<div id="changePasswordModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-purple-500/50 text-white space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-sm font-black">🔑</span>
+                <h3 class="font-black text-sm text-white">تغيير كلمة سر الإدارة</h3>
+            </div>
+            <button type="button" onclick="closeModal('changePasswordModal')" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('admin_change_password') }}" class="space-y-3.5">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">كلمة المرور الحالية: *</label>
+                <div class="relative">
+                    <input type="password" id="curPassInput" name="current_pin" required placeholder="••••••••" class="w-full bg-slate-950 border border-slate-700 focus:border-purple-400 text-white font-mono text-center text-sm rounded-xl py-2 px-9 focus:outline-none transition">
+                    <button type="button" onclick="togglePasswordVisibility('curPassInput', this)" class="absolute left-3 top-2.5 text-slate-400 hover:text-purple-300 text-xs">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-purple-300 mb-1">كلمة المرور الجديدة: *</label>
+                <div class="relative">
+                    <input type="password" id="newPassInput" name="new_pin" minlength="4" required placeholder="••••••••" class="w-full bg-slate-950 border-2 border-purple-500/60 focus:border-amber-400 text-white font-mono text-center text-sm rounded-xl py-2 px-9 focus:outline-none transition">
+                    <button type="button" onclick="togglePasswordVisibility('newPassInput', this)" class="absolute left-3 top-2.5 text-slate-400 hover:text-purple-300 text-xs">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-purple-300 mb-1">تأكيد كلمة المرور الجديدة: *</label>
+                <div class="relative">
+                    <input type="password" id="confPassInput" name="confirm_pin" minlength="4" required placeholder="••••••••" class="w-full bg-slate-950 border-2 border-purple-500/60 focus:border-amber-400 text-white font-mono text-center text-sm rounded-xl py-2 px-9 focus:outline-none transition">
+                    <button type="button" onclick="togglePasswordVisibility('confPassInput', this)" class="absolute left-3 top-2.5 text-slate-400 hover:text-purple-300 text-xs">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2">
+                <button type="submit" class="bg-purple-600 hover:bg-purple-500 text-white font-black py-2.5 px-4 rounded-xl text-xs transition shadow-md shadow-purple-600/30">
+                    حفظ كلمة السر 💾
+                </button>
+                <button type="button" onclick="closeModal('changePasswordModal')" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Backup, Export & Import Hub (النسخ الاحتياطي ونقل واستيراد وتصدير الداتا) -->
+<div id="backupExportModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-cyan-500/40 text-white space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-base font-black">💾</span>
+                <div>
+                    <h3 class="font-black text-sm text-white">النسخ الاحتياطي ونقل واستيراد وتصدير الداتا</h3>
+                    <p class="text-[10px] text-slate-400">حفظ نسخة من قاعدة البيانات، تصدير المنيو للكمبيوترات الأخرى، واستيراد المبيعات</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeModal('backupExportModal')" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <!-- Card 1: Full DB Backup Download -->
+            <div class="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 flex flex-col justify-between space-y-3">
+                <div>
+                    <div class="flex items-center gap-2 text-emerald-400 font-bold text-xs mb-1">
+                        <i class="fa-solid fa-download"></i>
+                        <span>تحميل نسخة احتياطية (.db)</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 leading-relaxed">
+                        تنزيل ملف قاعدة البيانات كاملاً بجميع الفواتير والديون والمنيو وحفظه على الفلاشة أو الكمبيوتر.
+                    </p>
+                </div>
+                <a href="{{ url_for('backup_download') }}" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-3 rounded-xl text-xs text-center transition flex items-center justify-center gap-1.5 shadow-sm">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                    <span>تحميل النسخة الاحتياطية (.db) 📥</span>
+                </a>
+            </div>
+
+            <!-- Card 2: Full DB Backup Restore -->
+            <div class="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 flex flex-col justify-between space-y-3">
+                <div>
+                    <div class="flex items-center gap-2 text-amber-400 font-bold text-xs mb-1">
+                        <i class="fa-solid fa-upload"></i>
+                        <span>استعادة نسخة احتياطية (.db)</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 leading-relaxed">
+                        رفع واستعادة ملف قاعدة البيانات المحفوظ مسبقاً لاسترجاع كافة الحسابات والمنيو.
+                    </p>
+                </div>
+                <form method="POST" action="{{ url_for('backup_restore') }}" enctype="multipart/form-data" class="space-y-2">
+                    <input type="file" name="backup_file" accept=".db,.sqlite,.sqlite3" required class="block w-full text-[10px] text-slate-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-slate-800 file:text-amber-300 hover:file:bg-slate-700">
+                    <button type="submit" onclick="return confirm('هل أنت متأكد من استعادة هذه النسخة؟ سيتم استبدال البيانات الحالية بالنسخة المرفوعة.')" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-sm">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        <span>استعادة من ملف (.db) 📤</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Card 3: Menu Export / Import (JSON) -->
+            <div class="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 flex flex-col justify-between space-y-3">
+                <div>
+                    <div class="flex items-center gap-2 text-purple-400 font-bold text-xs mb-1">
+                        <i class="fa-solid fa-mug-hot"></i>
+                        <span>تصدير واستيراد المنيو والأسعار</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 leading-relaxed">
+                        نقل قائمة المشروبات والأصناف والتصنيفات والأسعار بين أجهزة الموظفين بكل سهولة.
+                    </p>
+                </div>
+                <div class="space-y-2">
+                    <a href="{{ url_for('export_menu_json') }}" class="w-full bg-slate-800 hover:bg-slate-700 text-purple-300 font-bold py-1.5 px-3 rounded-xl text-xs text-center transition flex items-center justify-center gap-1.5 border border-purple-500/30">
+                        <i class="fa-solid fa-file-export"></i>
+                        <span>تصدير المنيو (JSON) 📑</span>
+                    </a>
+                    <form method="POST" action="{{ url_for('import_menu') }}" enctype="multipart/form-data" class="space-y-1.5 pt-1 border-t border-slate-800">
+                        <input type="file" name="menu_file" accept=".json" required class="block w-full text-[10px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-slate-800 file:text-purple-300">
+                        <button type="submit" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-black py-1.5 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-sm">
+                            <i class="fa-solid fa-file-import"></i>
+                            <span>استيراد المنيو ☕</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Card 4: Sales & Debts Excel CSV Export -->
+            <div class="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 flex flex-col justify-between space-y-3">
+                <div>
+                    <div class="flex items-center gap-2 text-blue-400 font-bold text-xs mb-1">
+                        <i class="fa-solid fa-file-excel"></i>
+                        <span>تصدير الحسابات والمبيعات لـ Excel</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 leading-relaxed">
+                        تصدير كشف كامل بجميع الفواتير والمبيعات اليومية، سجل ديون الزبائن، والمصاريف بصيغة CSV جاهزة للفتح ببرنامج Excel.
+                    </p>
+                </div>
+                <div class="space-y-2">
+                    <a href="{{ url_for('export_sales_csv_route') }}" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-2 px-3 rounded-xl text-xs text-center transition flex items-center justify-center gap-1.5 shadow-sm">
+                        <i class="fa-solid fa-file-csv"></i>
+                        <span>تحميل تقرير المبيعات والديون (Excel CSV) 📊</span>
+                    </a>
+                    <a href="{{ url_for('export_system_json') }}" class="w-full bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold py-1.5 px-3 rounded-xl text-xs text-center transition flex items-center justify-center gap-1.5 border border-cyan-500/30">
+                        <i class="fa-solid fa-box-archive"></i>
+                        <span>تصدير حزمة النظام الكاملة (Full JSON) 📦</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="pt-2 text-center border-t border-slate-800">
+            <button type="button" onclick="closeModal('backupExportModal')" class="px-6 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition">
+                إغلاق
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Factory Reset Options Hub -->
+<div id="factoryResetModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-rose-900/60 text-white space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="text-rose-500 text-lg">⚠️</span>
+                <h3 class="font-black text-sm text-white">خيارات ضبط المصنع والتصفير</h3>
+            </div>
+            <button type="button" onclick="closeModal('factoryResetModal')" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-base"></i>
+            </button>
+        </div>
+
+        <div class="space-y-3">
+            <button type="button" onclick="closeModal('factoryResetModal'); openModal('resetTransactionsModal');" class="w-full p-3.5 rounded-2xl bg-slate-950 hover:bg-slate-800 border border-amber-500/40 text-right flex items-center justify-between transition group">
+                <div>
+                    <h4 class="font-bold text-xs text-amber-400">1. تصفير المبيعات والفواتير فقط</h4>
+                    <p class="text-[10px] text-slate-400 mt-0.5">مسح حركات اليوم والمصاريف مع الحفاظ على المنيو</p>
+                </div>
+                <i class="fa-solid fa-chevron-left text-xs text-slate-500 group-hover:text-amber-400 transition"></i>
+            </button>
+
+            <button type="button" onclick="closeModal('factoryResetModal'); openModal('fullFactoryResetModal');" class="w-full p-3.5 rounded-2xl bg-rose-950/40 hover:bg-rose-900/50 border border-rose-800/80 text-right flex items-center justify-between transition group">
+                <div>
+                    <h4 class="font-bold text-xs text-rose-400">2. استعادة ضبط المصنع الشامل</h4>
+                    <p class="text-[10px] text-slate-400 mt-0.5">مسح كل شيء وتصفير النظام ليصبح فارغاً 100%</p>
+                </div>
+                <i class="fa-solid fa-chevron-left text-xs text-slate-500 group-hover:text-rose-400 transition"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function togglePasswordVisibility(inputId, btn) {
+        const inp = document.getElementById(inputId);
+        if (!inp) return;
+        const icon = btn.querySelector('i');
+        if (inp.type === 'password') {
+            inp.type = 'text';
+            if (icon) {
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            }
+        } else {
+            inp.type = 'password';
+            if (icon) {
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+    }
+</script>
+
+<script>
+    
+
+    // Preview uploaded image immediately
+    document.addEventListener('DOMContentLoaded', function() {
+        const fileInputs = document.querySelectorAll('input[name="image_file"]');
+        fileInputs.forEach(function(inp) {
+            inp.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const reader = new FileReader();
+                    const form = this.closest('form');
+                    reader.onload = function(e) {
+                        const prev = form.querySelector('.img-upload-preview');
+                        if (prev) {
+                            prev.src = e.target.result;
+                            prev.style.display = 'block';
+                            if (prev.parentElement) {
+                                prev.parentElement.classList.remove('hidden');
+                                prev.parentElement.style.display = 'flex';
+                            }
+                        }
+                    };
+                    reader.readAsDataURL(this.files[0]);
+                }
+            });
+        });
+    });
+
+    // Week Trend Chart
+    const weekData = {{ (weekly_trend or [])|tojson }};
+    const labels = weekData.map(d => d.label || (d.date ? d.date.split('-').slice(1).join('/') : ''));
+    const rev = weekData.map(d => (d.total_lbp || d.revenue_lbp || 0) / 1000);
+    const profit = weekData.map(d => (d.net_profit_lbp || 0) / 1000);
+
+    const ctx = document.getElementById('weekChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'إجمالي الدخل (ألف ل.ل)',
+                    data: rev,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                    fill: true,
+                    tension: 0.3
+                },
+                {
+                    label: 'صافي الربح (ألف ل.ل)',
+                    data: profit,
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'transparent',
+                    borderDash: [4, 4],
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top', labels: { color: '#cbd5e1', font: { family: 'Cairo', size: 10 } } }
+            },
+            scales: {
+                y: {
+                    ticks: { color: '#94a3b8', callback: v => v + 'k', font: { family: 'Cairo', size: 9 } },
+                    grid: { color: '#1e293b' }
+                },
+                x: {
+                    ticks: { color: '#94a3b8', font: { family: 'Cairo', size: 9 } },
+                    grid: { color: '#1e293b' }
+                }
+            }
+        }
+    });
+
+
+    // ==========================================
+    // STUDIO IMAGE UPLOADER & LIVE PREVIEW SYSTEM
+    // ==========================================
+    const SYSTEM_EXCHANGE_RATE = 89500;
+
+    function handleDragOver(e, dropzoneId) {
+        e.preventDefault();
+        e.stopPropagation();
+        const el = document.getElementById(dropzoneId);
+        if (el) {
+            el.classList.add('border-amber-400', 'bg-amber-950/30', 'scale-[1.01]');
+        }
+    }
+
+    function handleDragLeave(e, dropzoneId) {
+        e.preventDefault();
+        e.stopPropagation();
+        const el = document.getElementById(dropzoneId);
+        if (el) {
+            el.classList.remove('border-amber-400', 'bg-amber-950/30', 'scale-[1.01]');
+        }
+    }
+
+    function handleDrop(e, fileInputId, dropzoneId, imgPreviewId, containerId, placeholderId, livePreviewImgId) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleDragLeave(e, dropzoneId);
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+            const file = e.dataTransfer.files[0];
+            const fileInput = document.getElementById(fileInputId);
+            if (fileInput) {
+                const dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                fileInput.files = dataTransfer.files;
+                previewSelectedImage(fileInput, imgPreviewId, containerId, placeholderId, livePreviewImgId);
+            }
+        }
+    }
+
+    function previewSelectedImage(input, previewId, containerId, placeholderId, livePreviewImgId) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const prev = document.getElementById(previewId);
+                const cont = document.getElementById(containerId);
+                const place = document.getElementById(placeholderId);
+                const liveImg = document.getElementById(livePreviewImgId);
+
+                if (prev) {
+                    prev.src = e.target.result;
+                }
+                if (cont) {
+                    cont.classList.remove('hidden');
+                    cont.style.display = 'flex';
+                }
+                if (place) {
+                    place.classList.add('hidden');
+                    place.style.display = 'none';
+                }
+                if (liveImg) {
+                    liveImg.src = e.target.result;
+                    liveImg.classList.remove('hidden');
+                    const liveIcon = liveImg.parentElement ? liveImg.parentElement.querySelector('span:not([id*="Cat"])') : null;
+                    if (liveIcon) liveIcon.classList.add('hidden');
+                }
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function clearSelectedImage(fileInputId, imgPreviewId, containerId, placeholderId, livePreviewImgId, iconInputId) {
+        const fileInput = document.getElementById(fileInputId);
+        if (fileInput) fileInput.value = '';
+
+        const prev = document.getElementById(imgPreviewId);
+        if (prev) prev.src = '';
+
+        const cont = document.getElementById(containerId);
+        if (cont) {
+            cont.classList.add('hidden');
+            cont.style.display = 'none';
+        }
+
+        const place = document.getElementById(placeholderId);
+        if (place) {
+            place.classList.remove('hidden');
+            place.style.display = 'flex';
+        }
+
+        const liveImg = document.getElementById(livePreviewImgId);
+        if (liveImg) {
+            liveImg.src = '';
+            liveImg.classList.add('hidden');
+            const liveIcon = liveImg.parentElement ? liveImg.parentElement.querySelector('span:not([id*="Cat"])') : null;
+            if (liveIcon) liveIcon.classList.remove('hidden');
+        }
+
+        const iconInput = document.getElementById(iconInputId);
+        if (iconInput && !iconInput.value) iconInput.value = '☕';
+    }
+
+    function removeDrinkImageAction(mode) {
+        if (mode === 'edit') {
+            document.getElementById('editDrinkFileInput').value = '';
+            document.getElementById('editDrinkCurrentIcon').value = '';
+            const iconInput = document.getElementById('editDrinkIcon');
+            if (iconInput) iconInput.value = '☕';
+            
+            const cont = document.getElementById('editDrinkCurrentImgContainer');
+            if (cont) { cont.classList.add('hidden'); cont.style.display = 'none'; }
+            
+            const place = document.getElementById('editDrinkPlaceholder');
+            if (place) { place.classList.remove('hidden'); place.style.display = 'flex'; }
+
+            const liveImg = document.getElementById('editLivePreviewImg');
+            if (liveImg) { liveImg.src = ''; liveImg.classList.add('hidden'); }
+            const liveIcon = document.getElementById('editLivePreviewIcon');
+            if (liveIcon) { liveIcon.innerText = '☕'; liveIcon.classList.remove('hidden'); }
+        }
+    }
+
+    function selectEmojiForAdd(ic) {
+        const iconInput = document.getElementById('addDrinkIconInput');
+        if (iconInput) iconInput.value = ic;
+        clearSelectedImage('addDrinkFileInput', 'addDrinkImgPreview', 'addDrinkPreviewContainer', 'addDrinkPlaceholder', 'addLivePreviewImg', 'addDrinkIconInput');
+        const liveIcon = document.getElementById('addLivePreviewIcon');
+        if (liveIcon) { liveIcon.innerText = ic; liveIcon.classList.remove('hidden'); }
+    }
+
+    function selectEmojiForEdit(ic) {
+        removeDrinkImageAction('edit');
+        const iconInput = document.getElementById('editDrinkIcon');
+        if (iconInput) iconInput.value = ic;
+        const liveIcon = document.getElementById('editLivePreviewIcon');
+        if (liveIcon) { liveIcon.innerText = ic; liveIcon.classList.remove('hidden'); }
+    }
+
+    function syncAddPrice(source) {
+        const lbp = document.getElementById('addDrinkPriceInput');
+        const usd = document.getElementById('addDrinkPriceUSDInput');
+        if (source === 'lbp' && lbp.value) {
+            usd.value = (parseFloat(lbp.value) / SYSTEM_EXCHANGE_RATE).toFixed(2);
+        } else if (source === 'usd' && usd.value) {
+            lbp.value = Math.round(parseFloat(usd.value) * SYSTEM_EXCHANGE_RATE);
+        }
+        updateAddLivePreview();
+    }
+
+    function syncEditPrice(source) {
+        const lbp = document.getElementById('editDrinkPrice');
+        const usd = document.getElementById('editDrinkPriceUSD');
+        if (source === 'lbp' && lbp.value) {
+            usd.value = (parseFloat(lbp.value) / SYSTEM_EXCHANGE_RATE).toFixed(2);
+        } else if (source === 'usd' && usd.value) {
+            lbp.value = Math.round(parseFloat(usd.value) * SYSTEM_EXCHANGE_RATE);
+        }
+        updateEditLivePreview();
+    }
+
+    function updateAddLivePreview() {
+        const name = document.getElementById('addDrinkNameInput').value || 'اسم المنتج';
+        const price = parseFloat(document.getElementById('addDrinkPriceInput').value) || 0;
+        const usd = parseFloat(document.getElementById('addDrinkPriceUSDInput').value) || (price / SYSTEM_EXCHANGE_RATE);
+        const catSelect = document.getElementById('addDrinkCategorySelect');
+        const catName = catSelect.options[catSelect.selectedIndex] ? catSelect.options[catSelect.selectedIndex].text : 'عام';
+
+        document.getElementById('addLivePreviewName').innerText = name;
+        document.getElementById('addLivePreviewLBP').innerText = Number(price).toLocaleString() + ' ل.ل';
+        document.getElementById('addLivePreviewUSD').innerText = '$' + usd.toFixed(2);
+        document.getElementById('addLivePreviewCat').innerText = catName;
+    }
+
+    function updateEditLivePreview() {
+        const name = document.getElementById('editDrinkName').value || 'اسم المنتج';
+        const price = parseFloat(document.getElementById('editDrinkPrice').value) || 0;
+        const usd = parseFloat(document.getElementById('editDrinkPriceUSD').value) || (price / SYSTEM_EXCHANGE_RATE);
+        const catSelect = document.getElementById('editDrinkCategory');
+        const catName = catSelect.options[catSelect.selectedIndex] ? catSelect.options[catSelect.selectedIndex].text : 'عام';
+
+        document.getElementById('editLivePreviewName').innerText = name;
+        document.getElementById('editLivePreviewLBP').innerText = Number(price).toLocaleString() + ' ل.ل';
+        document.getElementById('editLivePreviewUSD').innerText = '$' + usd.toFixed(2);
+        document.getElementById('editLivePreviewCat').innerText = catName;
+    }
+
+    
+function triggerEditDrink(btn) {
+    if (!btn) return;
+    const id = btn.getAttribute('data-id');
+    const name = btn.getAttribute('data-name');
+    const catId = btn.getAttribute('data-category-id');
+    const price = btn.getAttribute('data-price');
+    const icon = btn.getAttribute('data-icon');
+    const isActive = btn.getAttribute('data-is-active');
+    openEditDrinkModal(id, name, catId, price, icon, isActive);
+}
+
+function openEditDrinkModal(id, name, catId, price, icon, isActive) {
+        document.getElementById('editDrinkForm').action = `/menu/item/${id}/edit`;
+        document.getElementById('editDrinkName').value = name;
+        document.getElementById('editDrinkCategory').value = catId;
+        document.getElementById('editDrinkPrice').value = price;
+        document.getElementById('editDrinkPriceUSD').value = (price / SYSTEM_EXCHANGE_RATE).toFixed(2);
+        document.getElementById('editDrinkActive').checked = (isActive == 1);
+
+        const iconInput = document.getElementById('editDrinkIcon');
+        const imgPreview = document.getElementById('editDrinkImgPreview');
+        const currentIconHidden = document.getElementById('editDrinkCurrentIcon');
+        const editContainer = document.getElementById('editDrinkCurrentImgContainer');
+        const editPlaceholder = document.getElementById('editDrinkPlaceholder');
+        const fileInput = document.getElementById('editDrinkFileInput');
+        if (fileInput) fileInput.value = '';
+
+        const liveImg = document.getElementById('editLivePreviewImg');
+        const liveIcon = document.getElementById('editLivePreviewIcon');
+
+        if (icon && (icon.startsWith('/static') || icon.startsWith('http') || icon.startsWith('data:'))) {
+            iconInput.value = '';
+            if (currentIconHidden) currentIconHidden.value = icon;
+            if (imgPreview) imgPreview.src = icon;
+            if (editContainer) { editContainer.classList.remove('hidden'); editContainer.style.display = 'flex'; }
+            if (editPlaceholder) { editPlaceholder.classList.add('hidden'); editPlaceholder.style.display = 'none'; }
+            if (liveImg) { liveImg.src = icon; liveImg.classList.remove('hidden'); }
+            if (liveIcon) liveIcon.classList.add('hidden');
+        } else {
+            iconInput.value = icon || '☕';
+            if (currentIconHidden) currentIconHidden.value = '';
+            if (imgPreview) imgPreview.src = '';
+            if (editContainer) { editContainer.classList.add('hidden'); editContainer.style.display = 'none'; }
+            if (editPlaceholder) { editPlaceholder.classList.remove('hidden'); editPlaceholder.style.display = 'flex'; }
+            if (liveImg) { liveImg.src = ''; liveImg.classList.add('hidden'); }
+            if (liveIcon) { liveIcon.innerText = icon || '☕'; liveIcon.classList.remove('hidden'); }
+        }
+        updateEditLivePreview();
+        openModal('editDrinkModal');
+    }
+
+
+// =========================================================================
+// ADMIN CLIPBOARD PASTE (Ctrl+V) IMAGE SUPPORT
+// =========================================================================
+window.addEventListener('paste', function(e) {
+    const editModal = document.getElementById('editDrinkModal');
+    const addModal = document.getElementById('addDrinkModal');
+    
+    let mode = null;
+    if (editModal && !editModal.classList.contains('hidden')) {
+        mode = 'edit';
+    } else if (addModal && !addModal.classList.contains('hidden')) {
+        mode = 'add';
+    }
+    
+    if (!mode) return;
+    
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    for (let item of items) {
+        if (item.type.indexOf('image') !== -1) {
+            e.preventDefault();
+            const blob = item.getAsFile();
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const dataUrl = evt.target.result;
+                if (mode === 'edit') {
+                    const b64 = document.getElementById('editDrinkImageBase64');
+                    if (b64) b64.value = dataUrl;
+                    const prev = document.getElementById('editDrinkImgPreview');
+                    const cont = document.getElementById('editDrinkCurrentImgContainer');
+                    const place = document.getElementById('editDrinkPlaceholder');
+                    const liveImg = document.getElementById('editLivePreviewImg');
+                    if (prev) prev.src = dataUrl;
+                    if (cont) { cont.classList.remove('hidden'); cont.style.display = 'flex'; }
+                    if (place) { place.classList.add('hidden'); place.style.display = 'none'; }
+                    if (liveImg) { liveImg.src = dataUrl; liveImg.classList.remove('hidden'); }
+                } else {
+                    const b64 = document.getElementById('addDrinkImageBase64');
+                    if (b64) b64.value = dataUrl;
+                    const prev = document.getElementById('addDrinkImgPreview');
+                    const cont = document.getElementById('addDrinkPreviewContainer');
+                    const place = document.getElementById('addDrinkPlaceholder');
+                    const liveImg = document.getElementById('addLivePreviewImg');
+                    if (prev) prev.src = dataUrl;
+                    if (cont) { cont.classList.remove('hidden'); cont.style.display = 'flex'; }
+                    if (place) { place.classList.add('hidden'); place.style.display = 'none'; }
+                    if (liveImg) { liveImg.src = dataUrl; liveImg.classList.remove('hidden'); }
+                }
+            };
+            reader.readAsDataURL(blob);
+            break;
+        }
+    }
+});
+
+</script>
+{% endblock %}

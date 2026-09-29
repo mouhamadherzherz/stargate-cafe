@@ -1,0 +1,348 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="space-y-6 max-w-4xl mx-auto">
+
+    <!-- Header -->
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+        <h2 class="text-2xl font-black text-slate-800">إعدادات النظام والشركة ⚙️</h2>
+        <p class="text-sm text-slate-500 mt-1">تخصيص بيانات شركة stargate experts، سعر صرف الدولار مقابل الليرة اللبنانية، وأسعار التوصيل، ومسح البيانات.</p>
+    </div>
+
+    <!-- Main Settings Form -->
+    <form method="POST" action="{{ url_for('save_settings') }}" class="space-y-6">
+
+        <!-- Company Info & Dual Currency Card -->
+        <div class="bg-white p-6 lg:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+            <h3 class="font-bold text-slate-800 text-base flex items-center gap-2 border-b border-slate-100 pb-3">
+                <i class="fa-solid fa-building text-blue-600"></i> بيانات الشركة والعملة وسعر الصرف
+            </h3>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">اسم الشركة / المكتب <span class="text-rose-500">*</span></label>
+                    <input type="text" name="company_name" value="{{ settings.company_name or 'stargate experts' }}" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">سعر صرف الدولار مقابل الليرة اللبنانية (LBP Rate) <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                        <input type="number" step="any" name="exchange_rate" value="{{ settings.exchange_rate or 89500 }}" required class="w-full bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2.5 text-sm font-black text-emerald-700 focus:ring-2 focus:ring-emerald-500 font-mono">
+                        <span class="absolute left-3 top-2.5 text-xs text-emerald-600 font-bold">1$ = ليرة</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">العملة الأساسية للنظام</label>
+                    <input type="text" name="currency" value="{{ settings.currency or 'ل.ل' }}" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-blue-600 focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">العملة الثانوية (المعادلة)</label>
+                    <input type="text" name="secondary_currency" value="{{ settings.secondary_currency or '$' }}" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-blue-600 focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف / واتساب</label>
+                    <input type="text" name="phone" value="{{ settings.phone or '+961 70 000 000' }}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 text-left font-mono" dir="ltr">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">العنوان والمقر</label>
+                    <input type="text" name="address" value="{{ settings.address or 'لبنان - بيروت' }}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">نص أسفل بوليصة الشحن (الفاتورة)</label>
+                <input type="text" name="receipt_footer_text" value="{{ settings.receipt_footer_text or 'شكراً لاختياركم stargate experts - يرجى فحص الطلب عند الاستلام' }}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500">
+            </div>
+        </div>
+
+        <!-- Admin PIN & Security Card (حماية صلاحيات المدير العام) -->
+        <div class="bg-white p-6 lg:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+            <h3 class="font-bold text-slate-800 text-base flex items-center gap-2 border-b border-slate-100 pb-3">
+                <i class="fa-solid fa-shield-halved text-red-600"></i>
+                <span>حماية المدير العام والرمز السري (Admin PIN)</span>
+            </h3>
+            <p class="text-xs text-slate-500">
+                هذا الرمز السري هو المفتاح الخاص بك وحدك لمنع الموظفين من حذف المتاجر أو الدخول للخزينة أو تعديل السائقين أو مسح البيانات.
+            </p>
+
+            <div class="max-w-xs">
+                <label class="block text-xs font-bold text-slate-700 mb-1">رمز مرور المدير السري (PIN) <span class="text-rose-500">*</span></label>
+                <div class="relative">
+                    <input type="password" id="settingsAdminPin" name="admin_pin" value="{{ settings.admin_pin or '' }}" required placeholder="••••••••" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-base font-black tracking-wider focus:ring-2 focus:ring-red-500 font-mono text-center pr-10">
+                    <button type="button" onclick="togglePinVisibility('settingsAdminPin', this)" class="absolute inset-y-0 right-0 px-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none">
+                        <i class="fa-solid fa-eye text-sm"></i>
+                    </button>
+                </div>
+                <span class="text-[11px] text-slate-400 mt-1 block">رمز المرور محمي ومخفي، يمكنك كتابة رمز جديد والضغط على حفظ.</span>
+            </div>
+        </div>
+
+        <!-- Pricing & Commissions Card -->
+        <div class="bg-white p-6 lg:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+            <h3 class="font-bold text-slate-800 text-base flex items-center gap-2 border-b border-slate-100 pb-3">
+                <i class="fa-solid fa-tags text-emerald-600"></i> أسعار التوصيل وعمولات المناديب الافتراضية
+            </h3>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">أجرة التوصيل الافتراضية (ل.ل)</label>
+                    <div class="relative">
+                        <input type="number" step="any" name="default_delivery_fee" value="{{ settings.default_delivery_fee or 268500 }}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-blue-600 focus:ring-2 focus:ring-blue-500 font-mono">
+                        <span class="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">ل.ل (~$3)</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">عمولة المندوب الافتراضية للطلب (ل.ل)</label>
+                    <div class="relative">
+                        <input type="number" step="any" name="default_driver_commission" value="{{ settings.default_driver_commission or 30000 }}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-amber-600 focus:ring-2 focus:ring-blue-500 font-mono">
+                        <span class="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">30,000 ل.ل</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">رسوم الإرجاع الافتراضية (ل.ل)</label>
+                    <div class="relative">
+                        <input type="number" step="any" name="default_return_fee" value="{{ settings.default_return_fee or 89500 }}" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-rose-600 focus:ring-2 focus:ring-blue-500 font-mono">
+                        <span class="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">ل.ل (~$1)</span>
+                    </div>
+                </div>
+        <!-- WhatsApp Auto-Send Gateway Card (الربط التلقائي الصامت بالواتساب) -->
+        <div class="bg-white p-6 lg:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                    <i class="fa-brands fa-whatsapp text-emerald-600 text-xl"></i>
+                    <span>بوابة الإرسال التلقائي للواتساب (WhatsApp Auto-Sender Gateway)</span>
+                </h3>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" name="whatsapp_gateway_enabled" value="1" {{ 'checked' if settings.whatsapp_gateway_enabled }} class="sr-only peer">
+                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                    <span class="mr-3 text-xs font-bold text-slate-700">تفعيل الإرسال الصامت ⚡</span>
+                </label>
+            </div>
+
+            <p class="text-xs text-slate-500 leading-relaxed">
+                عند تفعيل هذه البوابة، يقوم السيستم بإرسال رسائل التجهيز للمحل وفواتير الزبائن <b>تلقائياً في الخلفية بدون فتح تطبيق الواتساب وبدون الضغط على Enter</b> فور تسجيل أو تعديل الطلب!
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">مزود خدمة الواتساب (Provider)</label>
+                    <select name="whatsapp_provider" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500">
+                        <option value="ultramsg" {{ 'selected' if settings.whatsapp_provider == 'ultramsg' }}>UltraMsg (بوابة سريعة عبر QR)</option>
+                        <option value="custom" {{ 'selected' if settings.whatsapp_provider == 'custom' }}>Local Bridge / Webhook مخصص</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">معرف الحساب (Instance ID)</label>
+                    <input type="text" name="whatsapp_instance_id" value="{{ settings.whatsapp_instance_id or '' }}" placeholder="مثال: instance12345" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold focus:ring-2 focus:ring-emerald-500 text-left" dir="ltr">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">رمز التوثيق السري (API Token)</label>
+                    <input type="text" name="whatsapp_token" value="{{ settings.whatsapp_token or '' }}" placeholder="رمز الـ Token" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold focus:ring-2 focus:ring-emerald-500 text-left" dir="ltr">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">رابط السيرفر المخصص (API URL - اختياري للمزود المخصص)</label>
+                <input type="text" name="whatsapp_api_url" value="{{ settings.whatsapp_api_url or 'https://api.ultramsg.com' }}" placeholder="https://api.ultramsg.com" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono focus:ring-2 focus:ring-emerald-500 text-left" dir="ltr">
+            </div>
+        </div>
+
+        <div class="flex justify-end">
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-3 rounded-2xl text-sm shadow-md shadow-blue-600/20 transition flex items-center gap-2">
+                <i class="fa-solid fa-floppy-disk"></i>
+                <span>حفظ التعديلات وسعر الصرف</span>
+            </button>
+        </div>
+    </form>
+
+    <!-- Database Backup & Restore Card -->
+    <div class="bg-white p-6 lg:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+        <div>
+            <h3 class="font-bold text-slate-800 text-base flex items-center gap-2 border-b border-slate-100 pb-3">
+                <i class="fa-solid fa-database text-emerald-600"></i> النسخ الاحتياطي واستعادة البيانات (Backup & Restore)
+            </h3>
+            <p class="text-xs text-slate-500 leading-relaxed mt-2">
+                بياناتك محفوظة محلياً 100% داخل ملف قاعدة البيانات. يمكنك تنزيل نسخة احتياطية بأي وقت، أو استعادة نسخة سابقة عند الترقية أو نقل النظام لكمبيوتر آخر.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            <!-- 1. Download Backup -->
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between space-y-3">
+                <div>
+                    <h4 class="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                        <i class="fa-solid fa-cloud-arrow-down text-emerald-600"></i>
+                        <span>1. تصدير وحفظ نسخة احتياطية</span>
+                    </h4>
+                    <p class="text-[11px] text-slate-500 mt-1">تنزيل ملف قاعدة البيانات الحالي بالكامل (delivery_backup.db) لحفظه في مكان آمن أو نقله.</p>
+                </div>
+                <div>
+                    <a href="{{ url_for('backup_db') }}" class="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-md shadow-emerald-600/20 transition">
+                        <i class="fa-solid fa-download"></i>
+                        <span>تحميل نسخة احتياطية الآن 💾</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- 2. Restore Backup -->
+            <div class="p-4 rounded-2xl bg-blue-50/60 border border-blue-200 flex flex-col justify-between space-y-3">
+                <div>
+                    <h4 class="font-bold text-xs text-blue-900 flex items-center gap-1.5">
+                        <i class="fa-solid fa-cloud-arrow-up text-blue-600"></i>
+                        <span>2. استعادة أو جلب بيانات سابقة</span>
+                    </h4>
+                    <p class="text-[11px] text-blue-700 mt-1">رفع ملف نسخة سابقة (.db) لاسترجاع الشحنات والحسابات في هذا البرنامج فوراً.</p>
+                </div>
+                <form method="POST" action="{{ url_for('restore_db') }}" enctype="multipart/form-data" class="flex items-center gap-2 flex-wrap">
+                    <input type="file" name="backup_file" accept=".db" required class="text-xs text-slate-600 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700">
+                    <button type="submit" onclick="return confirm('هل أنت متأكد من استعادة هذه النسخة؟ سيتم استبدال البيانات الحالية بالنسخة المرفوعة.')" class="bg-blue-600 hover:bg-blue-700 text-white font-black px-3.5 py-1.5 rounded-xl text-xs transition shadow-sm">
+                        استعادة 📥
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- DANGER ZONE: CLEAR / WIPE ALL DATA CARD -->
+    <div class="bg-rose-50/60 p-6 lg:p-8 rounded-3xl border-2 border-rose-200 shadow-sm space-y-4">
+        <div class="flex items-center gap-3 text-rose-800">
+            <div class="w-10 h-10 rounded-2xl bg-rose-100 flex items-center justify-center text-rose-600 text-xl font-black">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div>
+                <h3 class="font-black text-base">منطقة الخطر: مسح وتصفير كافة البيانات (Factory Reset)</h3>
+                <p class="text-xs text-rose-600 mt-0.5">يمكنك تصفير النظام وبدء العمل من جديد بنقرة واحدة.</p>
+            </div>
+        </div>
+
+        <p class="text-xs text-slate-600 leading-relaxed">
+            عند تنفيذ المسح، سيتم حذف جميع الشحنات، سجل التسويات والسندات، عهد المناديب، وتصفير أرصدة الخزائن تماماً لتبدأ العمل على نظافة.
+        </p>
+
+        <div class="pt-2 flex items-center gap-3 flex-wrap">
+            <button type="button" onclick="openWipeModal('operational')" class="bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 cursor-pointer">
+                <i class="fa-solid fa-broom"></i>
+                <span>مسح الشحنات والحركات المالية فقط (مع الإبقاء على التجار والمناديب)</span>
+            </button>
+
+            <button type="button" onclick="openWipeModal('all')" class="bg-rose-600 hover:bg-rose-700 text-white font-black px-5 py-2.5 rounded-xl text-xs shadow-md shadow-rose-600/20 transition flex items-center gap-2 cursor-pointer">
+                <i class="fa-solid fa-trash-can"></i>
+                <span>مسح شامل وكامل 100% (تصفير كل شيء)</span>
+            </button>
+        </div>
+    </div>
+
+</div>
+
+<!-- WIPE CONFIRMATION MODAL -->
+<div id="wipeConfirmModal" class="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 lg:p-8 shadow-2xl text-center space-y-4">
+        <div class="w-16 h-16 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-3xl mx-auto">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+
+        <h3 class="text-xl font-black text-slate-900">هل أنت متأكد تماماً من مسح البيانات؟</h3>
+        <p class="text-xs text-slate-500 leading-relaxed" id="wipeModalDesc">
+            هذا الإجراء سيقوم بحذف كافة السجلات المالية والعمليات ولن تتمكن من التراجع عنه.
+        </p>
+
+        <form id="wipeFormElement" method="POST" action="{{ url_for('reset_data') }}" onsubmit="submitWipeForm(event)" class="pt-2 space-y-3">
+            <input type="hidden" name="wipe_mode" id="wipeModeInput" value="all">
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">أدخل رمز مرور المدير (PIN) للتأكيد:</label>
+                <input type="password" name="admin_pin" id="wipeAdminPin" placeholder="أدخل رمز سر المدير للتأكيد..." value="" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-center text-sm font-mono font-bold focus:ring-2 focus:ring-rose-500">
+            </div>
+
+            <div class="flex items-center justify-center gap-3 pt-3 border-t border-slate-100">
+                <button type="button" onclick="closeWipeModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-5 py-2.5 rounded-xl text-sm transition">
+                    إلغاء
+                </button>
+                <button type="submit" id="wipeSubmitBtn" class="bg-rose-600 hover:bg-rose-700 text-white font-black px-6 py-2.5 rounded-xl text-sm shadow-lg shadow-rose-600/30 transition flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-trash-can text-sm"></i>
+                    <span>نعم، امسح وتصفير البيانات</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function openWipeModal(mode) {
+        document.getElementById('wipeModeInput').value = mode;
+        const desc = document.getElementById('wipeModalDesc');
+        if (mode === 'operational') {
+            desc.textContent = 'سيتم حذف جميع الشحنات والطلبات وحركات الخزينة والتسويات، مع الحفاظ على أسماء التجار والمناديب وإعدادات الشركة.';
+        } else {
+            desc.textContent = 'تحذير: سيتم مسح كافة البيانات 100% (الشحنات، التجار، المناديب، الخزائن، السندات) وإرجاع النظام لحالة الصفر التام!';
+        }
+        document.getElementById('wipeConfirmModal').classList.remove('hidden');
+    }
+
+    function closeWipeModal() {
+        document.getElementById('wipeConfirmModal').classList.add('hidden');
+    }
+
+    async function submitWipeForm(e) {
+        e.preventDefault();
+        const form = e.target;
+        const btn = document.getElementById('wipeSubmitBtn');
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-sm"></i> <span>جاري المسح والتصفير...</span>';
+
+        const formData = new FormData(form);
+        try {
+            const res = await fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            const data = await res.json();
+            if (data.success) {
+                btn.className = "bg-emerald-600 text-white font-black px-6 py-2.5 rounded-xl text-sm transition flex items-center gap-1.5";
+                btn.innerHTML = '<i class="fa-solid fa-circle-check text-sm"></i> <span>تم المسح والتصفير بنجاح!</span>';
+                setTimeout(() => {
+                    window.location.href = '/settings';
+                }, 700);
+            } else {
+                alert(data.message || 'فشل مسح البيانات، تأكد من رمز المرور.');
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        } catch (err) {
+            console.error('Wipe form error:', err);
+            form.submit();
+        }
+    }
+
+    function togglePinVisibility(inputId, btn) {
+        const input = document.getElementById(inputId);
+        const icon = btn.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'fa-solid fa-eye-slash text-sm';
+        } else {
+            input.type = 'password';
+            icon.className = 'fa-solid fa-eye text-sm';
+        }
+    }
+</script>
+{% endblock %}

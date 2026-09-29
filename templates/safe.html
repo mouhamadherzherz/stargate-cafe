@@ -1,0 +1,476 @@
+{% extends "base.html" %}
+
+{% block title %}الخزنة المركزية الخاصة | STARGATE CAFE{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-7xl mx-auto pb-12">
+
+    <!-- Top Master Safe Header -->
+    <div class="bg-gradient-to-r from-slate-900 via-amber-950/80 to-slate-900 text-white p-6 rounded-3xl shadow-xl border border-amber-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="space-y-1">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-400/30">
+                <span>🏦</span>
+                <span>الخزنة الرئيسية الخاصة (صندوق المالك)</span>
+            </div>
+            <h1 class="text-2xl lg:text-3xl font-black text-white flex items-center gap-3">
+                <span>إدارة النقدية والتحويلات</span>
+                {% if is_filtered %}
+                <span class="text-xs font-mono text-amber-300 bg-amber-900/60 px-3 py-1 rounded-xl border border-amber-500/40">
+                    فلترة: {{ display_period }}
+                </span>
+                {% endif %}
+            </h1>
+            <p class="text-xs text-slate-400">
+                سجل متكامل وموثق لكافة التوريدات والمسحوبات النقدية من وإلى صندوق المالك مع البحث الدقيق عبر التاريخ.
+            </p>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+            <a href="{{ url_for('print_safe_statement', start_date=start_date, end_date=end_date, date=target_date) }}" target="_blank"
+               class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 shadow-lg shadow-amber-500/20">
+                <i class="fa-solid fa-print"></i>
+                <span>🖨️ طباعة كشف الحساب</span>
+            </a>
+            <a href="{{ url_for('admin_panel') }}"
+               class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 border border-slate-700">
+                <span>← لوحة الإدارة</span>
+            </a>
+        </div>
+    </div>
+
+    
+    <!-- ========================================================================= -->
+    <!-- 🚀 HERO: 1-CLICK DAILY SALES TRANSFER TO SPECIAL SAFE (ترحيل مبيعات اليوم) -->
+    <!-- ========================================================================= -->
+    <div class="bg-gradient-to-r from-slate-900 via-amber-950/70 to-slate-900 border-2 border-amber-500/60 rounded-3xl p-6 shadow-2xl space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-amber-500/20 pb-4">
+            <div class="flex items-center gap-3.5">
+                <div class="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-3xl font-black shrink-0 border border-amber-500/40 shadow-inner">
+                    🏦
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-lg sm:text-xl font-black text-white">ترحيل مبيعات اليوم إلى الخزنة الخاصة</h2>
+                        {% if daily_transfer_status and daily_transfer_status.is_fully_transferred %}
+                        <span class="text-[11px] font-bold text-emerald-400 bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-800 flex items-center gap-1">
+                            <i class="fa-solid fa-circle-check"></i> تم الترحيل بنجاح
+                        </span>
+                        {% else %}
+                        <span class="text-[11px] font-bold text-amber-400 bg-amber-950/80 px-2.5 py-0.5 rounded-full border border-amber-800/80 animate-pulse flex items-center gap-1">
+                            <i class="fa-solid fa-hourglass-half"></i> بانتظار الترحيل للخزنة
+                        </span>
+                        {% endif %}
+                    </div>
+                    <p class="text-xs text-slate-400 mt-0.5">
+                        نقل صافي مبيعات الكاش بعد خصم مصاريف اليوم مباشرة إلى الخزنة الخاصة مع حفظ كشف المبيعات الملحق
+                    </p>
+                </div>
+            </div>
+
+            <!-- Quick Action Links -->
+            <div class="flex items-center gap-2">
+                <a href="{{ url_for('reports_page', date=target_date) }}" target="_blank"
+                   class="bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-slate-700">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>عرض تقرير مبيعات اليوم 📊</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- 3-Pill Breakdown of Target Date -->
+        {% if daily_transfer_status %}
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            <!-- 1. Total Cash In -->
+            <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 flex flex-col justify-between">
+                <span class="text-[11px] font-bold text-slate-400">💵 إجمالي مبيعات الكاش (الوارد):</span>
+                <div class="mt-1 flex items-baseline justify-between">
+                    <span class="text-base font-black text-amber-400 font-mono">{{ daily_transfer_status.total_sales_lbp|format_currency }} ل.ل</span>
+                    <span class="text-xs font-mono font-bold text-slate-400">${{ "{:,.2f}".format(daily_transfer_status.total_sales_usd) }}</span>
+                </div>
+                <span class="text-[10px] text-slate-500 mt-1">{{ daily_transfer_status.orders_count }} طلب مسجل اليوم</span>
+            </div>
+
+            <!-- 2. Expenses Paid from Cash -->
+            <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 flex flex-col justify-between">
+                <span class="text-[11px] font-bold text-slate-400">🧾 مصاريف اليوم المسددة (المنصرف):</span>
+                <div class="mt-1 flex items-baseline justify-between">
+                    <span class="text-base font-black text-rose-400 font-mono">{{ daily_transfer_status.total_expenses_lbp|format_currency }} ل.ل</span>
+                    <span class="text-xs font-mono font-bold text-slate-400">${{ "{:,.2f}".format(daily_transfer_status.total_expenses_usd) }}</span>
+                </div>
+                <span class="text-[10px] text-slate-500 mt-1">مصاريف مسددة من صندوق الكاشير</span>
+            </div>
+
+            <!-- 3. Net Cash Recommended for Safe -->
+            <div class="bg-amber-950/40 p-3.5 rounded-2xl border-2 border-amber-500/50 flex flex-col justify-between relative overflow-hidden">
+                <span class="text-[11px] font-bold text-amber-300">💰 صافي الكاش الموصى بنقله للخزنة:</span>
+                <div class="mt-1 flex items-baseline justify-between">
+                    <span class="text-lg font-black text-white font-mono">{{ daily_transfer_status.recommended_transfer_lbp|format_currency }} ل.ل</span>
+                    <span class="text-xs font-mono font-bold text-emerald-400">${{ "{:,.2f}".format(daily_transfer_status.recommended_transfer_usd) }}</span>
+                </div>
+                <span class="text-[10px] text-amber-400 font-bold mt-1">
+                    {% if daily_transfer_status.already_transferred %}
+                    تم ترحيل سابقاً: {{ daily_transfer_status.already_transferred_lbp|format_currency }} ل.ل
+                    {% else %}
+                    صافي الأرباح النقدية المتاحة للنقل
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+
+        <!-- Execute Transfer Action Form -->
+        <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-950/60 p-4 rounded-2xl border border-amber-500/30">
+            <div class="text-xs text-slate-300 flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                <span>تاريخ الترحيل المحاسبي: <strong class="text-amber-300 font-mono">{{ target_date }}</strong></span>
+            </div>
+
+            <form action="{{ url_for('safe_transfer_daily') }}" method="POST" class="flex items-center gap-2 w-full sm:w-auto">
+                <input type="hidden" name="target_date" value="{{ target_date }}">
+                <input type="hidden" name="amount_lbp" value="{{ daily_transfer_status.recommended_transfer_lbp }}">
+                <input type="hidden" name="amount_usd" value="{{ daily_transfer_status.recommended_transfer_usd }}">
+                <input type="hidden" name="note" value="ترحيل صافي مبيعات يوم {{ target_date }}">
+
+                {% if daily_transfer_status.recommended_transfer_lbp > 0 or not daily_transfer_status.already_transferred %}
+                <button type="submit" 
+                        class="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black px-6 py-3 rounded-xl text-xs transition shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-95">
+                    <i class="fa-solid fa-arrow-down-to-bracket text-sm"></i>
+                    <span>نقل صافي مبيعات اليوم ({{ daily_transfer_status.recommended_transfer_lbp|format_currency }} ل.ل) إلى الخزنة الآن 🏦</span>
+                </button>
+                {% else %}
+                <button type="button" onclick="document.getElementById('safeCustomAmountInput').focus(); document.getElementById('safeManualTransferForm').scrollIntoView({behavior:'smooth'});"
+                        class="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold px-5 py-2.5 rounded-xl text-xs transition border border-amber-500/30 flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-plus-circle"></i>
+                    <span>ترحيل مبلغ إضافي مخصص للخزنة</span>
+                </button>
+                {% endif %}
+            </form>
+        </div>
+        {% endif %}
+    </div>
+
+
+<!-- FLASH BANNER: UN-TRANSFERRED CASH IN DRAWER (يشمل كاش الأمس 720,000 ل.ل) -->
+    {% if drawer_status and drawer_status.total_untransferred_lbp > 0 %}
+    <div class="bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border-2 border-amber-500/80 rounded-3xl p-5 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+            <div class="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-3xl font-black shrink-0 border border-amber-500/40">
+                ⚠️
+            </div>
+            <div>
+                <span class="text-xs font-bold text-amber-400 block uppercase tracking-wider">كاش متوفر في درج الكاشير بانتظار نقله للخزنة:</span>
+                <div class="text-2xl font-black text-white mt-0.5">
+                    {{ drawer_status.total_untransferred_lbp|format_currency }} <span class="text-sm font-normal text-amber-300">ل.ل</span>
+                    <span class="text-sm font-bold text-emerald-400 mr-2 font-mono">≈ ${{ "{:,.2f}".format(drawer_status.total_untransferred_usd) }}</span>
+                </div>
+                {% if drawer_status.past_untransferred_lbp > 0 %}
+                <p class="text-xs text-amber-300 font-bold mt-1">
+                    ⚡ منها مبيعات الأمس غير المرحلة: <strong class="text-white">{{ drawer_status.past_untransferred_lbp|format_currency }} ل.ل</strong>
+                </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+            {% if drawer_status.past_untransferred_lbp > 0 %}
+            <button type="button" onclick="quickFillSafe({{ drawer_status.past_untransferred_lbp }}, 'deposit', 'ترحيل كاش مبيعات الأمس بالكامل')"
+                    class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-500/25 flex items-center gap-1.5 active:scale-95">
+                <span>⚡ نقل كاش الأمس ({{ drawer_status.past_untransferred_lbp|format_currency }} ل.ل) للخزنة الآن</span>
+            </button>
+            {% endif %}
+            <button type="button" onclick="quickFillSafe({{ drawer_status.total_untransferred_lbp }}, 'deposit', 'ترحيل كامل الكاش المتاح بالدرج للخزنة')"
+                    class="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-4 py-2.5 rounded-xl text-xs transition shadow-lg shadow-emerald-600/25 flex items-center gap-1.5 active:scale-95">
+                <span>💰 نقل كامل الكاش المتوفر</span>
+            </button>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 4 MASTER SAFE BALANCE & PERIOD METRICS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <!-- Total Safe Balance -->
+        <div class="bg-gradient-to-br from-amber-500/20 to-yellow-600/10 border-2 border-amber-500/40 rounded-3xl p-5 shadow-lg relative overflow-hidden">
+            <span class="text-amber-300 text-xs font-bold uppercase tracking-wider block mb-1">الرصيد الإجمالي الفعلي للخزنة</span>
+            <div class="text-2xl font-black text-white font-mono">
+                {{ balance.total_lbp|format_currency }} <span class="text-xs font-normal text-amber-300">ل.ل</span>
+            </div>
+            <div class="text-base font-black text-amber-400 font-mono mt-1">
+                ≈ ${{ "{:,.2f}".format(balance.total_usd or 0) }}
+            </div>
+            <span class="text-[10px] text-slate-400 mt-2 block border-t border-slate-700/50 pt-1.5">{{ balance.transfers_count }} عملية مسجلة بالخزنة</span>
+        </div>
+
+        <!-- Period Deposits -->
+        <div class="bg-slate-900 border border-emerald-500/40 rounded-3xl p-5 shadow-sm">
+            <div class="flex items-center justify-between text-xs font-bold text-emerald-400 mb-1">
+                <span>📥 الإيداعات (الوارد للفترة)</span>
+                <span>🟢</span>
+            </div>
+            <div class="text-xl font-black text-emerald-300 font-mono">
+                {{ period_summary.deposit_lbp|format_currency }} <span class="text-xs font-normal text-slate-400">ل.ل</span>
+            </div>
+            <div class="text-xs font-bold text-emerald-400 font-mono mt-1">≈ ${{ "{:,.2f}".format(period_summary.deposit_usd or 0) }}</div>
+            <span class="text-[10px] text-slate-500 mt-2 block border-t border-slate-800 pt-1.5">مبالغ دخلت الخزنة</span>
+        </div>
+
+        <!-- Period Withdrawals -->
+        <div class="bg-slate-900 border border-rose-500/40 rounded-3xl p-5 shadow-sm">
+            <div class="flex items-center justify-between text-xs font-bold text-rose-400 mb-1">
+                <span>📤 المسحوبات (الصادر للفترة)</span>
+                <span>🔴</span>
+            </div>
+            <div class="text-xl font-black text-rose-300 font-mono">
+                {{ period_summary.withdraw_lbp|format_currency }} <span class="text-xs font-normal text-slate-400">ل.ل</span>
+            </div>
+            <div class="text-xs font-bold text-rose-400 font-mono mt-1">≈ ${{ "{:,.2f}".format(period_summary.withdraw_usd or 0) }}</div>
+            <span class="text-[10px] text-slate-500 mt-2 block border-t border-slate-800 pt-1.5">مسحوبات شخصية أو مدفوعات</span>
+        </div>
+
+        <!-- Net Period Change -->
+        <div class="bg-slate-900 border border-indigo-500/40 rounded-3xl p-5 shadow-sm">
+            <div class="flex items-center justify-between text-xs font-bold text-indigo-400 mb-1">
+                <span>📊 صافي حركة الفترة</span>
+                <span>⚖️</span>
+            </div>
+            <div class="text-xl font-black font-mono {{ 'text-emerald-400' if period_summary.net_lbp >= 0 else 'text-rose-400' }}">
+                {{ period_summary.net_lbp|format_currency }} <span class="text-xs font-normal text-slate-400">ل.ل</span>
+            </div>
+            <div class="text-xs font-bold font-mono mt-1 {{ 'text-emerald-400' if period_summary.net_usd >= 0 else 'text-rose-400' }}">
+                ≈ ${{ "{:,.2f}".format(period_summary.net_usd or 0) }}
+            </div>
+            <span class="text-[10px] text-slate-500 mt-2 block border-t border-slate-800 pt-1.5">الفارق بين الوارد والصادر</span>
+        </div>
+    </div>
+
+    <!-- DATE SEARCH & RANGE FILTER BAR (البحث عبر التاريخ) -->
+    <div class="bg-slate-900/90 border border-slate-800 p-4 rounded-3xl shadow-lg flex flex-col lg:flex-row items-center justify-between gap-4">
+        <!-- Quick Preset Buttons -->
+        <div class="flex items-center gap-2 flex-wrap w-full lg:w-auto">
+            <span class="text-xs font-bold text-slate-400">📅 بحث سريع:</span>
+            <a href="{{ url_for('safe_page', date=today_str) }}"
+               class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition {{ 'bg-amber-500 text-slate-950 font-black shadow-md' if target_date == today_str and not is_range else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
+                اليوم
+            </a>
+            <a href="{{ url_for('safe_page', date=yesterday_str) }}"
+               class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition {{ 'bg-amber-500 text-slate-950 font-black shadow-md' if target_date == yesterday_str and not is_range else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
+                أمس
+            </a>
+            <a href="{{ url_for('safe_page', date='all') }}"
+               class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition {{ 'bg-amber-500 text-slate-950 font-black shadow-md' if target_date == 'all' else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
+                كل السجل التاريخي
+            </a>
+        </div>
+
+        <!-- Custom Range and Keyword Search Form -->
+        <form method="GET" action="{{ url_for('safe_page') }}" class="flex items-center gap-2 flex-wrap w-full lg:w-auto">
+            <div class="flex items-center gap-1.5 bg-slate-950 px-3 py-1.5 rounded-2xl border border-slate-700">
+                <span class="text-[11px] text-slate-500">من:</span>
+                <input type="date" name="start_date" value="{{ start_date or target_date }}" class="bg-transparent text-white text-xs outline-none">
+                <span class="text-[11px] text-slate-500">إلى:</span>
+                <input type="date" name="end_date" value="{{ end_date or target_date }}" class="bg-transparent text-white text-xs outline-none">
+            </div>
+            <div class="relative">
+                <input type="text" name="q" value="{{ search_query or '' }}" placeholder="بحث بالبيان أو الاسم..."
+                       class="bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-amber-400 w-40">
+            </div>
+            <button type="submit" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-4 py-2 rounded-xl transition shadow">
+                🔍 بحث
+            </button>
+        </form>
+    </div>
+
+    <!-- MAIN TWO-COLUMN WORKSPACE: LEFT FORM & RIGHT TABLE -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- LEFT COLUMN: TRANSACTION FORM (إيداع وسحب) -->
+        <div class="lg:col-span-1 space-y-5">
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 class="font-black text-white text-sm flex items-center gap-2">
+                        <span class="text-amber-400">💸</span>
+                        <span>تسجيل حركة بالخزنة</span>
+                    </h3>
+                    <div class="flex gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                        <button type="button" onclick="setOpType('deposit')" id="btnOpDeposit"
+                                class="px-2.5 py-1 rounded-lg text-xs font-black transition bg-emerald-600 text-white shadow">
+                            📥 إيداع (وارد)
+                        </button>
+                        <button type="button" onclick="setOpType('withdraw')" id="btnOpWithdraw"
+                                class="px-2.5 py-1 rounded-lg text-xs font-black transition text-slate-400 hover:text-white">
+                            📤 سحب (صادر)
+                        </button>
+                    </div>
+                </div>
+
+                <form action="{{ url_for('safe_transfer') }}" method="POST" class="space-y-3.5">
+                    <input type="hidden" name="operation_type" id="safeOpType" value="deposit">
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">المبلغ بالليرة اللبنانية (ل.ل):</label>
+                        <input type="number" name="amount_lbp" id="safeAmountLBP" step="1000" placeholder="مثال: 500000"
+                               oninput="calcFromLBP()"
+                               class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold text-base rounded-2xl px-3.5 py-2.5 focus:border-amber-400 focus:outline-none">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">أو المبلغ بالدولار ($):</label>
+                        <input type="number" name="amount_usd" id="safeAmountUSD" step="any" placeholder="مثال: 10"
+                               oninput="calcFromUSD()"
+                               class="w-full bg-slate-950 border border-slate-700 text-emerald-400 font-mono font-bold text-base rounded-2xl px-3.5 py-2.5 focus:border-emerald-400 focus:outline-none">
+                    </div>
+
+                    <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 text-center">
+                        <span class="text-[11px] text-slate-400">المعادل المحسوب: </span>
+                        <span id="safePreviewConversion" class="text-xs font-black text-amber-300 font-mono">-</span>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">البيان / سبب الحركة:</label>
+                        <input type="text" name="note" id="safeNote" required placeholder="مثال: توريد مبيعات اليوم، سحب أرباح..."
+                               class="w-full bg-slate-950 border border-slate-700 text-white text-xs rounded-xl px-3 py-2.5 focus:border-amber-400 focus:outline-none">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">بواسطة / المسلّم أو المستلم:</label>
+                        <input type="text" name="transferred_by" value="{{ session.get('employee_name', 'المدير') }}"
+                               class="w-full bg-slate-950 border border-slate-700 text-white text-xs rounded-xl px-3 py-2.5 focus:border-amber-400 focus:outline-none">
+                    </div>
+
+                    <button type="submit" id="safeSubmitBtn"
+                            class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black py-3 rounded-2xl transition shadow-lg text-sm flex items-center justify-center gap-2">
+                        <span>📥 تأكيد الإيداع في الخزنة</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: TRANSACTIONS TABLE (جدول حركات الخزنة) -->
+        <div class="lg:col-span-2">
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+                <div class="p-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="text-amber-400 text-base">📋</span>
+                        <h3 class="font-black text-white text-sm">سجل حركات الخزنة المفصل</h3>
+                    </div>
+                    <span class="text-xs bg-slate-800 text-slate-300 px-3 py-1 rounded-full font-bold">
+                        {{ transfers|length }} حركة
+                    </span>
+                </div>
+
+                {% if transfers %}
+                <div class="overflow-x-auto max-h-[600px]">
+                    <table class="w-full text-right text-xs">
+                        <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 uppercase sticky top-0 font-bold text-[11px]">
+                            <tr>
+                                <th class="p-3.5">النوع</th>
+                                <th class="p-3.5">التاريخ والوقت</th>
+                                <th class="p-3.5">المبلغ (ل.ل)</th>
+                                <th class="p-3.5">المقابل ($)</th>
+                                <th class="p-3.5">البيان</th>
+                                <th class="p-3.5">المسؤول</th>
+                                <th class="p-3.5 w-10"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60">
+                            {% for t in transfers %}
+                            <tr class="hover:bg-slate-800/40 transition">
+                                <td class="p-3.5">
+                                    {% if t.is_withdraw %}
+                                    <span class="bg-rose-950 text-rose-300 border border-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                                        🔴 سحب
+                                    </span>
+                                    {% else %}
+                                    <span class="bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                                        🟢 إيداع
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="p-3.5 font-mono text-slate-300">
+                                    {{ t.created_at[:10] if t.created_at else '—' }}
+                                    <span class="text-slate-500 text-[10px] block">{{ t.created_at[11:16] if t.created_at and t.created_at|length > 15 else '' }}</span>
+                                </td>
+                                <td class="p-3.5 font-mono font-black text-sm {{ 'text-rose-400' if t.is_withdraw else 'text-amber-400' }}">
+                                    {{ '-' if t.is_withdraw else '+' }}{{ t.amount_lbp|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span>
+                                </td>
+                                <td class="p-3.5 font-mono font-bold {{ 'text-rose-400' if t.is_withdraw else 'text-emerald-400' }}">
+                                    {{ '-' if t.is_withdraw else '+' }}${{ "{:,.2f}".format(t.amount_usd or 0) }}
+                                </td>
+                                <td class="p-3.5 text-slate-200 font-bold max-w-xs truncate">{{ t.note or '—' }}</td>
+                                <td class="p-3.5">
+                                    <span class="bg-slate-800 text-indigo-300 px-2 py-0.5 rounded text-[10px]">
+                                        {{ t.transferred_by or 'المدير' }}
+                                    </span>
+                                </td>
+                                <td class="p-3.5">
+                                    <form action="{{ url_for('delete_safe_transfer', transfer_id=t.id) }}" method="POST"
+                                          onsubmit="return confirm('هل أنت متأكد من حذف هذه الحركة من سجل الخزنة؟')">
+                                        <button type="submit" class="text-slate-500 hover:text-rose-400 transition text-sm" title="حذف الحركة">
+                                            🗑️
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-12 text-center text-slate-500">
+                    <span class="text-4xl block mb-2">🏦</span>
+                    <p class="font-bold text-sm">لا توجد حركات مسجلة في الخزنة في هذا التاريخ أو البحث.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+const EXCHANGE_RATE = {{ rate or 89500 }};
+
+function setOpType(type) {
+    const hidden = document.getElementById('safeOpType');
+    const btnDep = document.getElementById('btnOpDeposit');
+    const btnWth = document.getElementById('btnOpWithdraw');
+    const subBtn = document.getElementById('safeSubmitBtn');
+
+    hidden.value = type;
+    if (type === 'withdraw') {
+        btnWth.className = 'px-2.5 py-1 rounded-lg text-xs font-black transition bg-rose-600 text-white shadow';
+        btnDep.className = 'px-2.5 py-1 rounded-lg text-xs font-black transition text-slate-400 hover:text-white';
+        subBtn.className = 'w-full bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black py-3 rounded-2xl transition shadow-lg text-sm flex items-center justify-center gap-2';
+        subBtn.innerHTML = '<span>📤 تأكيد السحب من الخزنة</span>';
+    } else {
+        btnDep.className = 'px-2.5 py-1 rounded-lg text-xs font-black transition bg-emerald-600 text-white shadow';
+        btnWth.className = 'px-2.5 py-1 rounded-lg text-xs font-black transition text-slate-400 hover:text-white';
+        subBtn.className = 'w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black py-3 rounded-2xl transition shadow-lg text-sm flex items-center justify-center gap-2';
+        subBtn.innerHTML = '<span>📥 تأكيد الإيداع في الخزنة</span>';
+    }
+}
+
+function calcFromLBP() {
+    const lbp = parseFloat(document.getElementById('safeAmountLBP').value) || 0;
+    const usd = EXCHANGE_RATE > 0 ? (lbp / EXCHANGE_RATE) : 0;
+    document.getElementById('safePreviewConversion').textContent = '≈ $' + usd.toFixed(2);
+}
+
+function calcFromUSD() {
+    const usd = parseFloat(document.getElementById('safeAmountUSD').value) || 0;
+    const lbp = usd * EXCHANGE_RATE;
+    document.getElementById('safePreviewConversion').textContent = '≈ ' + lbp.toLocaleString('en-US') + ' ل.ل';
+}
+
+function quickFillSafe(amountLBP, opType, note) {
+    setOpType(opType || 'deposit');
+    document.getElementById('safeAmountLBP').value = amountLBP;
+    document.getElementById('safeAmountUSD').value = '';
+    calcFromLBP();
+    if (note) {
+        document.getElementById('safeNote').value = note;
+    }
+    window.scrollTo({ top: document.getElementById('safeAmountLBP').offsetTop - 100, behavior: 'smooth' });
+}
+</script>
+{% endblock %}

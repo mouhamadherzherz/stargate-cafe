@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فاتورة رقم {{ order.order_number }} - {{ company_name }}</title>
+    <script src="{{ url_for('static', filename='js/tailwindcss.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.min.css') }}">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=JetBrains+Mono:wght@500;700&display=swap');
+        
+        body { 
+            font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; 
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+        .font-mono-num {
+            font-family: 'JetBrains Mono', monospace, 'Courier New';
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { 
+                background: white !important; 
+                padding: 0 !important; 
+                margin: 0 !important; 
+                width: 100% !important;
+            }
+            .receipt-card { 
+                box-shadow: none !important; 
+                border: none !important; 
+                width: 100% !important; 
+                max-width: 80mm !important; 
+                padding: 4mm !important;
+                margin: 0 auto !important;
+            }
+            @page { 
+                margin: 0; 
+                size: 80mm auto; 
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen p-2 sm:p-6 flex flex-col items-center justify-start text-slate-900">
+
+    <!-- Action Toolbar (Hidden in Print) -->
+    <div class="no-print max-w-[80mm] w-full mb-3 flex items-center justify-between bg-slate-950 text-white p-2.5 rounded-2xl shadow-xl border border-slate-800">
+        <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xs">
+                <i class="fa-solid fa-receipt"></i>
+            </div>
+            <span class="text-xs font-bold text-slate-200">إيصال بيع حراري</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <button onclick="window.print()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-3 py-1.5 rounded-xl text-xs flex items-center gap-1 shadow transition-all active:scale-95">
+                <i class="fa-solid fa-print"></i>
+                <span>طباعة</span>
+            </button>
+            <button onclick="window.close()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded-xl text-xs transition-colors">
+                إغلاق
+            </button>
+        </div>
+    </div>
+
+    <!-- Enterprise 80mm POS Thermal Receipt Container -->
+    <div class="receipt-card max-w-[80mm] w-full bg-white p-3.5 sm:p-4 rounded-2xl shadow-md border border-slate-200 text-slate-900 text-xs">
+        
+        <!-- Header -->
+        <div class="text-center pb-2.5 border-b-2 border-dashed border-slate-400 space-y-1">
+            <div class="w-10 h-10 mx-auto rounded-xl bg-slate-950 text-amber-400 flex items-center justify-center text-lg font-black shadow-sm">
+                ☕
+            </div>
+            <h1 class="font-black text-base text-slate-950 tracking-tight">{{ company_name or 'STARGATE CAFE' }}</h1>
+            
+            {% if settings and settings.phone %}
+            <p class="text-[10px] text-slate-600 font-mono-num"><i class="fa-solid fa-phone text-[9px]"></i> {{ settings.phone }}</p>
+            {% endif %}
+            
+            <div class="flex items-center justify-between text-[11px] font-bold text-slate-700 pt-1 border-t border-slate-100">
+                <span class="font-mono-num text-slate-900 font-black">#{{ order.order_number }}</span>
+                <span class="text-[10px] font-mono-num text-slate-500">{{ order.created_at|format_date }}</span>
+            </div>
+
+            <!-- Cashier & Customer Info -->
+            <div class="grid grid-cols-2 text-right text-[10px] text-slate-600 pt-1 bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                <div>
+                    <span class="text-slate-400">الكاشير:</span> 
+                    <strong class="text-slate-800">{{ order.employee_name or session.get('employee_name') or 'المدير العام' }}</strong>
+                </div>
+                <div class="text-left">
+                    <span class="text-slate-400">الدفع:</span> 
+                    {% if order.payment_method == 'debt' %}
+                    <span class="text-rose-600 font-black"><i class="fa-solid fa-clock"></i> آجل (ذمة)</span>
+                    {% else %}
+                    <span class="text-emerald-700 font-black"><i class="fa-solid fa-money-bill-wave"></i> نقداً</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if order.customer_name and order.customer_name != 'زبون كاش' %}
+            <div class="text-right text-[11px] font-bold text-slate-900 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                الزبون / الحساب: <span class="text-amber-800 font-black">{{ order.customer_name }}</span>
+            </div>
+            {% endif %}
+
+            {% if order.notes %}
+            <div class="text-right text-[10px] text-slate-600 italic">
+                ملاحظة: {{ order.notes }}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Items Table -->
+        <div class="py-2.5 border-b-2 border-dashed border-slate-400">
+            <table class="w-full text-right text-[11px]">
+                <thead>
+                    <tr class="border-b border-slate-300 text-slate-700 font-black">
+                        <th class="pb-1 text-right">الصنف</th>
+                        <th class="pb-1 text-center w-8">العدد</th>
+                        <th class="pb-1 text-left w-20">المجموع</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for it in (items or order.order_items or order['items']) %}
+                    <tr class="py-1.5">
+                        <td class="py-1 text-slate-950 font-bold leading-tight">
+                            <div>{{ it.item_name }}</div>
+                            <div class="text-[9px] text-slate-500 font-mono-num">{{ it.unit_price_lbp|format_currency }} ل.ل</div>
+                        </td>
+                        <td class="py-1 text-center font-mono-num font-black text-slate-800">
+                            {{ it.quantity }}
+                        </td>
+                        <td class="py-1 text-left font-mono-num font-black text-slate-950">
+                            {{ it.subtotal_lbp|format_currency }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Financial Totals -->
+        <div class="py-2.5 border-b-2 border-dashed border-slate-400 space-y-1.5">
+            <div class="flex justify-between items-baseline text-sm font-black text-slate-950 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
+                <span>المجموع الإجمالي:</span>
+                <span class="font-mono-num text-base text-emerald-800 font-black">{{ order.total_lbp|format_currency }} ل.ل</span>
+            </div>
+            <div class="flex justify-between text-[11px] text-slate-700 font-bold px-1">
+                <span>المعادل بالدولار ($):</span>
+                <span class="font-mono-num text-slate-950 font-black">{{ order.total_usd|to_usd }}</span>
+            </div>
+            <div class="flex justify-between text-[10px] text-slate-500 font-mono-num px-1 pt-0.5">
+                <span>سعر الصرف المعتمد:</span>
+                <span>1$ = {{ exchange_rate|format_currency }} ل.ل</span>
+            </div>
+        </div>
+
+        <!-- Footer & Barcode Simulation -->
+        <div class="pt-2.5 text-center space-y-1.5">
+            <!-- Barcode Simulation -->
+            <div class="flex flex-col items-center justify-center pt-1">
+                <div class="font-mono-num text-[18px] tracking-[5px] text-slate-900 leading-none select-none">
+                    ||||| | ||||| || |||||| | |||
+                </div>
+                <div class="text-[9px] font-mono-num text-slate-500 mt-0.5">
+                    *{{ order.order_number }}*
+                </div>
+            </div>
+            <p class="text-[10px] font-black text-slate-800 pt-1">
+                شكراً لزيارتكم! نعتز بخدمتكم دائماً ☕
+            </p>
+            <p class="text-[8px] text-slate-400">
+                نظام STARGATE المتطور لإدارة المقاهي والشركات
+            </p>
+        </div>
+    </div>
+
+    <!-- Auto Print Script on Load -->
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('autoprint') === '1') {
+                setTimeout(() => window.print(), 350);
+            }
+        });
+    </script>
+</body>
+</html>

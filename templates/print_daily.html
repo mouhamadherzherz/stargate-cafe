@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تقرير الإغلاق المالي والإنتاج اليومي - {{ target_date }}</title>
+    <script src="{{ url_for('static', filename='js/tailwindcss.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.min.css') }}">
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; }
+        }
+        body { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen p-6 flex flex-col items-center">
+
+    <div class="no-print max-w-3xl w-full mb-4 flex items-center justify-between bg-slate-900 text-white p-4 rounded-2xl shadow-lg">
+        <div class="flex items-center gap-2">
+            <span class="text-xl">🖨️</span>
+            <span class="font-bold text-sm">تقرير الإغلاق المالي للقهوة والألعاب</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="window.print()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-md">
+                <i class="fa-solid fa-print"></i>
+                <span>طباعة التقرير (Ctrl+P)</span>
+            </button>
+            <button onclick="window.close()" class="bg-slate-800 text-slate-300 px-4 py-2 rounded-xl text-xs">
+                إغلاق
+            </button>
+        </div>
+    </div>
+
+    <!-- Official A4 Statement Container -->
+    <div class="max-w-3xl w-full bg-white p-8 rounded-2xl shadow-md border border-slate-300 text-slate-900 text-xs space-y-6">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b-2 border-slate-900 pb-4">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-xl bg-slate-900 text-white flex items-center justify-center text-xl">
+                    ☕
+                </div>
+                <div>
+                    <h1 class="font-black text-base text-slate-900">{{ company_name }}</h1>
+                    <p class="text-xs text-slate-600">تقرير الإغلاق المالي وحساب الإنتاج اليومي</p>
+                </div>
+            </div>
+
+            <div class="text-left font-mono text-[11px] text-slate-600">
+                <div>التاريخ: <strong class="text-slate-900">{{ target_date }}</strong></div>
+                <div>سعر الصرف: 1$ = {{ summary.exchange_rate|format_currency }} ل.ل</div>
+            </div>
+        </div>
+
+        <!-- Summary KPI Boxes -->
+        <div class="grid grid-cols-4 gap-2.5 text-center">
+            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[10px] text-slate-500 font-bold block mb-1">إجمالي الإنتاج الكلي</span>
+                <div class="text-base font-black font-mono text-indigo-800">
+                    {{ summary.total_production_lbp|format_currency }} ل.ل
+                </div>
+                <span class="text-[10px] font-mono text-slate-500">{{ summary.total_production_usd|to_usd }}</span>
+            </div>
+
+            <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-300">
+                <span class="text-[10px] text-emerald-800 font-bold block mb-1">نقدية الصندوق (كاش مستلم)</span>
+                <div class="text-base font-black font-mono text-emerald-700">
+                    {{ summary.total_revenue_lbp|format_currency }} ل.ل
+                </div>
+                <span class="text-[10px] font-mono text-slate-600 font-bold">{{ summary.total_revenue_usd|to_usd }}</span>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[11px] text-slate-500 font-bold block mb-1">المصاريف المسجلة</span>
+                <div class="text-lg font-black font-mono text-rose-700">
+                    {{ summary.expenses.total_lbp|format_currency }} ل.ل
+                </div>
+                <span class="text-[11px] font-mono text-slate-500">{{ summary.expenses.total_usd|to_usd }}</span>
+            </div>
+
+            <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                <span class="text-[11px] text-emerald-800 font-bold block mb-1">صافي الربح المتبقي</span>
+                <div class="text-lg font-black font-mono text-emerald-800">
+                    {{ summary.grand_totals.net_profit_lbp|format_currency }} ل.ل
+                </div>
+                <span class="text-[11px] font-mono text-emerald-700 font-bold">{{ summary.grand_totals.net_profit_usd|to_usd }}</span>
+            </div>
+        </div>
+
+        <!-- Table Breakdown -->
+        <div>
+            <h3 class="font-black text-xs text-slate-900 mb-2 border-r-4 border-amber-500 pr-2">
+                بيان الدخل وتفاصيل الأنشطة:
+            </h3>
+            <table class="w-full text-right text-xs border border-slate-300">
+                <thead class="bg-slate-100 font-bold text-slate-800 border-b border-slate-300">
+                    <tr>
+                        <th class="py-2 px-3 border-l border-slate-300">النشاط</th>
+                        <th class="py-2 px-3 border-l border-slate-300">تفاصيل الإنتاج</th>
+                        <th class="py-2 px-3 border-l border-slate-300">الإيراد (ل.ل)</th>
+                        <th class="py-2 px-3">المقابل ($)</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    <tr>
+                        <td class="py-2 px-3 font-bold border-l border-slate-200">☕ مبيعات القهوة والمشروبات</td>
+                        <td class="py-2 px-3 text-slate-600 border-l border-slate-200">{{ summary.cafe.orders_count }} فواتير ({{ summary.cafe.cups_count }} كوب/قطعة)</td>
+                        <td class="py-2 px-3 font-mono font-bold border-l border-slate-200">{{ summary.cafe.total_lbp|format_currency }} ل.ل</td>
+                        <td class="py-2 px-3 font-mono">{{ summary.cafe.total_usd|to_usd }}</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 px-3 font-bold border-l border-slate-200">🎮 استخدام كمبيوتر GAMING</td>
+                        <td class="py-2 px-3 text-slate-600 border-l border-slate-200">{{ summary.pc.clicks_count }} دور مسجل</td>
+                        <td class="py-2 px-3 font-mono font-bold border-l border-slate-200">{{ summary.pc.total_lbp|format_currency }} ل.ل</td>
+                        <td class="py-2 px-3 font-mono">{{ summary.pc.total_usd|to_usd }}</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 px-3 font-bold border-l border-slate-200">✍️ مبيعات يدوية (Others)</td>
+                        <td class="py-2 px-3 text-slate-600 border-l border-slate-200">{{ summary.others.count }} صنف يدوي</td>
+                        <td class="py-2 px-3 font-mono font-bold border-l border-slate-200">{{ summary.others.total_lbp|format_currency }} ل.ل</td>
+                        <td class="py-2 px-3 font-mono">{{ summary.others.total_usd|to_usd }}</td>
+                    </tr>
+                </tbody>
+                <tfoot class="bg-slate-100 font-black border-t-2 border-slate-400">
+                    <tr>
+                        <td colspan="2" class="py-2 px-3 text-left border-l border-slate-300">المجموع الكلي:</td>
+                        <td class="py-2 px-3 font-mono text-emerald-800 border-l border-slate-300">{{ summary.grand_totals.revenue_lbp|format_currency }} ل.ل</td>
+                        <td class="py-2 px-3 font-mono text-slate-800">{{ summary.grand_totals.revenue_usd|to_usd }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        
+    <!-- Product by Product Sold Quantities Table -->
+    <div>
+        <h3 class="font-black text-xs text-slate-900 mb-2 border-r-4 border-amber-500 pr-2">
+            كشف كميات ومبيعات كل منتج مباع بالتفصيل:
+        </h3>
+        <table class="w-full text-right text-xs border border-slate-300">
+            <thead class="bg-slate-100 font-bold text-slate-800 border-b border-slate-300">
+                <tr>
+                    <th class="py-2 px-3 border-l border-slate-300">اسم المنتج / الصنف</th>
+                    <th class="py-2 px-3 text-center border-l border-slate-300">الكمية المباعة</th>
+                    <th class="py-2 px-3 border-l border-slate-300">إجمالي المبيعات (ل.ل)</th>
+                    <th class="py-2 px-3">المقابل ($)</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200">
+                {% for ps in product_sales %}
+                <tr>
+                    <td class="py-2 px-3 font-bold border-l border-slate-200">☕ {{ ps.item_name }}</td>
+                    <td class="py-2 px-3 text-center font-mono font-bold text-slate-900 border-l border-slate-200">{{ ps.total_qty|int }}</td>
+                    <td class="py-2 px-3 font-mono font-bold text-emerald-800 border-l border-slate-200">{{ ps.total_lbp|format_currency }} ل.ل</td>
+                    <td class="py-2 px-3 font-mono">{{ ps.total_usd|to_usd }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="text-center py-2 text-slate-400">لا توجد مبيعات أصناف مسجلة لهذا اليوم</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Recent Detailed Orders Table -->
+    <div>
+        <h3 class="font-black text-xs text-slate-900 mb-2 border-r-4 border-emerald-600 pr-2">
+            سجل الفواتير والمبيعات التفصيلي مع أسماء الأصناف:
+        </h3>
+        <table class="w-full text-right text-xs border border-slate-300">
+            <thead class="bg-slate-100 font-bold text-slate-800 border-b border-slate-300">
+                <tr>
+                    <th class="py-2 px-3 border-l border-slate-300">رقم الفاتورة</th>
+                    <th class="py-2 px-3 border-l border-slate-300">الموظف / الزبون</th>
+                    <th class="py-2 px-3 border-l border-slate-300">الأصناف المباعة</th>
+                    <th class="py-2 px-3 border-l border-slate-300">المجموع (ل.ل)</th>
+                    <th class="py-2 px-3">طريقة الدفع</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200">
+                {% for ord in orders %}
+                <tr>
+                    <td class="py-2 px-3 font-mono font-bold border-l border-slate-200">{{ ord.order_number }}</td>
+                    <td class="py-2 px-3 border-l border-slate-200">
+                        <div class="font-bold">{{ ord.employee_name or 'كاشير' }}</div>
+                        <div class="text-[10px] text-slate-500">{{ ord.customer_name or 'زبون كاش' }}</div>
+                    </td>
+                    <td class="py-2 px-3 text-slate-800 font-medium border-l border-slate-200">{{ ord.items_summary or 'طلب عام' }}</td>
+                    <td class="py-2 px-3 font-mono font-bold text-emerald-800 border-l border-slate-200">{{ ord.total_lbp|format_currency }} ل.ل</td>
+                    <td class="py-2 px-3 font-mono text-[11px]">{{ 'كاش نقدي' if ord.payment_method == 'cash' else 'دين / على الحساب' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Expenses breakdown if any -->
+        {% if summary.recent_expenses %}
+        <div>
+            <h3 class="font-black text-xs text-slate-900 mb-2 border-r-4 border-rose-500 pr-2">
+                سندات المصاريف المسجلة:
+            </h3>
+            <table class="w-full text-right text-xs border border-slate-300">
+                <thead class="bg-slate-100 font-bold border-b border-slate-300">
+                    <tr>
+                        <th class="py-1.5 px-3 border-l border-slate-300">بند المصروف</th>
+                        <th class="py-1.5 px-3">المبلغ</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    {% for exp in summary.recent_expenses %}
+                    <tr>
+                        <td class="py-1.5 px-3 border-l border-slate-200">{{ exp.title }}</td>
+                        <td class="py-1.5 px-3 font-mono font-bold text-rose-700">{{ exp.amount_lbp|format_currency }} ل.ل</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- Signatures -->
+        <div class="pt-8 grid grid-cols-2 gap-8 text-center text-xs">
+            <div>
+                <span class="text-slate-500 block mb-6 font-bold">توقيع مسؤول الكاشير:</span>
+                <div class="w-40 mx-auto border-b border-slate-400"></div>
+            </div>
+            <div>
+                <span class="text-slate-500 block mb-6 font-bold">اعتماد وتوقيع الإدارة:</span>
+                <div class="w-40 mx-auto border-b border-slate-400"></div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

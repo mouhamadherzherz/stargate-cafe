@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <title>{{ title or company_name }} - نظام محاسبة القهوة و GAMING</title>
+    
+    <!-- Local Offline Tailwind CSS Engine -->
+    <script src="{{ url_for('static', filename='js/tailwindcss.js') }}"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        amber: {
+                            500: '#f59e0b',
+                            600: '#d97706',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Cairo', 'Segoe UI', 'Tahoma', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Local Offline Font Awesome Icons -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.min.css') }}">
+    <!-- Local Offline Chart.js -->
+    <script src="{{ url_for('static', filename='js/chart.min.js') }}"></script>
+
+    <style>
+        body { font-family: 'Cairo', sans-serif; }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; color: black !important; }
+        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0b0f19; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 6px; }
+        ::-webkit-scrollbar-thumb:hover { background: #f59e0b; }
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.8); border-radius: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #9333ea; border-radius: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #fbbf24; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased">
+
+    <!-- Top Navigation Bar -->
+    <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-40 px-3 lg:px-6 py-2 shadow-md flex items-center justify-between no-print">
+        <div class="flex items-center gap-3">
+            <a href="{{ url_for('index') }}" class="flex items-center gap-2.5 group">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-purple-600/30 group-hover:scale-105 transition">
+                    🎮
+                </div>
+                <div>
+                    <h1 class="font-black text-sm lg:text-base text-white tracking-wider flex items-center gap-1.5">
+                        <span class="text-amber-400">⚡</span> {{ company_name or 'STARGATE' }}
+                    </h1>
+                    <span class="text-[10px] text-purple-300 font-bold block">كاشير القهوة والمشروبات و GAMING 🎮</span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Center Nav Links (Protected based on Role) -->
+<div class="flex items-center gap-1.5 bg-slate-950/90 p-1 rounded-2xl border border-slate-800 text-xs font-bold shadow-inner">
+<!-- 1. Cashier / POS (Visible to all) -->
+<a href="{{ url_for('index') }}" class="px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'index' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+<i class="fa-solid fa-cash-register"></i>
+<span>الكاشير والمبيعات</span>
+</a>
+
+<!-- 2. Customer Debts Ledger (Visible to all) -->
+<a href="{{ url_for('debts_page') }}" class="px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'debts_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+<i class="fa-solid fa-book-bookmark"></i>
+<span>📒 سجل الديون</span>
+</a>
+
+{% if is_admin or session.get('is_admin') or session.get('employee_role') == 'admin' %}
+<!-- Admin Only Pages -->
+<!-- 2.5 Inventory & Stock -->
+<a href="{{ url_for('inventory_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'inventory_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+<i class="fa-solid fa-boxes-stacked"></i>
+<span>📦 البضاعة والمخزون</span>
+</a>
+
+<!-- 2.7 Employees & Shifts -->
+<a href="{{ url_for('employees_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'employees_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+<i class="fa-solid fa-user-shield"></i>
+<span>👥 الموظفين</span>
+</a>
+
+<!-- Reports & Daily Sales Breakdown -->
+<a href="{{ url_for('reports_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'reports_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+<i class="fa-solid fa-chart-pie"></i>
+<span>📊 التقارير</span>
+</a>
+
+<!-- 2.9 Safe / Vault (Admin Only) -->
+<a href="{{ url_for('safe_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'safe_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+<i class="fa-solid fa-vault"></i>
+<span>🏦 الخزنة الخاصة</span>
+</a>
+
+<!-- 3. Admin & Accounts -->
+<a href="{{ url_for('admin_panel') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'admin_panel' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+<i class="fa-solid fa-shield-halved"></i>
+<span>الإدارة والحسابات</span>
+</a>
+{% endif %}
+</div>
+
+<!-- Active Employee Shift Controls -->
+        <div class="flex items-center gap-1.5">
+            <!-- Active Employee Pill / Switch -->
+            <div onclick="openSwitchEmployeeModal()" title="انقر لتبديل الموظف أو الوردية" class="cursor-pointer bg-slate-900 hover:bg-slate-800 border border-indigo-500/40 px-3 py-1.5 rounded-2xl flex items-center gap-2 transition group shadow-sm">
+                <span class="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-xs">👤</span>
+                <div class="text-right leading-tight">
+                    <span class="text-[9px] text-slate-400 block">الموظف:</span>
+                    <strong id="navCurrentEmpName" class="text-xs text-white group-hover:text-indigo-300 font-black">
+                        {{ session.get('employee_name', 'تسجيل الدخول') }}
+                    </strong>
+                </div>
+                <i class="fa-solid fa-repeat text-[10px] text-indigo-400 mr-1"></i>
+            </div>
+
+            <!-- Close Shift Button (تسكير الحساب) -->
+            <a href="{{ url_for('employee_close_shift') }}" title="تسكير حساب الوردية وتسليم الكاش" class="bg-amber-600/90 hover:bg-amber-500 text-white font-bold px-2.5 py-1.5 rounded-xl text-xs transition flex items-center gap-1 shadow-sm border border-amber-500/40">
+                <i class="fa-solid fa-calculator"></i>
+                <span class="hidden md:inline">تسكير الحساب 📋</span>
+            </a>
+
+            <!-- Lock / Logout POS Screen -->
+            <a href="{{ url_for('employee_logout') }}" title="قفل الشاشة وتسجيل خروج الموظف" class="bg-slate-800 hover:bg-rose-900 text-slate-300 hover:text-rose-200 px-2.5 py-1.5 rounded-xl text-xs transition flex items-center gap-1 border border-slate-700">
+                <i class="fa-solid fa-lock text-[11px]"></i>
+                <span class="hidden md:inline">قفل 🔒</span>
+            </a>
+        </div>
+
+        <!-- Left Actions -->
+        <div class="flex items-center gap-2">
+            <span class="hidden sm:inline-flex text-xs bg-slate-800 text-amber-300 px-3 py-1.5 rounded-xl border border-slate-700 font-mono font-bold">
+                1$ = {{ exchange_rate|format_currency }} ل.ل
+            </span>
+            <a href="{{ url_for('print_daily') }}" target="_blank" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-3.5 py-1.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm whitespace-nowrap">
+                <i class="fa-solid fa-print"></i>
+                <span>طباعة إغلاق اليوم</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Flash Messages -->
+    <div class="max-w-7xl mx-auto w-full px-4 pt-3 no-print">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between shadow-md mb-2
+                        {% if category == 'success' %} bg-emerald-950/80 text-emerald-300 border border-emerald-800
+                        {% elif category == 'danger' %} bg-rose-950/80 text-rose-300 border border-rose-800
+                        {% elif category == 'warning' %} bg-amber-950/80 text-amber-300 border border-amber-800
+                        {% else %} bg-slate-800 text-slate-200 border border-slate-700 {% endif %}">
+                        <div class="flex items-center gap-2">
+                            {% if category == 'success' %}<i class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>
+                            {% elif category == 'danger' %}<i class="fa-solid fa-circle-exclamation text-rose-400 text-sm"></i>
+                            {% else %}<i class="fa-solid fa-info-circle text-blue-400 text-sm"></i>{% endif %}
+                            <span>{{ message }}</span>
+                        </div>
+                        <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Main Content Body -->
+    <main class="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Modal Helper Scripts -->
+    <script>
+        function openModal(id) {
+            const m = document.getElementById(id);
+            if (m) m.classList.remove('hidden');
+        }
+        function closeModal(id) {
+            const m = document.getElementById(id);
+            if (m) m.classList.add('hidden');
+        }
+    </script>
+
+<!-- MODAL: SWITCH ACTIVE EMPLOYEE (PIN OR PASSWORD) -->
+<div id="switchEmployeeModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-indigo-500/40 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-center">
+        <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-300 mx-auto flex items-center justify-center text-2xl font-black">
+            👤
+        </div>
+        <div>
+            <h3 class="font-black text-white text-base">تبديل الموظف / الوردية الحالية</h3>
+            <p class="text-xs text-slate-400 mt-1">أدخل رمز الـ PIN السريع أو كلمة المرور للمتابعة</p>
+        </div>
+
+        <div class="space-y-3 pt-1">
+            <input type="password" 
+                   id="switchEmpPinInput" 
+                   maxlength="8" 
+                   autofocus
+                   onkeyup="if(event.key==='Enter') executeSwitchEmployee()"
+                   placeholder="أدخل رمز PIN (مثال: 1234)..." 
+                   class="w-full bg-slate-950 border-2 border-indigo-500/50 text-indigo-300 font-mono text-center text-lg font-black rounded-2xl py-2.5 focus:border-indigo-400 focus:outline-none">
+            
+            <p id="switchEmpError" class="text-xs text-rose-400 font-bold hidden"></p>
+
+            <div class="grid grid-cols-2 gap-2 pt-2">
+                <button type="button" onclick="closeSwitchEmployeeModal()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs transition">
+                    إلغاء
+                </button>
+                <button type="button" onclick="executeSwitchEmployee()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-2 rounded-xl text-xs transition shadow-md shadow-indigo-600/30">
+                    دخول الوردية
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function openSwitchEmployeeModal() {
+    const m = document.getElementById('switchEmployeeModal');
+    if (m) {
+        m.classList.remove('hidden');
+        const inp = document.getElementById('switchEmpPinInput');
+        if (inp) {
+            inp.value = '';
+            inp.focus();
+        }
+        document.getElementById('switchEmpError').classList.add('hidden');
+    }
+}
+function closeSwitchEmployeeModal() {
+    const m = document.getElementById('switchEmployeeModal');
+    if (m) m.classList.add('hidden');
+}
+
+function executeSwitchEmployee() {
+    const pin = document.getElementById('switchEmpPinInput').value.trim();
+    if (!pin) return;
+
+    fetch("/employee/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pin })
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.success) {
+            const b = document.getElementById('navCurrentEmpName');
+            if (b) b.innerText = d.employee_name;
+            closeSwitchEmployeeModal();
+            location.reload();
+        } else {
+            const err = document.getElementById('switchEmpError');
+            err.innerText = d.message || 'رمز غير صحيح';
+            err.classList.remove('hidden');
+        }
+    })
+    .catch(e => {
+        alert('خطأ في الاتصال: ' + e);
+    });
+}
+</script>
+
+</body>
+</html>

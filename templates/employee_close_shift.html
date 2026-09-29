@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسكير الحساب وتسليم الصندوق - {{ emp_name }}</title>
+    <script src="{{ url_for('static', filename='js/tailwindcss.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.min.css') }}">
+    <style>
+        body { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; color: black !important; padding: 0 !important; }
+            .print-card { box-shadow: none !important; border: 1px dashed #000 !important; max-width: 80mm !important; margin: 0 auto !important; padding: 8px !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-3 sm:p-6 select-none">
+
+    <!-- Warning / Lockdown Toast Modal -->
+    <div id="lockWarningModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl">
+            <div class="w-14 h-14 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-2xl mx-auto border border-rose-500/40">
+                🔒
+            </div>
+            <h3 class="text-base font-black text-white">تسكير الحساب مقفل إجبارياً</h3>
+            <p id="lockWarningMsg" class="text-xs text-rose-200 font-bold leading-relaxed">
+                لا يمكنك إغلاق أو مغادرة هذه الصفحة عبر (X) حتى يتم وضع المبلغ الفعلي وتسكير الحساب بالكامل!
+            </p>
+            <button type="button" onclick="closeLockWarningModal()" 
+                    class="w-full bg-rose-600 hover:bg-rose-500 text-white font-black py-2.5 rounded-xl text-xs transition">
+                فهمت، سأقوم بوضع المبلغ الآن
+            </button>
+        </div>
+    </div>
+
+    <div class="print-card max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 relative">
+        
+        <!-- Header with Top X and Lock Indicator -->
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center text-lg font-black shadow-lg">
+                    💰
+                </div>
+                <div>
+                    <h2 class="text-sm font-black text-white flex items-center gap-2">
+                        <span>تسكير الحساب ومقارنة الصندوق</span>
+                        <span class="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-lg border border-amber-500/30">الوردية</span>
+                    </h2>
+                    <div class="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                        <span>الموظف: <strong class="text-amber-300 font-bold">{{ emp_name }}</strong></span>
+                        <span>•</span>
+                        <span class="font-mono text-slate-400">{{ target_date }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top "X" Button (Locked unless amount is placed / account settled) -->
+            <button type="button" id="topCloseXBtn" onclick="handleTopXClick()" 
+                    class="w-9 h-9 rounded-2xl bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 flex items-center justify-center text-sm font-black border border-slate-700 hover:border-rose-500/50 transition cursor-pointer"
+                    title="إغلاق الصفحة (مقفل حتى يتم وضع المبلغ)">
+                ✕
+            </button>
+        </div>
+
+        <!-- 1. CASH REGISTER COMPARISON CARD (مقارنة الكاش مع الصندوق فقط بدون تفاصيل المبيع) -->
+        <div class="space-y-3">
+            
+            <!-- Expected System Cash (الصندوق) -->
+            <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-slate-400 font-bold flex items-center gap-1.5">
+                        <span>🏧</span> رصيد الصندوق المفترض (النظام):
+                    </span>
+                    <span class="text-[10px] text-slate-500 font-mono">درج الكاشير</span>
+                </div>
+                <div class="flex items-baseline justify-between pt-1">
+                    <div class="text-xl sm:text-2xl font-black text-emerald-400 font-mono tracking-tight" id="expectedCashVal">
+                        {{ cash_sales_lbp|format_currency }} <span class="text-xs font-sans font-bold">ل.ل</span>
+                    </div>
+                    <div class="text-xs text-slate-400 font-mono font-bold">
+                        ≈ {{ ((cash_sales_lbp / exchange_rate)|round(2)) if exchange_rate else 0 }}$
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actual Counted Cash Input (الكاش الفعلي في اليد) -->
+            <form id="closeShiftForm" method="POST" action="{{ url_for('employee_close_shift') }}" onsubmit="return onShiftFormSubmit(event)" class="space-y-4 no-print">
+                
+                <div class="bg-slate-950 p-4 rounded-2xl border-2 border-amber-500/50 space-y-2 relative focus-within:border-amber-400 transition">
+                    <div class="flex items-center justify-between">
+                        <label for="actualCashInput" class="block text-xs font-black text-amber-300 flex items-center gap-1.5">
+                            <span>💵</span> ضع مبلغ الكاش الفعلي المعدود في الصندوق: *
+                        </label>
+                        <span class="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/30">مطلوب</span>
+                    </div>
+
+                    <div class="relative">
+                        <input type="number" step="any" name="actual_cash_lbp" id="actualCashInput" 
+                               placeholder="أدخل المبلغ الفعلي المعدود (ل.ل)..." 
+                               autofocus
+                               required
+                               oninput="calculateDiscrepancy()"
+                               class="w-full bg-slate-900 border border-slate-700 text-white font-mono font-black text-lg sm:text-xl px-3.5 py-2.5 rounded-xl focus:border-amber-400 outline-none text-left" dir="ltr">
+                    </div>
+
+                    <!-- Quick 1-Click "Match Register" Helper -->
+                    <div class="flex items-center justify-between pt-1">
+                        <span class="text-[10px] text-slate-400 font-medium">إذا كان الصندوق مطابقاً بالتمام:</span>
+                        <button type="button" onclick="fillExactMatch()" 
+                                class="text-[10px] bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold px-2.5 py-1 rounded-lg border border-slate-700 transition">
+                            ✓ مطابق لرصيد الصندوق ({{ cash_sales_lbp|format_currency }} ل.ل)
+                        </button>
+                    </div>
+
+                    <!-- Live Comparison Badge (نتيجة المقارنة الفورية) -->
+                    <div id="diffBadge" class="hidden text-xs font-mono font-bold p-3 rounded-xl text-center transition-all duration-300 shadow-inner"></div>
+                </div>
+
+                <!-- Drawer Retention Notice (المال يبقى بالدرج لتسليمه للموظف التالي) -->
+                <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1.5 text-xs">
+                    <div class="flex items-center gap-2 text-slate-200 font-bold">
+                        <span class="text-base">🏧</span>
+                        <span>تسليم الصندوق وعهدة الدرج للموظف التالي:</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed pr-6">
+                        يبقى الكاش الفعلي في درج الصندوق لتسليمه مباشرة للوردية القادمة دون إيداعه في الخزنة الخاصة.
+                    </p>
+                </div>
+            </form>
+        </div>
+
+        <!-- Thermal Printable Slip (Only prints when Print button clicked) -->
+        <div class="hidden print:block text-black text-center text-xs space-y-2">
+            <h2 class="text-sm font-black">{{ company_name }}</h2>
+            <div class="text-[11px] font-bold">محضر إغلاق ومقارنة الصندوق</div>
+            <div class="border-b border-dashed border-black my-1"></div>
+            <div class="flex justify-between">
+                <span>الكاشير:</span>
+                <span class="font-bold">{{ emp_name }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span>التاريخ والوقت:</span>
+                <span class="font-mono">{{ target_date }}</span>
+            </div>
+            <div class="border-b border-dashed border-black my-1"></div>
+            <div class="flex justify-between font-bold">
+                <span>رصيد الصندوق المتوقع:</span>
+                <span class="font-mono">{{ cash_sales_lbp|format_currency }} ل.ل</span>
+            </div>
+            <div class="flex justify-between font-bold">
+                <span>الكاش الفعلي المعدود:</span>
+                <span class="font-mono" id="printActualCash">0 ل.ل</span>
+            </div>
+            <div class="flex justify-between font-bold" id="printDiffRow">
+                <span>الفارق / العجز / الزيادة:</span>
+                <span class="font-mono" id="printDiffVal">مطابق</span>
+            </div>
+            <div class="border-b border-dashed border-black my-2"></div>
+            <div class="pt-2 text-center text-[10px]">
+                توقيع الكاشير: ........................
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const expectedCash = {{ cash_sales_lbp }};
+        let isShiftFormSubmitted = false;
+
+        function fillExactMatch() {
+            const input = document.getElementById('actualCashInput');
+            input.value = expectedCash;
+            calculateDiscrepancy();
+            input.focus();
+        }
+
+        function calculateDiscrepancy() {
+            const input = document.getElementById('actualCashInput');
+            const badge = document.getElementById('diffBadge');
+            const submitBtn = document.getElementById('submitCloseBtn');
+            const submitBtnText = document.getElementById('submitCloseBtnText');
+            const topXBtn = document.getElementById('topCloseXBtn');
+            const printActual = document.getElementById('printActualCash');
+            const printDiff = document.getElementById('printDiffVal');
+
+            const valStr = input.value.trim();
+            if (valStr === '') {
+                badge.classList.add('hidden');
+                submitBtn.disabled = true;
+                submitBtnText.innerText = 'ضع المبلغ أولاً لتأكيد تسكير الحساب';
+                if (topXBtn) {
+                    topXBtn.classList.remove('bg-emerald-800', 'text-white', 'border-emerald-500');
+                    topXBtn.classList.add('bg-slate-800', 'text-slate-400', 'border-slate-700');
+                    topXBtn.title = 'إغلاق الصفحة (مقفل حتى يتم وضع المبلغ)';
+                }
+                return;
+            }
+
+            const val = parseFloat(valStr) || 0;
+            const diff = val - expectedCash;
+
+            // Enable submit button
+            submitBtn.disabled = false;
+            submitBtnText.innerText = 'تأكيد تسليم الصندوق وتسجيل الخروج 🔒';
+
+            // Update top X button state
+            if (topXBtn) {
+                topXBtn.classList.remove('bg-slate-800', 'text-slate-400', 'border-slate-700');
+                topXBtn.classList.add('bg-emerald-800', 'text-white', 'border-emerald-500');
+                topXBtn.title = 'تم وضع المبلغ. انقر لتأكيد تسكير الحساب والخروج';
+            }
+
+            // Print slip preview
+            if (printActual) printActual.innerText = val.toLocaleString() + ' ل.ل';
+
+            if (Math.abs(diff) < 1) {
+                badge.className = 'text-xs font-mono font-bold p-3 rounded-xl text-center bg-emerald-950 text-emerald-400 border border-emerald-800/80 shadow-md';
+                badge.innerHTML = '<span class="text-sm">✓</span> الصندوق مطابق 100% دون أي فارق (0 ل.ل)';
+                badge.classList.remove('hidden');
+                if (printDiff) printDiff.innerText = 'مطابق 100%';
+            } else if (diff > 0) {
+                badge.className = 'text-xs font-mono font-bold p-3 rounded-xl text-center bg-sky-950 text-sky-300 border border-sky-800/80 shadow-md';
+                badge.innerHTML = `<span class="text-sm">ℹ️</span> زيادة نقدية في الصندوق: +${diff.toLocaleString()} ل.ل (فائض في الدرج)`;
+                badge.classList.remove('hidden');
+                if (printDiff) printDiff.innerText = '+' + diff.toLocaleString() + ' ل.ل (زيادة)';
+            } else {
+                badge.className = 'text-xs font-mono font-bold p-3 rounded-xl text-center bg-rose-950 text-rose-300 border border-rose-800/80 shadow-md';
+                badge.innerHTML = `<span class="text-sm">⚠️</span> عجز نقدي في الصندوق: -${Math.abs(diff).toLocaleString()} ل.ل (نقص عن رصيد النظام)`;
+                badge.classList.remove('hidden');
+                if (printDiff) printDiff.innerText = '-' + Math.abs(diff).toLocaleString() + ' ل.ل (عجز)';
+            }
+        }
+
+        // Top "X" Button Handler
+        function handleTopXClick() {
+            const input = document.getElementById('actualCashInput');
+            const val = input.value.trim();
+
+            if (!val || parseFloat(val) < 0) {
+                showLockWarningModal('⚠️ لا يمكنك تسكير أو مغادرة هذه الصفحة عبر (X) حتى يتم وضع المبلغ الفعلي في الصندوق أو تسكير الحساب!');
+                input.focus();
+                return false;
+            }
+
+            // If amount is placed, prompt to settle now
+            const valNum = parseFloat(val) || 0;
+            const diff = valNum - expectedCash;
+            let statusText = 'مطابق 100%';
+            if (diff > 0) statusText = 'زيادة +' + diff.toLocaleString() + ' ل.ل';
+            if (diff < 0) statusText = 'عجز -' + Math.abs(diff).toLocaleString() + ' ل.ل';
+
+            if (confirm(`تم إدخال المبلغ: ${valNum.toLocaleString()} ل.ل (${statusText}).\nهل تريد تأكيد تسكير الحساب وتسليم الصندوق الآن؟`)) {
+                isShiftFormSubmitted = true;
+                document.getElementById('closeShiftForm').submit();
+            }
+        }
+
+        function showLockWarningModal(msg) {
+            document.getElementById('lockWarningMsg').innerText = msg;
+            document.getElementById('lockWarningModal').classList.remove('hidden');
+        }
+
+        function closeLockWarningModal() {
+            document.getElementById('lockWarningModal').classList.add('hidden');
+            document.getElementById('actualCashInput').focus();
+        }
+
+        function onShiftFormSubmit(e) {
+            const input = document.getElementById('actualCashInput');
+            const val = input.value.trim();
+
+            if (!val || parseFloat(val) < 0) {
+                e.preventDefault();
+                showLockWarningModal('⚠️ يجب إدخال مبلغ الكاش الفعلي المعدود في الصندوق قبل تسكير الوردية!');
+                input.focus();
+                return false;
+            }
+
+            const valNum = parseFloat(val) || 0;
+            const diff = valNum - expectedCash;
+            let msg = `هل أنت متأكد من تسليم الصندوق بمبلغ (${valNum.toLocaleString()} ل.ل)؟`;
+            if (diff !== 0) {
+                const diffTxt = diff > 0 ? `زيادة (+${diff.toLocaleString()} ل.ل)` : `عجز (-${Math.abs(diff).toLocaleString()} ل.ل)`;
+                msg += `\n⚠️ تنبيه: يوجد فارق ${diffTxt}`;
+            }
+
+            if (!confirm(msg)) {
+                e.preventDefault();
+                return false;
+            }
+
+            isShiftFormSubmitted = true;
+            return true;
+        }
+
+        // Window Close / Reload Lockdown (Anti-Escape via browser X)
+        window.addEventListener('beforeunload', function(e) {
+            if (!isShiftFormSubmitted) {
+                const msg = '⚠️ لا يمكنك الخروج أو إغلاق الصفحة قبل إدخال مبلغ الصندوق وتسكير الحساب!';
+                e.preventDefault();
+                e.returnValue = msg;
+                return msg;
+            }
+        });
+
+        // Initialize state
+        window.addEventListener('DOMContentLoaded', () => {
+            const input = document.getElementById('actualCashInput');
+            if (input) input.focus();
+        });
+    </script>
+</body>
+</html>

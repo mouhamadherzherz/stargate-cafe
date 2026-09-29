@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="p-6 max-w-7xl mx-auto space-y-6">
+
+    <!-- Top Header & Live Production Bar -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+        <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-600 border border-purple-500/20 flex items-center justify-center text-2xl">
+                🎮
+            </div>
+            <div>
+                <h2 class="text-xl font-black text-slate-800">كمبيوتر الألعاب وبلايستيشن (عداد الأدوار بدون وقت)</h2>
+                <p class="text-xs text-slate-500">تسجيل مباشر لعدد مرات الاستعمال والجلسات لكل جهاز بدون اشتراط تحديد وقت</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <a href="{{ url_for('gaming_devices_manage') }}" class="bg-slate-800 hover:bg-slate-700 text-purple-300 font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm border border-purple-500/30">
+                <i class="fa-solid fa-gamepad"></i>
+                <span>إدارة أجهزة الألعاب</span>
+            </a>
+            <button type="button" onclick="openMultiSessionModal()" class="bg-purple-600 hover:bg-purple-700 text-white font-black px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm">
+                <i class="fa-solid fa-plus"></i>
+                <span>تسجيل دور مخصص / عدة أدوار</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Live Daily Gaming KPI Summary Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <!-- Total Times/Sessions used today -->
+        <div class="bg-gradient-to-br from-purple-900 to-indigo-900 text-white p-5 rounded-2xl border border-purple-800 shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs text-purple-200 font-bold">إجمالي مرات الاستخدام اليوم</span>
+                <span class="w-8 h-8 rounded-lg bg-purple-800 text-purple-300 flex items-center justify-center text-sm">
+                    <i class="fa-solid fa-calculator"></i>
+                </span>
+            </div>
+            <div class="text-3xl font-black font-mono text-purple-100">
+                {{ gaming_stats.total_sessions_count or 0 }}
+                <span class="text-xs font-normal text-purple-300">دور / استخدام</span>
+            </div>
+            <p class="text-[11px] text-purple-300/80 mt-1">عبر كافة أجهزة الكمبيوتر والألعاب</p>
+        </div>
+
+        <!-- Total Revenue LBP today -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-500 text-xs font-bold mb-2">
+                <span>إجمالي إنتاج الألعاب اليوم (ل.ل)</span>
+                <span class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm">
+                    <i class="fa-solid fa-money-bill-wave"></i>
+                </span>
+            </div>
+            <div class="text-2xl font-black font-mono text-emerald-600">
+                {{ gaming_stats.total_lbp|format_currency }} ل.ل
+            </div>
+            <span class="text-[10px] text-slate-400 mt-1">توريد نقدي فوري في الخزينة</span>
+        </div>
+
+        <!-- Total Revenue USD today -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-500 text-xs font-bold mb-2">
+                <span>المقابل بالدولار ($)</span>
+                <span class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-sm">
+                    <i class="fa-solid fa-dollar-sign"></i>
+                </span>
+            </div>
+            <div class="text-2xl font-black font-mono text-slate-800">
+                {{ gaming_stats.total_usd|to_usd }}
+            </div>
+            <span class="text-[10px] text-slate-400 mt-1">حسب سعر صرف 1$ = {{ exchange_rate|format_currency }} ل.ل</span>
+        </div>
+
+        <!-- Active Devices Count -->
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-500 text-xs font-bold mb-2">
+                <span>الأجهزة المتوفرة</span>
+                <span class="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-sm">
+                    <i class="fa-solid fa-desktop"></i>
+                </span>
+            </div>
+            <div class="text-2xl font-black font-mono text-purple-900">
+                {{ devices|length }}
+                <span class="text-xs font-normal text-slate-500">أجهزة</span>
+            </div>
+            <span class="text-[10px] text-slate-400 mt-1">كمبيوترات ألعاب وبلايستيشن</span>
+        </div>
+    </div>
+
+    <!-- DEVICES GRID (One-Click +1 Usage Cards) -->
+    <div>
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-black text-slate-800 text-base flex items-center gap-2">
+                <span>🖥️</span> أجهزة الألعاب وسجل الاستخدام السريع (اضغط +1 لتسجيل دور)
+            </h3>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {% for dev in devices %}
+            <div class="bg-white rounded-2xl border border-slate-200 hover:border-purple-400 shadow-xs hover:shadow-md transition p-5 flex flex-col justify-between group">
+                
+                <!-- Card Header -->
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-purple-50 group-hover:bg-purple-600 group-hover:text-white text-purple-600 flex items-center justify-center text-2xl transition">
+                            {% if 'PS5' in dev.device_name or 'بلايستيشن' in dev.device_name %}🎮{% else %}💻{% endif %}
+                        </div>
+                        <div>
+                            <h4 class="font-black text-slate-900 text-sm group-hover:text-purple-900">{{ dev.device_name }}</h4>
+                            <span class="text-[11px] font-mono text-purple-600 font-bold">
+                                {{ dev.session_price_lbp|format_currency }} ل.ل / للدور
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Usage Counter Badge for Today -->
+                <div class="my-3 p-3.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+                    <div>
+                        <span class="text-[11px] text-slate-500 block">مرات الاستعمال اليوم:</span>
+                        <div class="text-2xl font-black font-mono text-purple-700">
+                            {{ dev.total_sessions }} <span class="text-xs font-normal text-slate-600">مرات / أدوار</span>
+                        </div>
+                    </div>
+                    <div class="text-left">
+                        <span class="text-[11px] text-slate-500 block">دخل الجهاز اليوم:</span>
+                        <span class="text-sm font-black font-mono text-emerald-600">{{ dev.total_revenue_lbp|format_currency }} ل.ل</span>
+                    </div>
+                </div>
+
+                <!-- Instant Action Button (+1 Round) -->
+                <div class="grid grid-cols-4 gap-2 pt-2 border-t border-slate-100">
+                    <!-- Quick +1 Instant Submit Form -->
+                    <form method="POST" action="{{ url_for('gaming_record_session') }}" class="col-span-3">
+                        <input type="hidden" name="device_id" value="{{ dev.device_id }}">
+                        <input type="hidden" name="session_count" value="1">
+                        <input type="hidden" name="player_name" value="لاعب ألعاب">
+                        <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-black py-2.5 px-3 rounded-xl shadow-md shadow-purple-600/20 transition flex items-center justify-center gap-2 text-xs">
+                            <i class="fa-solid fa-plus-circle text-sm"></i>
+                            <span>تسجيل دور سريع (+1)</span>
+                        </button>
+                    </form>
+
+                    <!-- Custom session button (multiple rounds or player name) -->
+                    <button type="button" onclick="openDeviceCustomModal({{ dev.device_id }}, '{{ dev.device_name|escape }}', {{ dev.session_price_lbp }}, {{ dev.session_price_usd }})" class="col-span-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition text-xs flex items-center justify-center" title="تسجيل عدة أدوار أو تحديد اسم اللاعب">
+                        <i class="fa-solid fa-sliders"></i>
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- TODAY'S GAMING SESSIONS LOG TABLE -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div class="p-4 bg-slate-900 text-white flex items-center justify-between">
+            <h3 class="font-black text-sm flex items-center gap-2">
+                <span>📋</span> سجل استخدامات وجلسات الألعاب اليوم
+            </h3>
+            <span class="text-xs text-purple-300 font-mono font-bold">{{ recent_sessions|length }} عملية مسجلة</span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-right text-xs">
+                <thead class="bg-slate-50 text-slate-500 border-b border-slate-200 font-bold">
+                    <tr>
+                        <th class="py-3 px-4">الوقت</th>
+                        <th class="py-3 px-4">الجهاز</th>
+                        <th class="py-3 px-4">عدد الأدوار / المرات</th>
+                        <th class="py-3 px-4">اللاعب</th>
+                        <th class="py-3 px-4">سعر الدور</th>
+                        <th class="py-3 px-4">المبلغ الإجمالي (ل.ل)</th>
+                        <th class="py-3 px-4">المقابل ($)</th>
+                        {% if is_admin %}
+                        <th class="py-3 px-4 text-center">حذف</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for session in recent_sessions %}
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="py-3 px-4 font-mono text-slate-500">{{ session.created_at|format_date }}</td>
+                        <td class="py-3 px-4 font-bold text-slate-900">{{ session.device_name }}</td>
+                        <td class="py-3 px-4 font-mono font-black text-purple-700">{{ session.session_count }} دور</td>
+                        <td class="py-3 px-4 text-slate-700">{{ session.player_name or 'لاعب ألعاب' }}</td>
+                        <td class="py-3 px-4 font-mono text-slate-500">{{ session.price_per_session_lbp|format_currency }} ل.ل</td>
+                        <td class="py-3 px-4 font-mono font-black text-emerald-600">{{ session.total_amount_lbp|format_currency }} ل.ل</td>
+                        <td class="py-3 px-4 font-mono text-slate-500">{{ session.total_amount_usd|to_usd }}</td>
+                        {% if is_admin %}
+                        <td class="py-3 px-4 text-center">
+                            <form method="POST" action="{{ url_for('gaming_session_delete', session_id=session.id) }}" onsubmit="return confirm('هل أنت متأكد من حذف هذا السجل وخصم مبلغه من الصندوق؟');" class="inline">
+                                <button type="submit" class="text-rose-500 hover:text-rose-700 p-1 rounded-lg hover:bg-rose-50" title="حذف">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </form>
+                        </td>
+                        {% endif %}
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center py-10 text-slate-400">
+                            لا توجد جلسات أو أدوار مسجلة اليوم حتى الآن. انقر على أي جهاز بالأعلى لتسجيل دور (+1).
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Custom Rounds / Player Name Session -->
+<div id="customSessionModal" class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200">
+        <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+            <h3 class="font-black text-slate-800 text-base flex items-center gap-2">
+                <span>🎮</span> تسجيل استخدام / أدوار للألعاب
+            </h3>
+            <button type="button" onclick="closeModal('customSessionModal')" class="text-slate-400 hover:text-slate-600">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('gaming_record_session') }}" class="space-y-4">
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">اختيار الجهاز *</label>
+                <select name="device_id" id="modalDeviceId" required class="w-full text-xs rounded-xl px-3 py-2 border border-slate-300 focus:outline-none focus:border-purple-500">
+                    {% for dev in devices %}
+                    <option value="{{ dev.device_id }}">{{ dev.device_name }} ({{ dev.session_price_lbp|format_currency }} ل.ل)</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">عدد الأدوار / المرات *</label>
+                <div class="grid grid-cols-4 gap-1.5 mb-2">
+                    <button type="button" onclick="setRoundsCount(1)" class="round-count-btn bg-purple-100 text-purple-900 border border-purple-300 font-bold py-1.5 rounded-lg text-xs">1 دور</button>
+                    <button type="button" onclick="setRoundsCount(2)" class="round-count-btn bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold py-1.5 rounded-lg text-xs">2 دور</button>
+                    <button type="button" onclick="setRoundsCount(3)" class="round-count-btn bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold py-1.5 rounded-lg text-xs">3 أدوار</button>
+                    <button type="button" onclick="setRoundsCount(5)" class="round-count-btn bg-slate-100 text-slate-700 hover:bg-slate-200 font-bold py-1.5 rounded-lg text-xs">5 أدوار</button>
+                </div>
+                <input type="number" name="session_count" id="modalSessionCount" value="1" min="1" required class="w-full text-xs rounded-xl px-3 py-2 border border-slate-300 focus:outline-none focus:border-purple-500 font-mono">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">اسم اللاعب (اختياري)</label>
+                <input type="text" name="player_name" id="modalPlayerName" placeholder="مثال: أحمد، علي، زبون كاش..." class="w-full text-xs rounded-xl px-3 py-2 border border-slate-300 focus:outline-none focus:border-purple-500">
+            </div>
+
+            <div class="flex items-center gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-black py-2.5 rounded-xl transition text-xs shadow-sm">
+                    تأكيد وتسجيل الإيراد 💰
+                </button>
+                <button type="button" onclick="closeModal('customSessionModal')" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition text-xs">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function setRoundsCount(num) {
+        document.getElementById('modalSessionCount').value = num;
+        document.querySelectorAll('.round-count-btn').forEach(b => {
+            b.classList.remove('bg-purple-100', 'text-purple-900', 'border', 'border-purple-300');
+            b.classList.add('bg-slate-100', 'text-slate-700');
+        });
+        event.target.classList.add('bg-purple-100', 'text-purple-900', 'border', 'border-purple-300');
+    }
+
+    function openMultiSessionModal() {
+        document.getElementById('modalSessionCount').value = '1';
+        document.getElementById('modalPlayerName').value = '';
+        openModal('customSessionModal');
+    }
+
+    function openDeviceCustomModal(devId, devName, priceLbp, priceUsd) {
+        document.getElementById('modalDeviceId').value = devId;
+        document.getElementById('modalSessionCount').value = '1';
+        document.getElementById('modalPlayerName').value = '';
+        openModal('customSessionModal');
+    }
+</script>
+{% endblock %}

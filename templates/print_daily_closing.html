@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>محضر الإقفال اليومي وتسكير حسابات السائقين - {{ closing_data.target_date }}</title>
+    <!-- Local Font Awesome Icons & Tailwind -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.min.css') }}">
+    <script src="{{ url_for('static', filename='js/tailwindcss.js') }}"></script>
+
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f8fafc;
+        }
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body {
+                background: white !important;
+                padding: 0 !important;
+            }
+            .printable-card {
+                box-shadow: none !important;
+                border: 1px solid #cbd5e1 !important;
+                max-width: 100% !important;
+            }
+        }
+    </style>
+</head>
+<body class="p-4 lg:p-8">
+
+    <!-- Print / Back Controls -->
+    <div class="max-w-6xl mx-auto mb-6 flex items-center justify-between no-print">
+        <a href="{{ url_for('reports_view') }}" class="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold px-4 py-2 rounded-xl text-xs transition">
+            &rarr; العودة لصفحة التقارير
+        </a>
+        <button onclick="window.print()" class="bg-slate-900 hover:bg-black text-white font-bold px-6 py-2.5 rounded-xl text-sm shadow-md transition flex items-center gap-2">
+            <i class="fa-solid fa-print"></i>
+            <span>طباعة محضر الإقفال اليومي (A4)</span>
+        </button>
+    </div>
+
+    <!-- Official Printable Daily Closing -->
+    <div class="printable-card max-w-6xl mx-auto bg-white p-6 lg:p-10 rounded-3xl border border-slate-200 shadow-lg space-y-6">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-6 border-b-2 border-slate-900">
+            <div>
+                <h1 class="text-2xl font-black text-slate-900 flex items-center gap-2">
+                    <span>{{ company_name }}</span>
+                    <span>🇱🇧</span>
+                </h1>
+                <p class="text-xs text-slate-500 font-bold mt-1">محضر الإقفال اليومي الشامل لحركة وتسكير حسابات السائقين والكاش</p>
+                <div class="text-xs text-slate-400 mt-0.5">{{ settings.address }} | هاتف: {{ settings.phone }}</div>
+            </div>
+            <div class="text-left" dir="ltr">
+                <div class="text-base font-black text-blue-600 font-mono">تاريخ اليومية: {{ closing_data.target_date }}</div>
+                <div class="text-xs text-slate-400 mt-1 font-mono">طبع في: {{ now_str }}</div>
+            </div>
+        </div>
+
+        <!-- 5 Summary Boxes -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+            <div class="p-3 bg-white rounded-xl border border-slate-200 shadow-sm text-center">
+                <span class="text-slate-500 font-bold block">إجمالي المسلم اليوم:</span>
+                <span class="text-lg font-black text-slate-900 font-mono mt-1 block">{{ closing_data.total_delivered }} طلب</span>
+            </div>
+            <div class="p-3 bg-white rounded-xl border border-slate-200 shadow-sm text-center">
+                <span class="text-slate-500 font-bold block">إجمالي الكاش المحصل:</span>
+                <span class="text-lg font-black text-blue-600 font-mono mt-1 block">{{ closing_data.total_collected|format_currency }}</span>
+            </div>
+            <div class="p-3 bg-white rounded-xl border border-slate-200 shadow-sm text-center">
+                <span class="text-slate-500 font-bold block">عمولات السائقين (30 ألف):</span>
+                <span class="text-lg font-black text-amber-600 font-mono mt-1 block">{{ closing_data.total_commissions|format_currency }}</span>
+            </div>
+            <div class="p-3 bg-white rounded-xl border border-slate-200 shadow-sm text-center">
+                <span class="text-slate-500 font-bold block">المورد فعلياً للخزينة:</span>
+                <span class="text-lg font-black text-emerald-600 font-mono mt-1 block">{{ closing_data.total_settled|format_currency }}</span>
+            </div>
+            <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 shadow-sm text-center">
+                <span class="text-amber-900 font-bold block">المتبقي في ذمة السائقين:</span>
+                <span class="text-lg font-black text-rose-600 font-mono mt-1 block">{{ closing_data.total_remaining|format_currency }}</span>
+            </div>
+        </div>
+
+        <!-- Master Drivers Settlement Table -->
+        <div class="space-y-3">
+            <h3 class="text-sm font-black text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-table-list text-slate-600"></i>
+                <span>تفاصيل تسكير حساب كل سائق في هذا اليوم:</span>
+            </h3>
+
+            <div class="border border-slate-200 rounded-2xl overflow-hidden">
+                <table class="w-full text-right text-xs">
+                    <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                        <tr>
+                            <th class="p-3">السائق / المندوب</th>
+                            <th class="p-3 text-center">الطلبات المسلمة اليوم</th>
+                            <th class="p-3">إجمالي الكاش المحصل</th>
+                            <th class="p-3">عمولة السائق المستحقة</th>
+                            <th class="p-3">الصافي المطلوب للمكتب</th>
+                            <th class="p-3 text-emerald-700">المورد فعلياً للخزينة (المسدد)</th>
+                            <th class="p-3 text-rose-700 font-bold">المتبقي بجيب السائق (غير المسدد)</th>
+                            <th class="p-3 text-center">الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for cd in closing_data.couriers_data %}
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3 font-bold text-slate-800">
+                                <div>{{ cd.courier.name }}</div>
+                                <span class="text-[11px] text-slate-400 font-mono">{{ cd.courier.phone }}</span>
+                            </td>
+                            <td class="p-3 text-center font-bold text-slate-700">{{ cd.delivered_count }}</td>
+                            <td class="p-3 font-mono font-bold text-slate-800">{{ cd.collected_today|format_currency }} {{ currency }}</td>
+                            <td class="p-3 font-mono font-bold text-amber-600">{{ cd.commission_today|format_currency }} {{ currency }}</td>
+                            <td class="p-3 font-mono font-bold text-slate-900">{{ cd.net_expected_today|format_currency }} {{ currency }}</td>
+                            <td class="p-3 font-mono font-black text-emerald-600">{{ cd.settled_collected|format_currency }} {{ currency }}</td>
+                            <td class="p-3 font-mono font-black text-rose-600">{{ cd.current_cash_custody|format_currency }} {{ currency }}</td>
+                            <td class="p-3 text-center">
+                                {% if cd.current_cash_custody == 0 and cd.delivered_count > 0 %}
+                                <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px]">مصفى 100% ✅</span>
+                                {% elif cd.current_cash_custody > 0 %}
+                                <span class="px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-bold text-[10px]">بذمته كاش ⚠️</span>
+                                {% else %}
+                                <span class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px]">لا توجد حركة</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Signatures & Approval -->
+        <div class="pt-8 border-t-2 border-slate-200 grid grid-cols-2 gap-12 text-xs">
+            <div class="space-y-12">
+                <span class="font-bold text-slate-700 block">إعداد وتدقيق المحاسب:</span>
+                <div class="border-b border-dashed border-slate-400 w-48"></div>
+            </div>
+            <div class="space-y-12 text-left" dir="ltr">
+                <span class="font-bold text-slate-700 block text-right">اعتماد وتوقيع المدير العام:</span>
+                <div class="border-b border-dashed border-slate-400 w-48 mr-auto"></div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

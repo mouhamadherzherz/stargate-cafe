@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="p-6 max-w-7xl mx-auto space-y-6">
+
+    <!-- Top Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
+        <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center justify-center text-2xl">
+                🧾
+            </div>
+            <div>
+                <h2 class="text-xl font-black text-slate-800">سجل فواتير ومبيعات الكافيه والقهوة</h2>
+                <p class="text-xs text-slate-500">متابعة الفواتير اليومية وإعادة طباعة الإيصالات</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <a href="{{ url_for('cafe_pos') }}" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm">
+                <i class="fa-solid fa-plus"></i>
+                <span>شاشة الكاشير السريعة</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Orders Table -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-right text-xs">
+                <thead class="bg-slate-900 text-white border-b border-slate-800 font-bold">
+                    <tr>
+                        <th class="py-3.5 px-4">رقم الفاتورة</th>
+                        <th class="py-3.5 px-4">الوقت والتاريخ</th>
+                        <th class="py-3.5 px-4">النوع / الزبون</th>
+                        <th class="py-3.5 px-4">تفاصيل المشروبات</th>
+                        <th class="py-3.5 px-4">المبلغ بالليرة (ل.ل)</th>
+                        <th class="py-3.5 px-4">المقابل بالدولار ($)</th>
+                        <th class="py-3.5 px-4 text-center">الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for order in orders %}
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="py-3 px-4 font-mono font-bold text-amber-600">
+                            {{ order.order_number }}
+                        </td>
+                        <td class="py-3 px-4 font-mono text-slate-500">
+                            {{ order.created_at|format_date }}
+                        </td>
+                        <td class="py-3 px-4">
+                            <span class="font-bold text-slate-800">{{ order.table_or_takeaway }}</span>
+                            {% if order.customer_name and order.customer_name != 'زبون كاش' %}
+                            <div class="text-[11px] text-slate-500">{{ order.customer_name }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-slate-700 max-w-xs truncate" title="{{ order.items_summary }}">
+                            {{ order.items_summary or 'مشروبات متنوعة' }}
+                        </td>
+                        <td class="py-3 px-4 font-mono font-black text-slate-900">
+                            {{ order.total_amount_lbp|format_currency }} ل.ل
+                        </td>
+                        <td class="py-3 px-4 font-mono font-bold text-slate-500">
+                            {{ order.total_amount_usd|to_usd }}
+                        </td>
+                        <td class="py-3 px-4 text-center">
+                            <div class="flex items-center justify-center gap-2">
+                                <a href="{{ url_for('cafe_receipt', order_id=order.id) }}" target="_blank" class="text-slate-600 hover:text-amber-600 font-bold p-1.5 hover:bg-slate-100 rounded-lg transition" title="طباعة الإيصال">
+                                    <i class="fa-solid fa-print"></i>
+                                </a>
+                                {% if is_admin %}
+                                <form method="POST" action="{{ url_for('cafe_order_delete', order_id=order.id) }}" onsubmit="return confirm('هل أنت متأكد من حذف هذه الفاتورة وإلغاء مبلغها من الصندوق؟');" class="inline">
+                                    <button type="submit" class="text-rose-500 hover:text-rose-700 font-bold p-1.5 hover:bg-rose-50 rounded-lg transition" title="حذف الفاتورة">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-12 text-slate-400">
+                            <i class="fa-solid fa-receipt text-4xl mb-3 text-slate-300"></i>
+                            <p class="font-bold">لا توجد فواتير كافيه مسجلة حتى الآن</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

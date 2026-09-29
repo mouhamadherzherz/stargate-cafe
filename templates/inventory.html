@@ -1,0 +1,414 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+
+    <!-- Top Header Banner -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 p-5 rounded-3xl border border-cyan-500/30 shadow-xl relative overflow-hidden">
+        <div class="absolute -right-10 -top-10 w-40 h-40 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        
+        <div class="flex items-center gap-3.5 relative z-10">
+            <div class="w-14 h-14 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-400 flex items-center justify-center text-3xl font-black shadow-lg shadow-cyan-500/20">
+                📦
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h2 class="text-xl font-black text-white">إدارة وجرد بضاعة الكافيه والمخزون</h2>
+                    <span class="bg-cyan-500/20 text-cyan-300 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-cyan-500/30 font-mono">STARGATE PRO</span>
+                </div>
+                <p class="text-xs text-slate-400 mt-0.5">متابعة الكميات المتوفرة، حد الطلب، وتنزيل كشف المخزون بضغطة زر واحدة</p>
+            </div>
+        </div>
+
+        <!-- Actions: Export CSV / Excel & Add New Item -->
+        <div class="flex flex-wrap items-center gap-2 relative z-10">
+            <!-- Quick Add Item Button -->
+            <button type="button" onclick="openQuickAddModal()" class="bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-black px-4 py-2 rounded-2xl text-xs transition flex items-center gap-2 shadow-lg shadow-purple-600/30">
+                <i class="fa-solid fa-plus-circle"></i>
+                <span>+ إضافة صنف بضاعة جديد</span>
+            </button>
+
+            <!-- Export Stock CSV / Excel Button -->
+            <a href="{{ url_for('export_inventory_csv_route') }}" class="bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black px-4 py-2 rounded-2xl text-xs transition flex items-center gap-2 shadow-lg shadow-emerald-500/30">
+                <i class="fa-solid fa-file-excel text-sm"></i>
+                <span>تنزيل كشف البضاعة والمخزون (Excel)</span>
+            </a>
+
+            <!-- Return to POS -->
+            <a href="{{ url_for('index') }}" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-3.5 py-2 rounded-2xl text-xs border border-slate-700 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-cash-register"></i>
+                <span>العودة لشاشة الكاشير</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Quick Stats Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+        <div class="bg-slate-900/90 border border-slate-800 p-3.5 rounded-2xl flex items-center justify-between">
+            <div>
+                <span class="text-[11px] text-slate-400 font-bold block">إجمالي الأصناف بالمنيو:</span>
+                <span class="text-xl font-black text-white font-mono">{{ items|length }}</span>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-slate-800 text-slate-300 flex items-center justify-center text-lg">
+                📋
+            </div>
+        </div>
+
+        <div class="bg-slate-900/90 border border-emerald-500/30 p-3.5 rounded-2xl flex items-center justify-between">
+            <div>
+                <span class="text-[11px] text-emerald-400 font-bold block">أصناف متوفرة بالمخزن:</span>
+                <span class="text-xl font-black text-emerald-400 font-mono">
+                    {{ items|selectattr('stock_qty', 'gt', 5)|list|length }}
+                </span>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-lg">
+                ✅
+            </div>
+        </div>
+
+        <div class="bg-slate-900/90 border border-amber-500/30 p-3.5 rounded-2xl flex items-center justify-between">
+            <div>
+                <span class="text-[11px] text-amber-400 font-bold block">أصناف قاربت على النفاد:</span>
+                <span class="text-xl font-black text-amber-400 font-mono">
+                    {{ items|selectattr('stock_qty', 'gt', 0)|selectattr('stock_qty', 'le', 5)|list|length }}
+                </span>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg">
+                ⚠️
+            </div>
+        </div>
+
+        <div class="bg-slate-900/90 border border-rose-500/30 p-3.5 rounded-2xl flex items-center justify-between">
+            <div>
+                <span class="text-[11px] text-rose-400 font-bold block">أصناف نفدت تماماً:</span>
+                <span class="text-xl font-black text-rose-400 font-mono">
+                    {{ items|selectattr('stock_qty', 'eq', 0)|selectattr('track_stock', 'eq', 1)|list|length }}
+                </span>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-lg">
+                ❌
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Filter Filter Bar -->
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800">
+        <div class="relative w-full sm:w-80">
+            <i class="fa-solid fa-search absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+            <input type="text" id="inventorySearch" oninput="filterInventoryTable()" placeholder="ابحث باسم الصنف أو التصنيف..." class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl pr-9 pl-3 py-2 text-xs focus:border-cyan-400 focus:outline-none placeholder-slate-500 transition">
+        </div>
+
+        <div class="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
+            <span class="text-xs text-slate-400 font-bold">تصفية:</span>
+            <button type="button" onclick="setInventoryFilter('all', this)" class="inv-filter-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-cyan-500 text-slate-950 shadow-md">الكل</button>
+            <button type="button" onclick="setInventoryFilter('tracked', this)" class="inv-filter-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:text-white border border-slate-700">بالمخزون فقط</button>
+            <button type="button" onclick="setInventoryFilter('low', this)" class="inv-filter-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-amber-400 hover:text-white border border-amber-500/30">المنخفض فقط ⚠️</button>
+        </div>
+    </div>
+
+    <!-- Inventory Table -->
+    <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-right text-xs" id="inventoryTable">
+                <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 text-[11px] font-black uppercase tracking-wider">
+                    <tr>
+                        <th class="p-3.5 pr-5">الصنف</th>
+                        <th class="p-3.5">التصنيف</th>
+                        <th class="p-3.5">سعر البيع (ل.ل) - تعديل فوري</th>
+                        <th class="p-3.5">سعر ($)</th>
+                        <th class="p-3.5">الكمية الحالية - تعديل فوري</th>
+                        <th class="p-3.5">حالة المخزون</th>
+                        <th class="p-3.5 text-center">إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60 text-slate-200">
+                    {% for item in items %}
+                    <tr class="hover:bg-slate-800/40 transition group item-row" 
+                        data-name="{{ item.name|lower }}" 
+                        data-cat="{{ (item.category_name or '')|lower }}"
+                        data-tracked="{{ item.track_stock }}"
+                        data-qty="{{ item.stock_qty }}"
+                        data-low="{{ item.low_stock_limit }}">
+                        
+                        <!-- Name with icon -->
+                        <td class="p-3.5 pr-5 font-bold flex items-center gap-2.5">
+                            {% if item.icon and (item.icon.startswith('/') or item.icon.startswith('http') or item.icon.startswith('data:')) %}
+                            <img src="{{ item.icon }}" alt="" class="w-9 h-9 rounded-xl object-contain bg-slate-900 border border-slate-700/80 p-0.5 shrink-0 shadow-sm">
+                            {% else %}
+                            <span class="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700/60 flex items-center justify-center text-base shrink-0">
+                                {{ item.icon or '☕' }}
+                            </span>
+                            {% endif %}
+                            <div>
+                                <span class="text-white text-xs font-black block">{{ item.name }}</span>
+                                <span class="text-[10px] text-slate-500 font-mono">ID: #{{ item.id }}</span>
+                            </div>
+                        </td>
+
+                        <!-- Category -->
+                        <td class="p-3.5 text-slate-400 font-bold">
+                            <span class="bg-slate-800/80 text-slate-300 px-2.5 py-1 rounded-lg border border-slate-700/50">
+                                {{ item.category_icon or '🏷️' }} {{ item.category_name or 'بدون تصنيف' }}
+                            </span>
+                        </td>
+
+                        <!-- Price LBP (Fast Inline Editable) -->
+                        <td class="p-3.5 font-mono font-black text-amber-400">
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" 
+                                       step="1000" 
+                                       value="{{ item.price_lbp|int }}" 
+                                       onchange="inlineUpdateField({{ item.id }}, 'price_lbp', this.value, this)" 
+                                       class="w-28 bg-slate-950 border border-amber-500/40 focus:border-amber-400 text-amber-300 font-mono font-black text-xs rounded-xl px-2.5 py-1 focus:outline-none transition">
+                                <span class="text-[10px] text-slate-400 font-normal">ل.ل</span>
+                            </div>
+                        </td>
+
+                        <!-- Price USD (Fast Inline Editable) -->
+                        <td class="p-3.5 font-mono font-black text-emerald-400">
+                            <div class="flex items-center gap-1">
+                                <span class="text-emerald-400 font-bold text-xs">$</span>
+                                <input type="number" 
+                                       step="0.05" 
+                                       min="0"
+                                       value="{{ item.price_usd|round(2) }}" 
+                                       onchange="inlineUpdateField({{ item.id }}, 'price_usd', this.value, this)" 
+                                       class="w-20 bg-slate-950 border border-emerald-500/40 focus:border-emerald-400 text-emerald-300 font-mono font-black text-xs rounded-xl px-2 py-1 focus:outline-none transition"
+                                       title="تعديل السعر بالدولار مباشرة وسيتم حساب اللبناني تلقائياً">
+                            </div>
+                        </td>
+
+                        <!-- Stock Quantity (Fast Inline Editable) -->
+                        <td class="p-3.5 font-mono">
+                            <div class="flex items-center gap-2">
+                                <input type="number" 
+                                       step="1" 
+                                       min="0"
+                                       value="{{ item.stock_qty|int }}" 
+                                       onchange="inlineUpdateField({{ item.id }}, 'stock_qty', this.value, this)" 
+                                       class="w-24 bg-slate-950 border border-cyan-500/40 focus:border-cyan-400 text-cyan-300 font-mono font-black text-xs rounded-xl px-2.5 py-1 focus:outline-none transition">
+                                <span class="text-[10px] text-slate-400">قطعة</span>
+                            </div>
+                        </td>
+
+                        <!-- Stock Status Badge -->
+                        <td class="p-3.5">
+                            {% if not item.track_stock %}
+                            <span class="text-[10px] font-bold text-slate-500 bg-slate-800/60 px-2 py-0.5 rounded-full">خدمة / بدون جرد</span>
+                            {% elif item.stock_qty > item.low_stock_limit %}
+                            <span class="text-[10px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1 w-fit">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                متوفر بالمستودع
+                            </span>
+                            {% elif item.stock_qty > 0 %}
+                            <span class="text-[10px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1 w-fit">
+                                ⚠️ كمية منخفضة
+                            </span>
+                            {% else %}
+                            <span class="text-[10px] font-black text-rose-400 bg-rose-500/10 border border-rose-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1 w-fit">
+                                ❌ نفد من المخزون
+                            </span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Actions -->
+                        <td class="p-3.5 text-center">
+                            <button type="button" 
+                                    onclick="quickStockAddPrompt({{ item.id }}, '{{ item.name }}', {{ item.stock_qty|int }})" 
+                                    class="bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 hover:text-white px-2.5 py-1 rounded-xl text-[11px] font-black transition">
+                                + زيادة الكمية
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Quick Add New Item -->
+<div id="quickAddItemModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-purple-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="font-black text-white text-base flex items-center gap-2">
+                <span>➕</span> إضافة صنف بضاعة جديد للمخزون
+            </h3>
+            <button type="button" onclick="closeQuickAddModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+        </div>
+
+        <form action="{{ url_for('quick_add_item_inline') }}" method="POST" enctype="multipart/form-data" class="space-y-3">
+            <div>
+                <label class="text-xs text-slate-400 font-bold block mb-1">اسم الصنف أو المنتج:</label>
+                <input type="text" name="name" required placeholder="مثال: قهوة برازيلي فاخر / عصير راني" class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:border-purple-500 focus:outline-none">
+            </div>
+
+            <!-- Studio Photo Uploader in Inventory -->
+            <div class="space-y-1.5">
+                <label class="text-xs text-amber-300 font-bold flex items-center justify-between">
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-camera text-amber-400"></i> صورة المنتج (اختياري):</span>
+                    <span class="text-[10px] text-slate-400">يدعم اللصق (Ctrl+V)</span>
+                </label>
+                <div class="relative border-2 border-dashed border-slate-700 hover:border-amber-400 bg-slate-950/80 rounded-2xl p-3 text-center transition flex flex-col items-center justify-center min-h-[110px] cursor-pointer">
+                    <input type="file" name="image_file" id="invItemImageFile" accept="image/*" onchange="previewInvImage(this)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20">
+                    <input type="hidden" name="image_base64" id="invItemImageBase64">
+                    
+                    <div id="invPreviewContainer" class="hidden flex-col items-center space-y-1.5 z-10">
+                        <img id="invImgPreview" src="" alt="معاينة" class="w-20 h-20 rounded-xl object-contain bg-slate-900 border border-amber-400 p-1 shadow-lg">
+                        <span class="text-[10px] text-emerald-400 font-bold bg-emerald-950/90 px-2 py-0.5 rounded-full border border-emerald-800">✓ تم اختيار الصورة</span>
+                    </div>
+
+                    <div id="invPlaceholder" class="flex flex-col items-center justify-center space-y-1 pointer-events-none">
+                        <i class="fa-solid fa-cloud-arrow-up text-amber-400 text-2xl"></i>
+                        <p class="text-[11px] font-bold text-white">انقر لاختيار صورة، أو اسحبها هنا، أو الصقها بـ (Ctrl+V)</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="text-xs text-slate-400 font-bold block mb-1">التصنيف:</label>
+                    <select name="category_id" required class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:border-purple-500 focus:outline-none">
+                        {% for cat in categories %}
+                        <option value="{{ cat.id }}">{{ cat.icon }} {{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 font-bold block mb-1">الأيقونة (رمز تعبيري):</label>
+                    <input type="text" name="icon" value="☕" class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs text-center focus:border-purple-500 focus:outline-none">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="text-xs text-amber-400 font-bold block mb-1">سعر البيع (ل.ل أو بالدولار $):</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="quickAddPriceLBP" name="price_lbp" required step="any" min="0" placeholder="باللبناني (مثال: 100000)" oninput="syncModalPrice('lbp')" class="w-full bg-slate-950 border border-amber-500/50 text-amber-300 font-mono font-black rounded-xl px-3 py-2 text-xs focus:border-amber-400 focus:outline-none">
+                        <input type="number" id="quickAddPriceUSD" step="0.05" min="0" placeholder="بالدولار (1.50$)" oninput="syncModalPrice('usd')" class="w-28 bg-slate-950 border border-emerald-500/50 text-emerald-300 font-mono font-black rounded-xl px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-cyan-400 font-bold block mb-1">الكمية المتوفرة بالمخزن:</label>
+                    <input type="number" name="stock_qty" value="50" min="0" step="1" class="w-full bg-slate-950 border border-cyan-500/50 text-cyan-300 font-mono font-black rounded-xl px-3 py-2 text-xs focus:border-cyan-400 focus:outline-none">
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 pt-1">
+                <input type="checkbox" name="track_stock" id="trackStockCheck" value="1" checked class="w-4 h-4 rounded text-cyan-500 bg-slate-950 border-slate-700 focus:ring-0">
+                <label for="trackStockCheck" class="text-xs text-slate-300 font-bold cursor-pointer">تفعيل مراقبة المخزون والخصم التلقائي عند البيع</label>
+            </div>
+
+            <div class="pt-3 flex items-center justify-end gap-2 border-t border-slate-800">
+                <button type="button" onclick="closeQuickAddModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white bg-slate-800">إلغاء</button>
+                <button type="submit" class="bg-purple-600 hover:bg-purple-500 text-white font-black px-5 py-2 rounded-xl text-xs transition shadow-lg shadow-purple-600/30">حفظ وإضافة الصنف</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Inline update via AJAX
+function inlineUpdateField(itemId, field, value, inputEl) {
+    inputEl.classList.add('opacity-50');
+    fetch("{{ url_for('quick_update_item') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_id: itemId, field: field, value: value })
+    })
+    .then(res => res.json())
+    .then(data => {
+        inputEl.classList.remove('opacity-50');
+        if (data.success) {
+            inputEl.classList.add('border-emerald-500');
+            setTimeout(() => inputEl.classList.remove('border-emerald-500'), 1500);
+        } else {
+            alert('تعذر التعديل: ' + data.message);
+        }
+    })
+    .catch(err => {
+        inputEl.classList.remove('opacity-50');
+        alert('خطأ في الاتصال: ' + err);
+    });
+}
+
+function syncModalPrice(source) {
+    const rate = {{ exchange_rate or 89500.0 }};
+    const lbpInput = document.getElementById('quickAddPriceLBP');
+    const usdInput = document.getElementById('quickAddPriceUSD');
+    if (!lbpInput || !usdInput) return;
+    if (source === 'lbp') {
+        const val = parseFloat(lbpInput.value) || 0;
+        usdInput.value = (val > 0 && rate > 0) ? (val / rate).toFixed(2) : '';
+    } else if (source === 'usd') {
+        const val = parseFloat(usdInput.value) || 0;
+        lbpInput.value = (val > 0 && rate > 0) ? Math.round(val * rate) : '';
+    }
+}
+
+function quickStockAddPrompt(itemId, itemName, currentQty) {
+    const addQty = prompt(`كمية البضاعة الإضافية التي ترغب بإضافتها إلى (${itemName})؟\nالكمية الحالية: ${currentQty}`, "10");
+    if (addQty !== null && !isNaN(parseInt(addQty))) {
+        const newTotal = currentQty + parseInt(addQty);
+        fetch("{{ url_for('quick_update_item') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ item_id: itemId, field: 'stock_qty', value: newTotal })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.message);
+            }
+        });
+    }
+}
+
+// Search & Filter
+function filterInventoryTable() {
+    const q = document.getElementById('inventorySearch').value.toLowerCase().trim();
+    const rows = document.querySelectorAll('#inventoryTable tbody tr.item-row');
+    rows.forEach(r => {
+        const name = r.getAttribute('data-name') || '';
+        const cat = r.getAttribute('data-cat') || '';
+        if (name.includes(q) || cat.includes(q)) {
+            r.style.display = '';
+        } else {
+            r.style.display = 'none';
+        }
+    });
+}
+
+function setInventoryFilter(filterType, btn) {
+    document.querySelectorAll('.inv-filter-btn').forEach(b => {
+        b.className = 'inv-filter-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:text-white border border-slate-700';
+    });
+    btn.className = 'inv-filter-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-cyan-500 text-slate-950 shadow-md';
+
+    const rows = document.querySelectorAll('#inventoryTable tbody tr.item-row');
+    rows.forEach(r => {
+        const tracked = r.getAttribute('data-tracked') === '1';
+        const qty = parseFloat(r.getAttribute('data-qty') || 0);
+        const low = parseFloat(r.getAttribute('data-low') || 5);
+
+        if (filterType === 'all') {
+            r.style.display = '';
+        } else if (filterType === 'tracked') {
+            r.style.display = tracked ? '' : 'none';
+        } else if (filterType === 'low') {
+            r.style.display = (tracked && qty <= low) ? '' : 'none';
+        }
+    });
+}
+
+function openQuickAddModal() {
+    document.getElementById('quickAddItemModal').classList.remove('hidden');
+}
+
+function closeQuickAddModal() {
+    document.getElementById('quickAddItemModal').classList.add('hidden');
+}
+</script>
+{% endblock %}

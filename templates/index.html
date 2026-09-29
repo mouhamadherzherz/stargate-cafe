@@ -1,0 +1,2269 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex-1 flex flex-col p-2.5 lg:p-4 max-w-full space-y-3 pb-12">
+    
+    <!-- 1. LIVE TOP KPI AUDIT BAR (إحصائيات فورية لإنتاج اليوم) -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 shrink-0">
+        
+        <!-- 1. Cafe Production -->
+        <div class="bg-slate-900/90 border border-amber-500/40 p-2.5 rounded-2xl flex items-center justify-between shadow-sm">
+            <div>
+                <span class="text-[10px] text-amber-400 font-bold block">☕ القهوة والمشروبات:</span>
+                <div class="text-base font-black font-mono text-white">
+                    {{ summary.cafe.total_lbp|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span>
+                </div>
+                <span class="text-[9px] text-slate-400 font-mono">{{ summary.cafe.cups_count }} صنف / كوب</span>
+            </div>
+            <div class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-base">
+                ☕
+            </div>
+        </div>
+
+        <!-- 2. GAMING & Computers Dedicated Account & 100% Profit -->
+        <div class="bg-gradient-to-tr from-slate-900 to-purple-950 border-2 border-purple-500/60 p-2.5 rounded-2xl flex items-center justify-between shadow-md relative overflow-hidden">
+            <div class="relative z-10">
+                <div class="flex items-center gap-1 mb-0.5">
+                    <span class="text-[10px] text-purple-300 font-black block">🎮 ألعاب وكمبيوتر:</span>
+                    <span class="bg-purple-500/30 text-purple-200 text-[8px] font-black px-1 rounded border border-purple-400/30">100% ربح</span>
+                </div>
+                <div class="text-base font-black font-mono text-purple-200">
+                    {{ summary.pc.total_lbp|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span>
+                </div>
+                <div class="flex items-center gap-1.5 text-[9px] font-mono font-bold mt-0.5">
+                    <span class="text-purple-300">{{ summary.pc.total_usd|to_usd }}</span>
+                    <span class="text-slate-500">•</span>
+                    <span class="text-emerald-400 font-black">ربح: {{ (summary.pc.profit_lbp or summary.pc.total_lbp)|format_currency }}</span>
+                </div>
+            </div>
+            <div class="w-9 h-9 rounded-xl bg-purple-500/30 border border-purple-500/50 text-purple-300 flex items-center justify-center text-lg shadow-inner shrink-0">
+                🎮
+            </div>
+        </div>
+
+        {% if is_admin or session.get('is_admin') or session.get('employee_role') == 'admin' %}
+        <!-- 3. Safe Vault Dedicated Balance & Quick Transfer -->
+        <div class="bg-gradient-to-tr from-slate-900 to-amber-950 border-2 border-amber-500/60 p-2.5 rounded-2xl flex items-center justify-between shadow-md cursor-pointer hover:border-amber-400 transition group" onclick="openSafeTransferModal()" title="انقر لترحيل مبالغ نقدية إلى الخزنة الخاصة">
+            <div class="relative z-10">
+                <div class="flex items-center gap-1 mb-0.5">
+                    <span class="text-[10px] text-amber-300 font-black block">🏦 الخزنة الخاصة (صندوق المالك):</span>
+                </div>
+                <div class="text-base font-black font-mono text-amber-300">
+                    {{ safe_balance.total_lbp|default(0)|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span>
+                </div>
+                <div class="flex items-center gap-1.5 text-[9px] font-mono mt-0.5">
+                    <span class="text-amber-200 font-bold">{{ safe_balance.total_usd|default(0)|to_usd }}</span>
+                    <span class="text-slate-500">•</span>
+                    <span class="text-amber-400 font-black group-hover:underline">نقل كاش ↗</span>
+                </div>
+            </div>
+            <div class="w-9 h-9 rounded-xl bg-amber-500/25 border border-amber-500/50 text-amber-300 flex items-center justify-center text-lg shadow-inner shrink-0 group-hover:scale-105 transition">
+                🏦
+            </div>
+        </div>
+
+     {% else %}
+        <!-- Cashier Simple Drawer Status -->
+        <div class="bg-slate-900/90 border border-slate-800 p-2.5 rounded-2xl flex items-center justify-between shadow-sm">
+            <div>
+                <span class="text-[10px] text-slate-400 font-bold block">🏧 كاشير الوردية الحالية:</span>
+                <div class="text-base font-black font-mono text-amber-300">
+                    {{ session.get('employee_name', 'الكاشير') }}
+                </div>
+                <span class="text-[9px] text-emerald-400 font-bold">الوردية نشطة ومفتوحة 🟢</span>
+            </div>
+            <div class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-base">
+                👤
+            </div>
+        </div>
+        {% endif %}
+        <!-- 4. Grand Total Cash in Drawer -->
+        <div class="bg-slate-900/90 border border-emerald-500/40 p-2.5 rounded-2xl flex items-center justify-between shadow-sm">
+            <div>
+                <span class="text-[10px] text-emerald-400 font-bold block">💵 نقدية الكاش بالصندوق:</span>
+                <div class="text-base font-black font-mono text-emerald-400">
+                    {{ summary.total_revenue_lbp|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span>
+                </div>
+                <span class="text-[9px] text-slate-400 font-mono">{{ summary.total_revenue_usd|to_usd }}</span>
+            </div>
+            <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-base">
+                💰
+            </div>
+        </div>
+
+        <!-- 5. Total Production Value (Cash + Debts) -->
+        <div class="bg-slate-900/90 border border-indigo-500/40 p-2.5 rounded-2xl flex items-center justify-between shadow-sm">
+            <div>
+                <span class="text-[10px] text-indigo-400 font-bold block">📊 إنتاج اليوم (شامل الديون):</span>
+                <div class="text-base font-black font-mono text-indigo-300">
+                    {{ summary.total_production_lbp|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span>
+                </div>
+                <span class="text-[9px] text-slate-400 font-mono">{{ summary.total_production_usd|to_usd }}</span>
+            </div>
+            <div class="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-base">
+                📦
+            </div>
+        </div>
+
+        <!-- 6. Net Profit Today (Direct Cafe + 100% Gaming - Expenses) -->
+        <div class="bg-gradient-to-tr from-slate-900 to-emerald-950 border border-emerald-500/50 p-2.5 rounded-2xl flex items-center justify-between shadow-sm">
+            <div>
+                <span class="text-[10px] text-emerald-400 font-bold block">📈 صافي أرباح اليوم:</span>
+                <div class="text-base font-black font-mono text-emerald-400">
+                    {{ summary.net_profit_lbp|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span>
+                </div>
+                <span class="text-[9px] text-emerald-300/80 font-mono font-bold">{{ summary.net_profit_usd|to_usd }}</span>
+            </div>
+            <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-base">
+                💎
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. ACTIVE SEATED CUSTOMERS ROW (الزبائن الجالسون في المحل / إضافة زبون) -->
+    <div class="bg-slate-900 border border-slate-800 p-2.5 rounded-3xl flex items-center justify-between gap-3 shadow-md shrink-0">
+        <div class="flex items-center gap-2 shrink-0">
+            <span class="w-8 h-8 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-base font-black">👥</span>
+            <div>
+                <h4 class="text-xs font-black text-white leading-tight">الزبائن الجالسون في المحل:</h4>
+                <span id="openTabsCountText" class="text-[10px] text-purple-300 font-mono font-bold">
+                    {{ open_tabs|length }} حساب مفتوح حالياً
+                </span>
+            </div>
+        </div>
+
+        <!-- Scrollable Customer Tabs Pills -->
+        <div id="openTabsPillsContainer" class="flex-1 flex items-center gap-2 overflow-x-auto py-0.5 custom-scrollbar">
+            
+            <!-- Add New Customer Tab Button -->
+            <button type="button" onclick="startNewCustomerTab()" class="bg-purple-600 hover:bg-purple-500 active:scale-95 text-white text-xs font-black px-3.5 py-2 rounded-2xl transition flex items-center gap-1.5 shrink-0 shadow-md shadow-purple-600/30">
+                <i class="fa-solid fa-user-plus"></i>
+                <span>+ إضافة زبون جديد</span>
+            </button>
+
+            <!-- Loop Active Seated Customers -->
+            {% for tab in open_tabs %}
+            <div id="tabPill_{{ tab.id }}" 
+                 onclick="loadCustomerTab({{ tab.id }})" 
+                 class="customer-tab-pill bg-slate-950 hover:bg-slate-800/90 border border-purple-500/40 hover:border-purple-400 p-2 px-3.5 rounded-2xl flex items-center gap-3 shrink-0 transition cursor-pointer shadow-sm group">
+                <div class="flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center text-xs">👤</span>
+                    <div>
+                        <strong class="text-xs text-white font-bold block group-hover:text-purple-300">{{ tab.customer_name }}</strong>
+                        <span class="text-[9px] text-slate-400 font-mono">{{ tab.total_qty or 0 }} أصناف</span>
+                    </div>
+                </div>
+                <div class="text-left font-mono border-r border-slate-800 pr-2.5">
+                    <div class="text-xs font-black text-amber-400">{{ tab.total_lbp|format_currency }} ل.ل</div>
+                    <div class="text-[9px] text-slate-400">{{ tab.total_usd|to_usd }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    
+    <!-- 2.8 PRO QUICK COMMAND BAR (الخزنة، تعديل الأصناف، حاسبة الألعاب، الموظفين، الديون) -->
+    <div class="bg-gradient-to-r from-slate-900 via-indigo-950/80 to-slate-900 p-2.5 rounded-3xl border border-indigo-500/40 shadow-xl flex flex-wrap items-center justify-between gap-2.5 shrink-0">
+        <div class="flex items-center gap-2 flex-wrap">
+            <!-- Button 1: Transfer Cash to Safe -->
+            {% if is_admin or session.get("is_admin") or session.get("employee_role") == "admin" %}
+            <button type="button" onclick="openSafeTransferModal()" class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs px-3.5 py-2 rounded-2xl transition flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95">
+                <span class="text-sm">🏦</span>
+                <span>نقل المال إلى الخزنة الخاصة</span>
+            </button>
+            {% endif %}
+            
+            {% if is_admin or session.get('is_admin') or session.get('employee_role') == 'admin' %}
+            <!-- Button 2: Edit & Manage Products (Admin Only) -->
+            <button type="button" onclick="openManageProductsModal()" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black text-xs px-3.5 py-2 rounded-2xl transition flex items-center gap-2 shadow-lg shadow-cyan-600/20 active:scale-95">
+                <span class="text-sm">⚙️</span>
+                <span>تعديل وإضافة الأصناف والأسعار</span>
+            </button>
+            {% endif %}
+
+            <!-- Button 3: Gaming & PlayStation Calculator Hub -->
+            <button type="button" onclick="openGamingSessionModal()" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs px-3.5 py-2 rounded-2xl transition flex items-center gap-2 shadow-lg shadow-purple-600/20 active:scale-95">
+                <span class="text-sm">🎮</span>
+                <span>حاسبة وتسجيل ألعاب وبلايستيشن</span>
+            </button>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+            {% if is_admin or session.get('is_admin') or session.get('employee_role') == 'admin' %}
+            <!-- Link to Employees (Admin Only) -->
+            <a href="{{ url_for('employees_page') }}" class="bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white font-bold text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 border border-indigo-500/30">
+                <i class="fa-solid fa-user-shield"></i>
+                <span>👥 الموظفين (الهاتف/تعديل)</span>
+            </a>
+            {% endif %}
+
+            <!-- Link to Debts (Visible to all) -->
+            <a href="{{ url_for('debts_page') }}" class="bg-slate-800 hover:bg-slate-700 text-rose-300 hover:text-white font-bold text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 border border-rose-500/30">
+                <i class="fa-solid fa-book-bookmark"></i>
+                <span>📒 سجل الديون</span>
+            </a>
+
+            {% if is_admin or session.get('is_admin') or session.get('employee_role') == 'admin' %}
+            <!-- Safe Direct Page (Admin Only) -->
+            <a href="{{ url_for('safe_page') }}" class="bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-white font-bold text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 border border-amber-500/30">
+                <i class="fa-solid fa-vault"></i>
+                <span>🏦 الخزنة الخاصة</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 3. MAIN WORKSPACE -->
+    <div class="flex-1 flex flex-col lg:flex-row gap-3.5 items-start">
+        
+        <!-- LEFT: ALL PRODUCTS IN THE OPEN + OTHERS BOX -->
+        <div class="flex-1 w-full flex flex-col bg-slate-900 rounded-3xl border border-slate-800 shadow-lg overflow-hidden">
+            
+            <!-- TOP CONTROLS: CATEGORY TABS & SEARCH -->
+            <div class="p-3 bg-slate-950/80 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                
+                <!-- Category Filter Pills -->
+                <div class="flex items-center gap-1.5 overflow-x-auto max-w-full pb-1 sm:pb-0 custom-scrollbar">
+                    <button type="button" onclick="filterCategory('all', this)" class="cat-pill active px-3.5 py-1.5 rounded-xl text-xs font-black transition bg-amber-500 text-slate-950 shadow-md whitespace-nowrap">
+                        🌟 جميع المنتجات (الكل)
+                    </button>
+                    <button type="button" onclick="filterCategory('computer', this)" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700 whitespace-nowrap">
+                        💻 كمبيوتر
+                    </button>
+                    {% for cat in categories %}
+                    {% if 'gaming' not in cat.name.lower() and 'ألعاب' not in cat.name and 'كمبيوتر' not in cat.name.lower() %}
+                    <button type="button" onclick="filterCategory('{{ cat.id }}', this)" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700 whitespace-nowrap">
+                        <span>{{ cat.icon }}</span> {{ cat.name }}
+                    </button>
+                    {% endif %}
+                    {% endfor %}
+                    <button type="button" onclick="filterCategory('others-box', this)" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-cyan-300 hover:bg-slate-700 hover:text-white border border-cyan-500/30 whitespace-nowrap">
+                        ✍️ Others (يدوي)
+                    </button>
+                </div>
+
+                <!-- Right Side: Fast Search + Direct Scroll Arrows -->
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <!-- Quick Scroll Buttons -->
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button type="button" onclick="scrollProductsToTop()" title="الصعود لأول المنتجات" class="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition flex items-center gap-1 shadow-sm">
+                            <i class="fa-solid fa-arrow-up text-[10px]"></i>
+                            <span class="hidden sm:inline">أول الصفحة</span>
+                        </button>
+                        <button type="button" onclick="scrollProductsToBottom()" title="النزول لآخر المنتجات وأسفل الصفحة" class="px-2.5 py-1.5 rounded-xl text-xs font-black bg-purple-600 hover:bg-purple-500 text-white transition flex items-center gap-1 shadow-md shadow-purple-600/30">
+                            <i class="fa-solid fa-arrow-down text-[10px]"></i>
+                            <span class="hidden sm:inline">آخر المنتجات ⬇️</span>
+                        </button>
+                    </div>
+
+                    <!-- Fast Search Bar -->
+                    <div class="relative flex-1 sm:w-48">
+                        <i class="fa-solid fa-search absolute right-3 top-2.5 text-slate-500 text-xs"></i>
+                        <input type="text" id="searchInput" oninput="searchItems(this.value)" placeholder="بحث عن صنف..." class="w-full bg-slate-900 border border-slate-700 text-white rounded-xl pr-8 pl-3 py-1.5 text-xs focus:border-amber-500 focus:outline-none placeholder-slate-500">
+                    </div>
+                </div>
+            </div>
+
+            <!-- DEDICATED "Others" MANUAL PRICE BOX (يدعم اللبناني والدولار $) -->
+            <div id="othersBoxSection" class="p-2.5 bg-gradient-to-r from-cyan-950/70 via-slate-900 to-slate-950 border-b border-cyan-800/40 shrink-0">
+                <form id="othersManualForm" onsubmit="addOthersItem(event)" class="flex flex-wrap sm:flex-nowrap items-center gap-2.5">
+                    <div class="flex items-center gap-2 text-cyan-300 font-black text-xs shrink-0">
+                        <span class="w-7 h-7 rounded-xl bg-cyan-500/20 flex items-center justify-center text-sm shadow-sm">✍️</span>
+                        <span>Others:</span>
+                    </div>
+
+                    <!-- Free Unlimited Custom Price Input (LBP) -->
+                    <div class="flex-1 min-w-[150px] relative">
+                        <input type="number" id="othersPrice" step="any" min="0" oninput="syncOthersPrice('lbp')" placeholder="السعر باللبناني (ل.ل)..." class="w-full bg-slate-950 border-2 border-cyan-500/60 text-cyan-300 font-mono font-black rounded-xl pr-3 pl-10 py-2 text-xs focus:border-cyan-400 focus:outline-none placeholder-slate-500">
+                        <span class="absolute left-3 top-2.5 text-[10px] font-bold text-cyan-400/80 pointer-events-none">ل.ل</span>
+                    </div>
+
+                    <!-- Free Unlimited Custom Price Input (USD $) -->
+                    <div class="w-36 relative">
+                        <input type="number" id="othersPriceUSD" step="any" min="0" oninput="syncOthersPrice('usd')" placeholder="أو بالدولار ($)..." class="w-full bg-slate-950 border-2 border-emerald-500/60 text-emerald-300 font-mono font-black rounded-xl pr-3 pl-8 py-2 text-xs focus:border-emerald-400 focus:outline-none placeholder-slate-500">
+                        <span class="absolute left-3 top-2.5 text-[10px] font-bold text-emerald-400/80 pointer-events-none">$</span>
+                    </div>
+
+                    <!-- Add Button -->
+                    <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-white font-black px-5 py-2 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md shadow-cyan-600/30 shrink-0">
+                        <i class="fa-solid fa-plus-circle"></i>
+                        <span>+ إضافة للفاتورة</span>
+                    </button>
+                </form>
+            </div>
+
+            
+            <!-- ALL PRODUCTS GRID (المنتجات جميعها في الخارج بشكل موحد مع شريط تمرير سلس) -->
+            <div id="productsScrollContainer" class="p-3.5 overflow-y-auto custom-scrollbar max-h-[calc(100vh-250px)] min-h-[500px] pb-36 scroll-smooth">
+                <div id="itemsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3.5">
+                    
+                    <!-- 1. REGULAR COMPUTER PRODUCT CARD -->
+                    <button type="button" 
+                            data-category="computer"
+                            data-name="كمبيوتر"
+                            data-item-id="0"
+                            data-item-name="كمبيوتر 💻"
+                            data-item-price="{{ pc_price_lbp }}"
+                            data-item-icon="💻"
+                            data-item-type="computer"
+                            onclick="handleProductCardClick(this)" 
+                            class="item-card group relative p-4 rounded-3xl bg-gradient-to-br from-slate-900 via-slate-950 to-purple-950/40 hover:from-slate-850 hover:to-purple-900/60 border-2 border-purple-500/30 hover:border-purple-400 hover:scale-[1.03] active:scale-95 transition flex flex-col justify-between text-right shadow-md min-h-[135px]">
+                        <!-- Quantity Badge in Cart -->
+                        <span class="card-qty-badge hidden absolute -top-2.5 -left-2.5 bg-amber-400 text-slate-950 font-mono font-black text-sm px-2.5 py-0.5 rounded-full shadow-xl border-2 border-slate-950">
+                            x1
+                        </span>
+                        
+                        <div class="flex items-start justify-between w-full">
+                            <span class="text-4xl group-hover:scale-110 transition drop-shadow-md">🎮</span>
+                            <span class="text-xs font-black text-purple-300 bg-purple-950/80 px-2.5 py-1 rounded-xl border border-purple-800">
+                                كمبيوتر
+                            </span>
+                        </div>
+                        <div class="mt-2 w-full">
+                            <h4 class="font-black text-sm sm:text-base text-white group-hover:text-purple-300 leading-tight">كمبيوتر ألعاب GAMING</h4>
+                            <div class="mt-1.5 flex items-baseline justify-between">
+                                <span class="font-mono font-black text-sm text-purple-400">{{ pc_price_lbp|format_currency }} <span class="text-xs font-normal">ل.ل</span></span>
+                                <span class="font-mono text-xs font-bold text-slate-400">{{ pc_price_lbp|to_usd }}</span>
+                            </div>
+                        </div>
+                    </button>
+
+                    <!-- 2. REGULAR OTHERS CARD IN GRID -->
+                    <button type="button" 
+                            data-category="others-box"
+                            data-name="Others"
+                            data-type="others"
+                            onclick="document.getElementById('othersPrice').focus(); document.getElementById('othersBoxSection').scrollIntoView({behavior:'smooth'});" 
+                            class="item-card group relative p-4 rounded-3xl bg-gradient-to-br from-slate-900 via-slate-950 to-cyan-950/40 hover:from-slate-850 hover:to-cyan-900/60 border-2 border-cyan-500/30 hover:border-cyan-400 hover:scale-[1.03] active:scale-95 transition flex flex-col justify-between text-right shadow-md min-h-[135px]">
+                        <!-- Quantity Badge in Cart -->
+                        <span class="card-qty-badge hidden absolute -top-2.5 -left-2.5 bg-cyan-400 text-slate-950 font-mono font-black text-sm px-2.5 py-0.5 rounded-full shadow-xl border-2 border-slate-950">
+                            x1
+                        </span>
+                        
+                        <div class="flex items-start justify-between w-full">
+                            <span class="text-4xl group-hover:scale-110 transition drop-shadow-md">✍️</span>
+                            <span class="text-xs font-black text-cyan-300 bg-cyan-950/80 px-2.5 py-1 rounded-xl border border-cyan-800">
+                                يدوي
+                            </span>
+                        </div>
+                        <div class="mt-2 w-full">
+                            <h4 class="font-black text-sm sm:text-base text-white group-hover:text-cyan-300 leading-tight">Others (مبيعات أخرى)</h4>
+                            <div class="mt-1.5 flex items-baseline justify-between">
+                                <span class="font-mono font-black text-sm text-cyan-300">حدد السعر</span>
+                                <span class="font-mono text-xs font-bold text-slate-400">حر ✍️</span>
+                            </div>
+                        </div>
+                    </button>
+
+                    <!-- 3. ALL CAFÉ PRODUCTS (PREMIUM POS KIOSK CARDS - PURE DIV NO PARSER CONFLICT) -->
+                    {% for item in items %}
+                    {% if item.item_type != 'gaming' and item.item_type != 'computer' and 'gaming' not in item.name.lower() and 'ألعاب' not in item.name and 'كمبيوتر' not in item.name %}
+                    <div id="card-{{ item.id }}"
+                         data-category="{{ item.category_id }}"
+                         data-name="{{ item.name }}"
+                         data-item-id="{{ item.id }}"
+                         data-item-name="{{ item.name }}"
+                         data-item-price="{{ item.price_lbp }}"
+                         data-item-icon="{{ item.icon or '☕' }}"
+                         data-item-type="cafe"
+                         onclick="handleProductCardClick(this)"
+                         role="button"
+                         tabindex="0"
+                         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();handleProductCardClick(this);}"
+                         class="item-card group relative rounded-3xl bg-slate-900/90 hover:bg-slate-850 border border-slate-800 hover:border-amber-400/90 hover:shadow-2xl hover:shadow-amber-500/10 hover:-translate-y-1 active:scale-[0.98] transition-all duration-200 flex flex-col justify-between text-right shadow-lg overflow-hidden min-h-[220px] cursor-pointer select-none">
+                        
+                        <!-- Quick Direct Edit Button (تعديل سريع ومباشر على الكرت) -->
+                        <button type="button" 
+                                data-id="{{ item.id }}"
+                                data-name="{{ item.name|e }}"
+                                data-price-lbp="{{ item.price_lbp }}"
+                                data-price-usd="{{ item.price_usd|default(0) }}"
+                                data-category-id="{{ item.category_id|default(0) }}"
+                                data-item-type="{{ item.item_type|default('cafe') }}"
+                                data-icon="{{ item.icon|default('☕') }}"
+                                onclick="event.stopPropagation(); triggerEditSingleItem(this)"
+                                title="تعديل هذا المنتج (السعر، الصورة، الاسم)" 
+                                class="absolute top-2.5 left-2.5 z-30 w-8 h-8 rounded-full bg-slate-950/85 hover:bg-amber-400 text-slate-300 hover:text-slate-950 border border-slate-700/80 hover:border-amber-300 flex items-center justify-center text-xs shadow-xl transition-all duration-200 hover:scale-115 cursor-pointer">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+
+                        <!-- Quantity Badge in Cart -->
+                        <span class="card-qty-badge hidden absolute top-2.5 left-12 z-30 bg-amber-400 text-slate-950 font-mono font-black text-xs px-2.5 py-1 rounded-full shadow-2xl border-2 border-slate-950 animate-bounce">
+                            x1
+                        </span>
+
+                        {% if item.icon and (item.icon.startswith('/') or item.icon.startswith('http') or item.icon.startswith('data:')) %}
+                        <!-- Studio Presentation: Crisp Dark Contrast + Floating Product -->
+                        <div class="relative w-full h-40 sm:h-44 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 overflow-hidden shrink-0 border-b border-slate-800/80 flex items-center justify-center p-3">
+                            <!-- Crisp Product Image with Deep Drop Shadow -->
+                            <img src="{{ item.icon }}" alt="{{ item.name }}" loading="lazy" class="relative z-10 max-h-full max-w-full object-contain filter drop-shadow-[0_10px_20px_rgba(0,0,0,0.7)] group-hover:scale-105 transition-transform duration-300">
+                            
+                            <!-- Category Pill -->
+                            <span class="absolute top-2.5 right-2.5 z-20 text-[11px] font-black text-amber-300 bg-slate-950/90 backdrop-blur-md px-3 py-0.5 rounded-full border border-amber-500/30 shadow-lg">
+                                {{ item.category_name }}
+                            </span>
+                        </div>
+                        <div class="p-3.5 pt-2.5 flex flex-col justify-between flex-1 w-full">
+                        {% else %}
+                        <!-- Luxury Emblem Icon Tile (No Photo) -->
+                        <div class="p-4 pb-1 flex items-start justify-between w-full">
+                            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/15 via-slate-900 to-slate-950 border border-amber-500/30 flex items-center justify-center shadow-xl group-hover:scale-110 group-hover:border-amber-400 transition-all duration-300">
+                                <span class="text-3xl drop-shadow-lg">{{ item.icon or '☕' }}</span>
+                            </div>
+                            <span class="text-[11px] font-black text-slate-300 bg-slate-900/90 px-3 py-1 rounded-xl border border-slate-800">
+                                {{ item.category_name }}
+                            </span>
+                        </div>
+                        <div class="p-4 pt-2 flex flex-col justify-between flex-1 w-full">
+                        {% endif %}
+
+                            <!-- Product Name -->
+                            <h4 class="font-black text-sm text-white group-hover:text-amber-300 line-clamp-2 leading-snug transition-colors drop-shadow-xs">
+                                {{ item.name }}
+                            </h4>
+
+                            <!-- Price Bar with High Contrast Amber & Emerald -->
+                            <div class="mt-2.5 flex items-baseline justify-between pt-2 border-t border-slate-800/80">
+                                <span class="font-mono font-black text-sm sm:text-base text-amber-400 drop-shadow-xs">
+                                    {{ item.price_lbp|format_currency }} <span class="text-[11px] font-normal text-slate-400">ل.ل</span>
+                                </span>
+                                <span class="font-mono text-xs font-black text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-lg border border-emerald-800/60 shadow-sm">
+                                    {{ item.price_usd|to_usd }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: CASHIER & INVOICE CART PANEL -->
+        <div class="w-full lg:w-96 flex flex-col bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden shrink-0 lg:sticky lg:top-16">
+            
+            <!-- Cashier Header -->
+            <div class="p-3 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-sm font-black">🧾</span>
+                    <div>
+                        <h3 class="font-black text-sm text-white">فاتورة الحساب الحالية</h3>
+                        <span id="cartCountBadge" class="text-[10px] text-amber-400 font-bold block">0 أصناف في الفاتورة</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="openModal('recentInvoicesModal')" class="text-[11px] text-slate-300 hover:text-white font-bold px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 transition" title="فواتير اليوم">
+                        <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+                    </button>
+                    <button type="button" onclick="clearCart()" class="text-[11px] text-rose-400 hover:text-rose-300 font-bold p-1.5 rounded-xl hover:bg-rose-950/50 transition" title="إفراغ الفاتورة">
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Active Seated Customer Banner (if Tab is active) -->
+            <div id="activeTabBanner" class="hidden p-2.5 bg-gradient-to-r from-purple-950/90 to-slate-900 border-b border-purple-800/60 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-lg bg-purple-500 text-slate-950 flex items-center justify-center text-xs font-black">👤</span>
+                    <div>
+                        <span class="text-[9px] text-purple-300 block font-bold">حساب زبون في المحل (معلّق):</span>
+                        <h4 id="activeTabCustomerNameDisplay" class="font-black text-xs text-white">...</h4>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button type="button" onclick="deleteActiveCustomerTab()" class="text-[10px] bg-rose-950 hover:bg-rose-900 text-rose-300 px-2 py-1 rounded-lg border border-rose-800" title="إلغاء حساب الزبون">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                    <button type="button" onclick="resetActiveTabSelection()" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg border border-slate-700" title="إلغاء التحديد">
+                        طلب جديد ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- Cart Items Container (Scrollable) -->
+            <div class="overflow-y-auto custom-scrollbar p-3 min-h-[160px] max-h-[300px] relative">
+                <!-- Empty Cart State -->
+                <div id="emptyCartMessage" class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
+                    <span class="text-4xl mb-2 opacity-40">☕</span>
+                    <p class="text-xs font-bold text-slate-400">الفاتورة فارغة</p>
+                    <p class="text-[10px] text-slate-500 mt-1">اضغط على أي مشروب، كمبيوتر، أو صنف من Others لتسجيله في الفاتورة</p>
+                </div>
+
+                <!-- Active Cart Items List -->
+                <div id="cartItemsList" class="space-y-2 hidden">
+                    <!-- Dynamic Items rendered by JS -->
+                </div>
+            </div>
+
+            <!-- Cart Bottom: Totals & Direct Pay -->
+            <div class="p-3 bg-slate-950/95 border-t border-slate-800 space-y-2.5">
+
+                <!-- Grand Total Box -->
+                <div class="p-3 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-950 border border-amber-500/40 flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] text-slate-400 font-bold block">المجموع الكلي المطلوب:</span>
+                        <div class="text-2xl font-black font-mono text-emerald-400 leading-none mt-1">
+                            <span id="cartTotalLBP">0</span> <span class="text-xs font-normal text-slate-400">ل.ل</span>
+                        </div>
+                    </div>
+                    <div class="text-left">
+                        <span class="text-[10px] text-slate-400 block font-mono">1$ = {{ exchange_rate|format_currency }}</span>
+                        <span id="cartTotalUSD" class="text-sm font-black font-mono text-amber-300 mt-0.5 block">$0.00</span>
+                    </div>
+                </div>
+
+                <!-- DUAL ACTIONS: HOLD CUSTOMER TAB vs IMMEDIATE CHECKOUT -->
+                <div class="space-y-2 pt-0.5">
+                    
+                    <!-- 1. HOLD / SAVE TO SEATED CUSTOMER TAB -->
+                    <button type="button" onclick="saveCustomerTabAction()" id="btnHoldCustomerTab" class="w-full bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-black py-2 px-3 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-md shadow-purple-600/30 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-user-clock text-sm"></i>
+                        <span id="btnHoldTabText">📌 حفظ لحساب الزبون (جالس بالمحل)</span>
+                    </button>
+
+                    <!-- 2. DIRECT CHECKOUT & PAY (دفع كاش) -->
+                    <button type="button" onclick="checkoutOrder('cash')" id="btnSaveCash" class="w-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black py-2.5 px-3 rounded-2xl text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-coins text-base"></i>
+                        <span>💰 دفع كاش وإنهاء الحساب</span>
+                    </button>
+
+                    <!-- 3. DEBT CHECKOUT (تسجيل على الحساب / دين) -->
+                    <button type="button" onclick="openCheckoutDebtModal()" id="btnSaveDebt" class="w-full bg-rose-950/80 hover:bg-rose-900 border border-rose-600/50 active:scale-95 text-rose-300 hover:text-white font-black py-2 px-3 rounded-2xl text-xs transition flex items-center justify-center gap-2 shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-book-bookmark text-sm"></i>
+                        <span>📝 تسجيل على الحساب (دين للزبون)</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SUCCESS INVOICE MODAL -->
+<div id="invoiceSuccessModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl">
+        <div class="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center text-3xl">
+            <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <div>
+            <h3 class="text-base font-black text-white">تمت المحاسبة بنجاح!</h3>
+            <p id="successInvoiceNum" class="text-xs font-mono text-amber-400 font-bold mt-1">CAF-...</p>
+        </div>
+
+        <div class="p-3 bg-slate-950 rounded-2xl border border-slate-800 text-center">
+            <span class="text-[11px] text-slate-400 block">المبلغ الإجمالي المستلم:</span>
+            <div id="successInvoiceTotal" class="text-xl font-black font-mono text-emerald-400 mt-0.5">
+                0 ل.ل
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 pt-2">
+            <button type="button" id="btnModalPrint" onclick="printSuccessInvoice()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md">
+                <i class="fa-solid fa-print"></i>
+                <span>طباعة الإيصال 🖨️</span>
+            </button>
+
+            <button type="button" onclick="closeSuccessModal()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-plus"></i>
+                <span>طلب جديد</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- RECENT INVOICES MODAL -->
+<div id="recentInvoicesModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-5 space-y-4 shadow-2xl max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="text-amber-400 text-base">🕒</span>
+                <h3 class="font-black text-sm text-white">آخر فواتير اليوم</h3>
+            </div>
+            <button type="button" onclick="closeModal('recentInvoicesModal')" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto space-y-2 divide-y divide-slate-800">
+            {% if recent_orders %}
+                {% for ord in recent_orders %}
+                <div class="pt-2 flex items-center justify-between text-xs">
+                    <div>
+                        <div class="font-mono font-bold text-white">{{ ord.order_number }}</div>
+                        <span class="text-[10px] text-slate-400">{{ ord.created_at|format_date }} | {{ ord.customer_name or 'زبون كاش' }}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="text-left font-mono">
+                            <div class="font-black text-emerald-400">{{ ord.total_lbp|format_currency }} ل.ل</div>
+                            <div class="text-[9px] text-slate-500">{{ ord.total_usd|to_usd }}</div>
+                        </div>
+                        <a href="{{ url_for('order_receipt', order_id=ord.id) }}" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-amber-300 p-2 rounded-xl text-xs">
+                            <i class="fa-solid fa-print"></i>
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-xs text-slate-500 text-center py-6">لا توجد فواتير مسجلة اليوم حتى الآن.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: ADD / OPEN CUSTOMER TAB (فتح حساب لزبون جديد) -->
+<div id="newCustomerTabModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="text-purple-400 text-lg font-black">👥</span>
+                <h3 class="font-black text-base text-white">فتح حساب لزبون في المحل</h3>
+            </div>
+            <button type="button" onclick="closeModal('newCustomerTabModal')" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <form id="newCustomerTabForm" onsubmit="confirmNewCustomerTab(event)" class="space-y-3">
+            <div>
+                <label class="block text-xs text-purple-300 font-bold mb-1">اسم الزبون (أو وصفه): *</label>
+                <input type="text" 
+                       id="newCustomerTabNameInput" 
+                       required 
+                       placeholder="مثال: أبو علي، حسام، سامر، طاولة 2..." 
+                       class="w-full bg-slate-950 border-2 border-purple-500 text-white font-bold rounded-xl px-3 py-2.5 text-xs focus:border-purple-400 focus:outline-none placeholder-slate-500 shadow-inner">
+            </div>
+
+            <div id="tabModalItemsNotice" class="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 space-y-1">
+                <span id="tabModalItemsNoticeText">سيتم تثبيت حساب الزبون في شريط الحسابات المفتوحة بالأعلى.</span>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <button type="button" onclick="closeModal('newCustomerTabModal')" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-xl text-xs">
+                    إلغاء
+                </button>
+                <button type="submit" id="btnConfirmTabModal" class="bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-black px-5 py-2 rounded-xl text-xs shadow-md shadow-purple-600/30">
+                    تأكيد وفتح الحساب 📌
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- CHECKOUT DEBT MODAL (تسجيل دين من شاشة الكاشير) -->
+<div id="checkoutDebtModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="text-rose-400 text-lg">📒</span>
+                <h3 class="font-black text-base text-white">تسجيل الفاتورة كدين على الزبون</h3>
+            </div>
+            <button type="button" onclick="closeModal('checkoutDebtModal')" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <div class="p-3 bg-slate-950 rounded-2xl border border-slate-800 flex items-baseline justify-between">
+            <span class="text-xs text-slate-400 font-bold">مبلغ الدين المطلوب:</span>
+            <span id="debtModalTotalLBP" class="font-mono font-black text-rose-400 text-base">0 ل.ل</span>
+        </div>
+
+        <div class="space-y-3">
+            <div>
+                <label class="block text-xs text-slate-300 font-bold mb-1">اسم الزبون المديون: *</label>
+                <input type="text" id="debtCustomerNameInput" required placeholder="مثال: أبو علي، حسام، سامر..." class="w-full bg-slate-950 border-2 border-rose-500/60 text-white font-bold rounded-xl px-3 py-2 text-xs focus:border-rose-400 focus:outline-none">
+            </div>
+
+            <div>
+                <label class="block text-xs text-slate-300 font-bold mb-1">رقم الهاتف (اختياري):</label>
+                <input type="text" id="debtCustomerPhoneInput" placeholder="03-xxxxxx / 70-xxxxxx" class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:border-rose-500 focus:outline-none">
+            </div>
+
+            <div>
+                <label class="block text-xs text-slate-300 font-bold mb-1">ملاحظات (اختياري):</label>
+                <input type="text" id="debtCustomerNotesInput" placeholder="ملاحظة..." class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:border-rose-500 focus:outline-none">
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2">
+            <button type="button" onclick="closeModal('checkoutDebtModal')" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-xl text-xs">
+                إلغاء
+            </button>
+            <button type="button" onclick="confirmDebtCheckout()" class="bg-rose-600 hover:bg-rose-500 text-white font-black px-5 py-2 rounded-xl text-xs shadow-md shadow-rose-600/30">
+                حفظ في سجل الديون 📒
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- JAVASCRIPT POS & OPEN CUSTOMER TABS ENGINE -->
+<script>
+    const EXCHANGE_RATE = {{ exchange_rate or 89500.0 }};
+    let cart = [];
+    let activeTabId = null;
+    let lastOrderId = null;
+    let openTabsData = {{ (open_tabs or [])|tojson }};
+
+    // Safe Web Audio Sound FX
+    function playBeep(freq = 600, duration = 0.06) {
+        try {
+            if (!window.AudioContext && !window.webkitAudioContext) return;
+            const ctx = window._audioCtx || (window._audioCtx = new (window.AudioContext || window.webkitAudioContext)());
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.06, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+            osc.start();
+            osc.stop(ctx.currentTime + duration);
+        } catch(e){}
+    }
+
+    // Filter by Category
+    function filterCategory(catId, btn) {
+        document.querySelectorAll('.cat-pill').forEach(p => {
+            p.classList.remove('bg-amber-500', 'text-slate-950', 'active', 'bg-cyan-600', 'text-white');
+            p.classList.add('bg-slate-800', 'text-slate-300');
+        });
+
+        btn.classList.remove('bg-slate-800', 'text-slate-300');
+        if (catId === 'others-box') {
+            btn.classList.add('bg-cyan-600', 'text-white', 'active');
+            const box = document.getElementById('othersBoxSection');
+            box.scrollIntoView({ behavior: 'smooth' });
+            document.getElementById('othersPrice').focus();
+            return;
+        } else {
+            btn.classList.add('bg-amber-500', 'text-slate-950', 'active');
+        }
+
+        const cards = document.querySelectorAll('.item-card');
+        cards.forEach(card => {
+            const cardCat = card.getAttribute('data-category');
+            if (catId === 'all' || cardCat === catId) {
+                card.classList.remove('hidden');
+            } else {
+                card.classList.add('hidden');
+            }
+        });
+    }
+
+    // Search items
+    function searchItems(query) {
+        const q = (query || '').trim().toLowerCase();
+        const cards = document.querySelectorAll('.item-card');
+        cards.forEach(card => {
+            const name = (card.getAttribute('data-name') || '').toLowerCase();
+            if (!q || name.includes(q)) {
+                card.classList.remove('hidden');
+            } else {
+                card.classList.add('hidden');
+            }
+        });
+    }
+
+    // Handle Product Card Touch / Click
+    function handleProductCardClick(btn) {
+        if (!btn) return;
+        const id = btn.getAttribute('data-item-id');
+        const name = btn.getAttribute('data-item-name') || 'صنف';
+        const price = parseFloat(btn.getAttribute('data-item-price')) || 0;
+        const icon = btn.getAttribute('data-item-icon') || '☕';
+        const type = btn.getAttribute('data-item-type') || 'cafe';
+        addToCart(id, name, price, icon, type);
+    }
+
+    // Add Item to Cart
+    function addToCart(itemId, name, priceLBP, icon, itemType = 'cafe') {
+        playBeep(700, 0.05);
+        const p = parseFloat(priceLBP) || 0;
+        const existing = cart.find(i => i.name === name && i.item_type === itemType);
+        if (existing) {
+            existing.quantity += 1;
+        } else {
+            cart.push({
+                item_id: itemId ? parseInt(itemId) : null,
+                name: name,
+                price_lbp: p,
+                icon: icon || '☕',
+                item_type: itemType,
+                quantity: 1
+            });
+        }
+        renderCart();
+    }
+
+    function syncOthersPrice(source) {
+        const lbpIn = document.getElementById('othersPrice');
+        const usdIn = document.getElementById('othersPriceUSD');
+        if (!lbpIn || !usdIn) return;
+        if (source === 'lbp') {
+            const v = parseFloat(lbpIn.value) || 0;
+            usdIn.value = (v > 0 && EXCHANGE_RATE > 0) ? (v / EXCHANGE_RATE).toFixed(2) : '';
+        } else if (source === 'usd') {
+            const v = parseFloat(usdIn.value) || 0;
+            lbpIn.value = (v > 0 && EXCHANGE_RATE > 0) ? Math.round(v * EXCHANGE_RATE) : '';
+        }
+    }
+
+    // Add Custom "Others" Item with price only
+    function addOthersItem(e) {
+        if (e) e.preventDefault();
+        const priceInput = document.getElementById('othersPrice');
+        const usdInput = document.getElementById('othersPriceUSD');
+        let price = parseFloat(priceInput ? priceInput.value : 0);
+        const priceUsd = parseFloat(usdInput ? usdInput.value : 0);
+
+        if ((isNaN(price) || price <= 0) && priceUsd > 0) {
+            price = Math.round(priceUsd * EXCHANGE_RATE);
+        }
+
+        if (isNaN(price) || price <= 0) {
+            if (priceInput) priceInput.focus();
+            return;
+        }
+
+        playBeep(850, 0.08);
+
+        const existing = cart.find(i => i.item_type === 'others' && i.price_lbp === price);
+        if (existing) {
+            existing.quantity += 1;
+        } else {
+            cart.push({
+                item_id: null,
+                name: 'Others',
+                price_lbp: price,
+                icon: '✍️',
+                item_type: 'others',
+                quantity: 1,
+                is_custom: true
+            });
+        }
+
+        if (priceInput) priceInput.value = '';
+        if (usdInput) usdInput.value = '';
+        if (priceInput) priceInput.focus();
+
+        renderCart();
+    }
+
+    // Update Quantity in Cart
+    function updateQty(index, delta) {
+        if (cart[index]) {
+            cart[index].quantity += delta;
+            playBeep(delta > 0 ? 750 : 500, 0.04);
+            if (cart[index].quantity <= 0) {
+                cart.splice(index, 1);
+            }
+        }
+        renderCart();
+    }
+
+    // Update Item Custom Price in Cart
+    function updateItemPrice(index, newPrice) {
+        const val = parseFloat(newPrice);
+        if (cart[index] && !isNaN(val) && val >= 0) {
+            cart[index].price_lbp = val;
+            renderCart();
+        }
+    }
+
+    // Remove Item from Cart
+    function removeItem(index) {
+        if (cart[index]) {
+            playBeep(400, 0.06);
+            cart.splice(index, 1);
+        }
+        renderCart();
+    }
+
+    // Clear Cart
+    function clearCart() {
+        cart = [];
+        resetActiveTabSelection();
+        renderCart();
+    }
+
+    // Update Badges on Product Cards
+    function updateCardBadges() {
+        document.querySelectorAll('.item-card').forEach(card => {
+            const cardName = card.getAttribute('data-name') || '';
+            const badge = card.querySelector('.card-qty-badge');
+            
+            let totalQty = 0;
+            cart.forEach(item => {
+                if (item.name === cardName || item.name.includes(cardName) || cardName.includes(item.name.replace(' 💻', ''))) {
+                    totalQty += item.quantity;
+                }
+            });
+
+            if (badge) {
+                if (totalQty > 0) {
+                    badge.innerText = `x${totalQty}`;
+                    badge.classList.remove('hidden');
+                    card.classList.add('border-amber-500/80', 'bg-slate-900');
+                } else {
+                    badge.classList.add('hidden');
+                    card.classList.remove('border-amber-500/80', 'bg-slate-900');
+                }
+            }
+        });
+    }
+
+    // Render Cart DOM
+    function renderCart() {
+        const list = document.getElementById('cartItemsList');
+        const emptyMsg = document.getElementById('emptyCartMessage');
+        const totalLBPDisplay = document.getElementById('cartTotalLBP');
+        const totalUSDDisplay = document.getElementById('cartTotalUSD');
+        const cartCountBadge = document.getElementById('cartCountBadge');
+        const btnCash = document.getElementById('btnSaveCash');
+        const btnDebt = document.getElementById('btnSaveDebt');
+        const btnHold = document.getElementById('btnHoldCustomerTab');
+
+        updateCardBadges();
+
+        if (!cart || cart.length === 0) {
+            if (emptyMsg) emptyMsg.classList.remove('hidden');
+            if (list) {
+                list.innerHTML = '';
+                list.classList.add('hidden');
+            }
+            if (totalLBPDisplay) totalLBPDisplay.innerText = '0';
+            if (totalUSDDisplay) totalUSDDisplay.innerText = '$0.00';
+            if (cartCountBadge) cartCountBadge.innerText = '0 أصناف في الفاتورة';
+            if (btnCash) btnCash.disabled = true;
+            if (btnDebt) btnDebt.disabled = true;
+            if (btnHold) {
+                // If an active tab is selected, allow updating even if cart is empty
+                btnHold.disabled = !activeTabId;
+            }
+            return;
+        }
+
+        if (emptyMsg) emptyMsg.classList.add('hidden');
+        if (list) {
+            list.classList.remove('hidden');
+            list.innerHTML = '';
+        }
+
+        let totalLBP = 0;
+        let totalItemsCount = 0;
+
+        cart.forEach((item, idx) => {
+            const qty = item.quantity || 1;
+            const price = item.price_lbp || 0;
+            const subtotal = qty * price;
+            totalLBP += subtotal;
+            totalItemsCount += qty;
+
+            const div = document.createElement('div');
+            div.className = `p-2.5 rounded-2xl border flex items-center justify-between gap-2 transition shadow-sm ${
+                (item.item_type === 'computer' || item.item_type === 'gaming') ? 'bg-slate-900/90 border-slate-700' :
+                (item.item_type === 'others' ? 'bg-cyan-950/40 border-cyan-800/60' : 'bg-slate-950/90 border-slate-800')
+            }`;
+
+            div.innerHTML = `
+                <div class="flex items-center gap-2 min-w-0 flex-1">
+                    ${(item.icon && (item.icon.startsWith('/') || item.icon.startsWith('http') || item.icon.startsWith('data:'))) ? `<img src="${item.icon}" class="w-7 h-7 rounded-lg object-cover border border-slate-700 shrink-0">` : `<span class="text-xl">${item.icon || '☕'}</span>`}
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5">
+                            <h4 class="font-bold text-xs text-white truncate">${item.name}</h4>
+                            ${(item.item_type === 'computer' || item.item_type === 'gaming') ? '<span class="text-[9px] bg-slate-800 text-slate-300 px-1.5 py-0.2 rounded font-mono font-bold">كمبيوتر</span>' : ''}
+                            ${item.item_type === 'others' ? '<span class="text-[9px] bg-cyan-900 text-cyan-300 px-1.5 py-0.2 rounded font-mono font-bold">Others</span>' : ''}
+                        </div>
+                        <div class="flex items-center gap-2 mt-1">
+                            <div class="flex items-center gap-1 text-[10px] text-slate-400">
+                                <span>سعر الحبة:</span>
+                                <input type="number" step="any" min="0" value="${price}" 
+                                       onchange="updateItemPrice(${idx}, this.value)" 
+                                       class="w-20 bg-slate-900 border border-slate-700 text-amber-300 font-mono font-bold text-center rounded-lg px-1 py-0.5 focus:border-amber-400 focus:outline-none text-[11px]">
+                                <span>ل.ل</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quantity and Subtotal -->
+                <div class="flex items-center gap-2.5 shrink-0">
+                    <div class="flex items-center bg-slate-900 border border-slate-700 rounded-xl p-0.5">
+                        <button type="button" onclick="updateQty(${idx}, -1)" class="w-6 h-6 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-black transition">-</button>
+                        <span class="font-mono font-black text-xs text-white px-2">${qty}</span>
+                        <button type="button" onclick="updateQty(${idx}, 1)" class="w-6 h-6 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-slate-800 text-xs font-black transition">+</button>
+                    </div>
+
+                    <div class="text-left w-20">
+                        <div class="font-mono font-black text-xs text-emerald-400">${subtotal.toLocaleString()} ل.ل</div>
+                        <div class="font-mono text-[9px] text-slate-500">$${(subtotal / EXCHANGE_RATE).toFixed(2)}</div>
+                    </div>
+
+                    <button type="button" onclick="removeItem(${idx})" class="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-950/40 transition">
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                    </button>
+                </div>
+            `;
+            list.appendChild(div);
+        });
+
+        if (cartCountBadge) cartCountBadge.innerText = `${totalItemsCount} أصناف في الفاتورة`;
+        if (totalLBPDisplay) totalLBPDisplay.innerText = totalLBP.toLocaleString();
+        if (totalUSDDisplay) totalUSDDisplay.innerText = '$' + (totalLBP / EXCHANGE_RATE).toFixed(2);
+        if (btnCash) btnCash.disabled = false;
+        if (btnDebt) btnDebt.disabled = false;
+        if (btnHold) btnHold.disabled = false;
+    }
+
+    // ================= CUSTOMER OPEN TABS LOGIC =================
+
+    // Open Add New Customer Tab Modal
+    function startNewCustomerTab() {
+        playBeep(650, 0.05);
+        const nameInput = document.getElementById('newCustomerTabNameInput');
+        if (nameInput) {
+            nameInput.value = '';
+        }
+        
+        const noticeText = document.getElementById('tabModalItemsNoticeText');
+        const totalItems = cart.reduce((sum, it) => sum + (it.quantity || 1), 0);
+        
+        if (totalItems > 0) {
+            noticeText.innerHTML = `⚠️ <strong class="text-amber-300">يوجد حالياً ${totalItems} أصناف في الفاتورة</strong>، سيتم حفظها مباشرة لحساب هذا الزبون.`;
+        } else {
+            noticeText.innerHTML = `سيتم فتح حساب جديد للزبون، ويمكنك بعدها اختيار المشروبات والكمبيوتر بسهولة.`;
+        }
+
+        openModal('newCustomerTabModal');
+        setTimeout(() => {
+            const input = document.getElementById('newCustomerTabNameInput');
+            if (input) input.focus();
+        }, 150);
+    }
+
+    // Confirm creation of customer tab from modal
+    async function confirmNewCustomerTab(e) {
+        if (e) e.preventDefault();
+        const nameInput = document.getElementById('newCustomerTabNameInput');
+        const customerName = (nameInput?.value || '').trim();
+        if (!customerName) {
+            nameInput?.focus();
+            return;
+        }
+
+        closeModal('newCustomerTabModal');
+
+        const btnModal = document.getElementById('btnConfirmTabModal');
+        if (btnModal) btnModal.disabled = true;
+
+        const payload = {
+            tab_id: null,
+            customer_name: customerName,
+            notes: '',
+            items: cart || []
+        };
+
+        try {
+            const resp = await fetch('/tab/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const res = await resp.json();
+            if (res.success) {
+                playBeep(950, 0.12);
+                window.location.reload();
+            } else {
+                alert('خطأ أثناء فتح حساب الزبون: ' + (res.message || ''));
+                if (btnModal) btnModal.disabled = false;
+            }
+        } catch (err) {
+            alert('حدث خطأ أثناء الاتصال بالسيرفر');
+            if (btnModal) btnModal.disabled = false;
+        }
+    }
+
+    // Load existing customer tab into cart
+    function loadCustomerTab(tabId) {
+        const tab = openTabsData.find(t => t.id === tabId);
+        if (!tab) return;
+
+        playBeep(650, 0.08);
+        activeTabId = tab.id;
+
+        const banner = document.getElementById('activeTabBanner');
+        const displayName = document.getElementById('activeTabCustomerNameDisplay');
+        if (banner) banner.classList.remove('hidden');
+        if (displayName) displayName.innerText = tab.customer_name;
+
+        const btnHoldText = document.getElementById('btnHoldTabText');
+        if (btnHoldText) btnHoldText.innerText = `📌 تحديث حساب ${tab.customer_name}`;
+
+        document.querySelectorAll('.customer-tab-pill').forEach(p => {
+            p.classList.remove('border-purple-400', 'bg-purple-950/80', 'ring-2', 'ring-purple-500');
+        });
+        const pill = document.getElementById(`tabPill_${tab.id}`);
+        if (pill) {
+            pill.classList.add('border-purple-400', 'bg-purple-950/80', 'ring-2', 'ring-purple-500');
+        }
+
+        cart = (tab.items || []).map(it => ({
+            item_id: it.item_id || null,
+            name: it.item_name,
+            price_lbp: parseFloat(it.unit_price_lbp) || 0,
+            icon: (it.item_type === 'gaming' || it.item_type === 'computer') ? '💻' : (it.item_type === 'others' ? '✍️' : '☕'),
+            item_type: it.item_type || 'cafe',
+            quantity: it.quantity || 1
+        }));
+
+        renderCart();
+    }
+
+    // Reset Active Tab
+    function resetActiveTabSelection() {
+        activeTabId = null;
+        const banner = document.getElementById('activeTabBanner');
+        if (banner) banner.classList.add('hidden');
+        const btnHoldText = document.getElementById('btnHoldTabText');
+        if (btnHoldText) btnHoldText.innerText = '📌 حفظ لحساب الزبون (جالس بالمحل)';
+
+        document.querySelectorAll('.customer-tab-pill').forEach(p => {
+            p.classList.remove('border-purple-400', 'bg-purple-950/80', 'ring-2', 'ring-purple-500');
+        });
+    }
+
+    // Save or Update Customer Tab
+    async function saveCustomerTabAction() {
+        if (!cart || cart.length === 0) {
+            alert('الفاتورة فارغة، يرجى اختيار أصناف أولاً لحفظها في حساب الزبون');
+            return;
+        }
+
+        if (activeTabId) {
+            const tab = openTabsData.find(t => t.id === activeTabId);
+            const customerName = tab ? tab.customer_name : 'زبون في المحل';
+            
+            const btnHold = document.getElementById('btnHoldCustomerTab');
+            if (btnHold) btnHold.disabled = true;
+
+            const payload = {
+                tab_id: activeTabId,
+                customer_name: customerName,
+                notes: '',
+                items: cart
+            };
+
+            try {
+                const resp = await fetch('/tab/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const res = await resp.json();
+                if (res.success) {
+                    playBeep(950, 0.12);
+                    window.location.reload();
+                } else {
+                    alert('خطأ أثناء حفظ حساب الزبون: ' + (res.message || ''));
+                    if (btnHold) btnHold.disabled = false;
+                }
+            } catch (err) {
+                alert('حدث خطأ أثناء الاتصال بالسيرفر');
+                if (btnHold) btnHold.disabled = false;
+            }
+        } else {
+            startNewCustomerTab();
+        }
+    }
+
+    // Delete Active Customer Tab
+    async function deleteActiveCustomerTab() {
+        if (!activeTabId) return;
+        if (!confirm('هل تريد إلغاء ومسح حساب هذا الزبون المعلق؟')) return;
+
+        try {
+            const resp = await fetch(`/tab/${activeTabId}/delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const res = await resp.json();
+            if (res.success) {
+                window.location.reload();
+            }
+        } catch(e){}
+    }
+
+    // ================= CHECKOUT (CASH & DEBT) =================
+
+    // Open Debt Modal
+    function openCheckoutDebtModal() {
+        if (!cart || cart.length === 0) {
+            alert('الفاتورة فارغة، يرجى اختيار أصناف أولاً');
+            return;
+        }
+        const totalLBP = cart.reduce((sum, it) => sum + ((it.quantity || 1) * (it.price_lbp || 0)), 0);
+        document.getElementById('debtModalTotalLBP').innerText = totalLBP.toLocaleString() + ' ل.ل';
+        
+        const activeName = activeTabId ? (openTabsData.find(t => t.id === activeTabId)?.customer_name || '') : '';
+        document.getElementById('debtCustomerNameInput').value = activeName;
+        openModal('checkoutDebtModal');
+        setTimeout(() => document.getElementById('debtCustomerNameInput').focus(), 150);
+    }
+
+    // Confirm Debt Checkout
+    async function confirmDebtCheckout() {
+        const nameInput = document.getElementById('debtCustomerNameInput');
+        const name = (nameInput?.value || '').trim();
+        if (!name) {
+            nameInput.focus();
+            nameInput.classList.add('ring-2', 'ring-rose-500');
+            return;
+        }
+
+        const phone = (document.getElementById('debtCustomerPhoneInput')?.value || '').trim();
+        const notes = (document.getElementById('debtCustomerNotesInput')?.value || '').trim();
+
+        await checkoutOrder('debt', name, phone, notes);
+        closeModal('checkoutDebtModal');
+    }
+
+    // Checkout Order (Cash or Debt)
+    async function checkoutOrder(paymentMethod = 'cash', customerName = 'زبون كاش', phone = '', notes = '') {
+        if (!cart || cart.length === 0) return;
+
+        if (paymentMethod === 'cash') {
+            customerName = activeTabId 
+                ? (openTabsData.find(t => t.id === activeTabId)?.customer_name || 'زبون كاش') 
+                : 'زبون كاش';
+        }
+
+        const payload = {
+            tab_id: activeTabId,
+            customer_name: customerName,
+            payment_method: paymentMethod,
+            phone: phone,
+            notes: notes,
+            items: cart
+        };
+
+        const btnCash = document.getElementById('btnSaveCash');
+        const btnDebt = document.getElementById('btnSaveDebt');
+        if (btnCash) btnCash.disabled = true;
+        if (btnDebt) btnDebt.disabled = true;
+
+        try {
+            const resp = await fetch('/order/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const res = await resp.json();
+            if (res.success) {
+                playBeep(900, 0.15);
+                cart = [];
+                activeTabId = null;
+                renderCart();
+                window.location.reload();
+            } else {
+                alert('خطأ أثناء تسجيل العملية: ' + (res.message || ''));
+                if (btnCash) btnCash.disabled = false;
+                if (btnDebt) btnDebt.disabled = false;
+            }
+        } catch (err) {
+            alert('حدث خطأ في الاتصال بالسيرفر');
+            if (btnCash) btnCash.disabled = false;
+            if (btnDebt) btnDebt.disabled = false;
+        }
+    }
+
+    // Fast Scrolling Helpers
+    function scrollProductsToBottom() {
+        const container = document.getElementById('productsScrollContainer');
+        if (container) {
+            container.scrollTo({ top: container.scrollHeight + 3000, behavior: 'smooth' });
+        }
+        window.scrollTo({ top: document.body.scrollHeight + 3000, behavior: 'smooth' });
+    }
+
+    function scrollProductsToTop() {
+        const container = document.getElementById('productsScrollContainer');
+        if (container) {
+            container.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Initialize Empty Cart
+    window.addEventListener('DOMContentLoaded', () => {
+        renderCart();
+    });
+</script>
+
+<!-- Floating Fast Scroll Action Buttons (أسهم عائمة للنزول والصعود السريع) -->
+<div class="fixed bottom-6 left-6 z-40 flex flex-col gap-2.5 no-print">
+    <button type="button" onclick="scrollProductsToTop()" title="الصعود لأعلى الصفحة والمنتجات" class="w-12 h-12 rounded-2xl bg-slate-900/95 hover:bg-purple-600 border-2 border-purple-500/60 text-white flex items-center justify-center shadow-2xl backdrop-blur-md transition hover:scale-110 active:scale-95 cursor-pointer group">
+        <i class="fa-solid fa-angles-up text-base group-hover:-translate-y-0.5 transition"></i>
+    </button>
+    <button type="button" onclick="scrollProductsToBottom()" title="النزول لأسفل المنتجات وآخر الصفحة" class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 flex items-center justify-center shadow-2xl transition hover:scale-110 active:scale-95 cursor-pointer font-black group">
+        <i class="fa-solid fa-angles-down text-base group-hover:translate-y-0.5 transition"></i>
+    </button>
+</div>
+
+<!-- ====================================================================== -->
+<!-- 1. SAFE TRANSFER MODAL (نقل المال من الصندوق إلى الخزنة الخاصة) -->
+<!-- ====================================================================== -->
+<div id="safeTransferModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-amber-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 relative">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg font-black">🏦</span>
+                <div>
+                    <h3 class="font-black text-sm text-white">نقل مبالغ نقدية إلى الخزنة الخاصة</h3>
+                    <span class="text-[10px] text-slate-400">حفظ وإيداع الأموال اليومية في صندوق المالك</span>
+                </div>
+            </div>
+            <button type="button" onclick="closeSafeTransferModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+        </div>
+
+        <div class="bg-slate-950 p-3.5 rounded-2xl border border-amber-500/30 space-y-2 text-xs">
+            <div class="flex items-center justify-between font-bold">
+                <span class="text-slate-400">كاش الأمس (المبيعات السابقة غير المرحلة):</span>
+                <span class="text-amber-400 font-mono font-black text-sm">{{ (drawer_status.past_untransferred_lbp or 0)|format_currency }} ل.ل</span>
+            </div>
+            <div class="flex items-center justify-between font-bold">
+                <span class="text-slate-400">كاش اليوم المباشر:</span>
+                <span class="text-emerald-400 font-mono font-black text-sm">{{ (summary.total_revenue_lbp or 0)|format_currency }} ل.ل</span>
+            </div>
+            <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between font-black text-white">
+                <span class="text-amber-300">إجمالي الكاش المتوفر للترحيل الآن:</span>
+                <span class="text-emerald-400 font-mono text-base">{{ (drawer_status.total_untransferred_lbp or summary.total_revenue_lbp or 0)|format_currency }} ل.ل</span>
+            </div>
+        </div>
+
+        <!-- Quick 1-Click Fill Buttons -->
+        <div class="flex gap-2 flex-wrap">
+            {% if drawer_status and drawer_status.past_untransferred_lbp > 0 %}
+            <button type="button" onclick="fillSafeAmount({{ drawer_status.past_untransferred_lbp }}, 'ترحيل كاش الأمس بالكامل')"
+                    class="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-3 py-1.5 rounded-xl text-[11px] font-black transition flex items-center gap-1">
+                <span>⚡ ترحيل كاش الأمس ({{ drawer_status.past_untransferred_lbp|format_currency }} ل.ل)</span>
+            </button>
+            {% endif %}
+            <button type="button" onclick="fillSafeAmount({{ drawer_status.total_untransferred_lbp if drawer_status else summary.total_revenue_lbp }}, 'ترحيل كامل الكاش المتاح')"
+                    class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-[11px] font-black transition flex items-center gap-1">
+                <span>💰 ترحيل كامل الكاش المتوفر</span>
+            </button>
+        </div>
+
+        <form id="safeTransferForm" onsubmit="submitSafeTransfer(event)" class="space-y-3 text-xs">
+            <div>
+                <label class="block text-slate-300 font-bold mb-1">المبلغ المراد نقله (بالليرة اللبنانية ل.ل):</label>
+                <div class="flex gap-2">
+                    <input type="number" id="safeAmountLBP" step="any" placeholder="مثال: 500000" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold rounded-xl px-3 py-2 text-sm focus:border-amber-500 focus:outline-none">
+                    <button type="button" onclick="document.getElementById('safeAmountLBP').value = '{{ summary.total_revenue_lbp }}'" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap border border-slate-700">
+                        كامل الكاش
+                    </button>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-bold mb-1">أو المبلغ بالدولار ($) (اختياري):</label>
+                <input type="number" id="safeAmountUSD" step="any" placeholder="مثال: 10" class="w-full bg-slate-950 border border-slate-700 text-emerald-400 font-mono font-bold rounded-xl px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none">
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-bold mb-1">اسم الموظف أو المسلّم:</label>
+                <input type="text" id="safeEmployeeName" value="{{ session.get('employee_name', 'الكاشير') }}" class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 focus:border-amber-500 focus:outline-none">
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-bold mb-1">البيان / ملاحظات:</label>
+                <input type="text" id="safeNote" value="توريد نقدي من الكاشير إلى الخزنة الخاصة" class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 focus:border-amber-500 focus:outline-none">
+            </div>
+
+            <div class="pt-2 flex gap-2">
+                <button type="submit" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl transition shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2">
+                    <span>🏦 تأكيد الإيداع في الخزنة</span>
+                </button>
+                <button type="button" onclick="closeSafeTransferModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- 2. EDIT SINGLE ITEM MODAL (تعديل فوري للصنف وسعره) -->
+<!-- ====================================================================== -->
+<div id="editSingleItemModal" class="fixed inset-0 z-[100] hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-cyan-500/40 rounded-3xl p-6 max-w-xl w-full shadow-2xl space-y-4 my-8 relative text-white">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2.5">
+                <span class="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-lg font-black border border-cyan-500/30">⚙️</span>
+                <div>
+                    <h3 class="font-black text-base text-white">تعديل الصنف والصورة والسعر</h3>
+                    <span class="text-[11px] text-slate-400">تحديث فوري لاسم الصنف والصورة وسعر البيع</span>
+                </div>
+            </div>
+            <button type="button" onclick="closeEditSingleItemModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition">✕</button>
+        </div>
+
+        <form id="editSingleItemForm" onsubmit="submitEditSingleItem(event)" enctype="multipart/form-data" class="space-y-4 text-xs">
+            <input type="hidden" id="editItemId">
+            <input type="hidden" id="editItemType" value="cafe">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-slate-300 font-bold mb-1">اسم الصنف:</label>
+                    <input type="text" id="editItemName" required oninput="updateQuickEditLivePreview()" class="w-full bg-slate-950 border border-slate-700 text-white font-bold rounded-xl px-3 py-2.5 text-xs focus:border-cyan-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-bold mb-1">التصنيف:</label>
+                    <select id="editItemCategory" onchange="updateQuickEditLivePreview()" class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2.5 focus:border-cyan-500 focus:outline-none">
+                        {% for cat in categories %}
+                        <option value="{{ cat.id }}" data-name="{{ cat.name }}">{{ cat.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-slate-300 font-bold mb-1">السعر بالليرة (ل.ل):</label>
+                    <input type="number" id="editItemPriceLBP" step="any" required oninput="syncQuickEditPrice('lbp')" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold rounded-xl px-3 py-2.5 text-xs focus:border-cyan-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-bold mb-1">السعر بالدولار ($):</label>
+                    <input type="number" id="editItemPriceUSD" step="any" oninput="syncQuickEditPrice('usd')" class="w-full bg-slate-950 border border-slate-700 text-emerald-400 font-mono font-bold rounded-xl px-3 py-2.5 text-xs focus:border-cyan-500 focus:outline-none">
+                </div>
+            </div>
+
+            <!-- Studio Image Uploader (Quick Edit) -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs font-black text-cyan-300 flex items-center gap-1.5">
+                        <i class="fa-solid fa-camera text-cyan-400"></i>
+                        <span>صورة الصنف (Photo Studio):</span>
+                    </label>
+                    <span class="text-[10px] text-cyan-400 font-bold bg-cyan-950/80 px-2.5 py-0.5 rounded-full border border-cyan-800/60">
+                        ✨ دقة فائقة HD
+                    </span>
+                </div>
+
+                <!-- Dropzone Canvas -->
+                <div id="quickEditDropzone" 
+                     ondragover="handleQuickDragOver(event)" 
+                     ondragleave="handleQuickDragLeave(event)" 
+                     ondrop="handleQuickDrop(event)"
+                     class="relative group border-2 border-dashed border-cyan-500/40 hover:border-cyan-400 bg-slate-950/70 hover:bg-slate-950 rounded-2xl p-4 text-center transition-all duration-200 overflow-hidden min-h-[180px] flex flex-col items-center justify-center cursor-pointer">
+                    
+                    <input type="file" id="editItemImageFile" accept="image/*" onchange="previewItemImage(this)" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-30">
+                    <input type="hidden" id="editItemCurrentIcon">
+                    <input type="hidden" id="editItemImageBase64">
+                    
+                    <!-- 1. Loaded Image View -->
+                    <div id="quickEditPreviewContainer" class="hidden w-full flex-col items-center justify-center space-y-2.5 z-20">
+                        <div class="relative w-full max-w-xs h-44 rounded-2xl overflow-hidden border-2 border-cyan-400 shadow-2xl shadow-cyan-500/20 bg-slate-950 flex items-center justify-center p-2">
+                            <div class="absolute inset-0 bg-cover bg-center filter blur-lg opacity-25" id="quickEditImgBackdrop"></div>
+                            <img id="quickEditImgPreview" src="" alt="معاينة الصورة" class="relative z-10 max-h-full max-w-full object-contain transition-transform duration-300 group-hover:scale-105 drop-shadow-xl">
+                            <div class="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent pointer-events-none"></div>
+                            <span class="absolute top-2 right-2 text-[10px] font-bold text-cyan-300 bg-slate-950/90 backdrop-blur-md px-2.5 py-0.5 rounded-full border border-cyan-500/30">
+                                📷 صورة الصنف
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-bold text-emerald-400 bg-emerald-950/90 px-3 py-1 rounded-full border border-emerald-800 flex items-center gap-1">
+                                <i class="fa-solid fa-circle-check"></i> تم اختيار الصورة بنجاح
+                            </span>
+                            <button type="button" onclick="clearQuickEditImage()" class="relative z-40 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-950/80 hover:bg-rose-900/90 px-3 py-1 rounded-full border border-rose-800 transition cursor-pointer">
+                                <i class="fa-solid fa-trash-can"></i> إزالة الصورة والرجوع للرمز
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-slate-400">انقر هنا أو اسحب صورة جديدة من جهازك لتغييرها</p>
+                    </div>
+
+                    <!-- 2. Placeholder View (When No Image) -->
+                    <div id="quickEditPlaceholder" class="flex flex-col items-center justify-center py-3 space-y-2 pointer-events-none">
+                        <div class="w-16 h-16 rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center text-3xl group-hover:scale-110 transition-transform shadow-inner">
+                            <i class="fa-solid fa-camera"></i>
+                        </div>
+                        <div class="space-y-1">
+                            <p class="text-xs font-black text-white group-hover:text-cyan-300 transition-colors">اسحب وأفلت صورة المنتج هنا، أو اضغط للاختيار من الكمبيوتر</p>
+                            <p class="text-[11px] text-amber-300 font-bold flex items-center justify-center gap-1.5">
+                                <i class="fa-solid fa-paste"></i> يمكنك نسخ أي صورة ولصقها هنا مباشرة بـ (Ctrl + V)
+                            </p>
+                            <p class="text-[10px] text-slate-400">معالجة استوديو تلقائية: ضبط الاتجاه وعدم القص وتحسين الجودة HD</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Presets Palette: Fast Icons & Emojis -->
+                <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] text-cyan-300 font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> رموز وتصاميم سريعة جاهزة:
+                        </span>
+                        <div class="flex items-center gap-1">
+                            <span class="text-[10px] text-slate-400 font-bold">الرمز:</span>
+                            <input type="text" id="editItemIcon" placeholder="☕" oninput="updateQuickEditLivePreview()" class="w-10 bg-slate-900 text-white text-center text-sm rounded-lg py-0.5 border border-slate-700">
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1.5 overflow-x-auto py-1 text-base scrollbar-thin">
+                        {% for ic in ['☕', '🍵', '🥤', '🧋', '🍹', '💧', '💨', '🥐', '🍰', '🍪', '🍕', '🍔', '🥪', '🍫', '🍿', '🍦', '⚡', '🎮'] %}
+                        <button type="button" onclick="selectEditItemEmoji('{{ ic }}')" class="w-8 h-8 rounded-xl bg-slate-900 hover:bg-cyan-500/30 border border-slate-800 hover:border-cyan-400 text-white flex items-center justify-center hover:scale-115 transition shrink-0 cursor-pointer">
+                            {{ ic }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Cashier Card Preview Box in Quick Edit -->
+            <div class="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
+                <span class="text-[11px] font-black text-cyan-400 flex items-center gap-1">
+                    <i class="fa-solid fa-eye"></i> معاينة مباشرة: هكذا سيظهر الصنف في شاشة الكاشير
+                </span>
+                
+                <div class="max-w-[220px] mx-auto rounded-2xl bg-slate-950 border-2 border-cyan-400/60 shadow-xl overflow-hidden text-right">
+                    <div class="relative w-full h-28 bg-slate-950 overflow-hidden flex items-center justify-center p-1.5">
+                        <div class="absolute inset-0 bg-cover bg-center filter blur-lg opacity-25" id="quickLiveBackdrop"></div>
+                        <img id="quickLivePreviewImg" src="" alt="" class="hidden relative z-10 max-h-full max-w-full object-contain drop-shadow-xl">
+                        <span id="quickLivePreviewIcon" class="text-4xl relative z-10">☕</span>
+                        <span id="quickLivePreviewCat" class="absolute top-1.5 right-1.5 z-20 text-[9px] font-bold text-white bg-slate-950/80 px-2 py-0.5 rounded-full border border-white/10">مشروبات</span>
+                    </div>
+                    <div class="p-2.5 space-y-1">
+                        <h5 id="quickLivePreviewName" class="font-black text-xs text-white truncate">اسم المنتج</h5>
+                        <div class="flex items-baseline justify-between pt-1 border-t border-slate-800">
+                            <span id="quickLivePreviewLBP" class="font-mono font-black text-xs text-amber-400">0 ل.ل</span>
+                            <span id="quickLivePreviewUSD" class="font-mono text-[10px] font-bold text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-2 flex gap-2">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-black py-3 rounded-xl transition shadow-lg shadow-cyan-600/30 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span>حفظ التعديل والصورة والسعر فوراً</span>
+                </button>
+                <button type="button" onclick="closeEditSingleItemModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-5 py-3 rounded-xl font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- 3. GAMING & PLAYSTATION CALCULATOR MODAL (حاسبة وتسجيل ألعاب وبلايستيشن) -->
+<!-- ====================================================================== -->
+<div id="gamingSessionModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-purple-500/50 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4 relative">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center text-lg font-black">🎮</span>
+                <div>
+                    <h3 class="font-black text-sm text-white">حاسبة وتسجيل ألعاب والكمبيوتر GAMING</h3>
+                    <span class="text-[10px] text-purple-300">حساب الوقت والأدوار وإدراج الأرباح الصافية (100%) في خانة الألعاب</span>
+                </div>
+            </div>
+            <button type="button" onclick="closeGamingSessionModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+        </div>
+
+        <div class="space-y-3 text-xs">
+            <!-- Select Gaming Device -->
+            <div>
+                <label class="block text-slate-300 font-bold mb-1.5">اختر الجهاز أو اللعبة:</label>
+                <div class="grid grid-cols-3 gap-2">
+                    <button type="button" onclick="selectGamingDevice(this, 'كمبيوتر ألعاب PC 1')" class="gaming-dev-btn active bg-purple-600 text-white font-bold p-2 rounded-xl text-center border border-purple-500 transition">
+                        🖥️ PC 1
+                    </button>
+                    <button type="button" onclick="selectGamingDevice(this, 'كمبيوتر ألعاب PC 2')" class="gaming-dev-btn bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold p-2 rounded-xl text-center border border-slate-700 transition">
+                        🖥️ PC 2
+                    </button>
+                    <button type="button" onclick="selectGamingDevice(this, 'كمبيوتر ألعاب PC 3')" class="gaming-dev-btn bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold p-2 rounded-xl text-center border border-slate-700 transition">
+                        🖥️ PC 3
+                    </button>
+                    <button type="button" onclick="selectGamingDevice(this, 'بلايستيشن PS5')" class="gaming-dev-btn bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold p-2 rounded-xl text-center border border-slate-700 transition">
+                        🎮 بلايستيشن 5
+                    </button>
+                    <button type="button" onclick="selectGamingDevice(this, 'بلايستيشن PS4')" class="gaming-dev-btn bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold p-2 rounded-xl text-center border border-slate-700 transition">
+                        🎮 بلايستيشن 4
+                    </button>
+                    <button type="button" onclick="selectGamingDevice(this, 'طاولة بلياردو Billiards')" class="gaming-dev-btn bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold p-2 rounded-xl text-center border border-slate-700 transition">
+                        🎱 بلياردو
+                    </button>
+                </div>
+            </div>
+
+            <!-- Select Time / Rounds -->
+            <div>
+                <label class="block text-slate-300 font-bold mb-1.5">اختر المدة أو عدد الأدوار:</label>
+                <div class="grid grid-cols-4 gap-2">
+                    <button type="button" onclick="selectGamingDuration(this, 30, 0.5)" class="gaming-dur-btn bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold p-2 rounded-xl text-center border border-slate-700 transition">
+                        نصف ساعة (30د)
+                    </button>
+                    <button type="button" onclick="selectGamingDuration(this, 60, 1.0)" class="gaming-dur-btn active bg-purple-600 text-white font-bold p-2 rounded-xl text-center border border-purple-500 transition">
+                        ساعة كاملة (60د)
+                    </button>
+                    <button type="button" onclick="selectGamingDuration(this, 120, 2.0)" class="gaming-dur-btn bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold p-2 rounded-xl text-center border border-slate-700 transition">
+                        ساعتان (120د)
+                    </button>
+                    <button type="button" onclick="selectGamingDuration(this, 180, 3.0)" class="gaming-dur-btn bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold p-2 rounded-xl text-center border border-slate-700 transition">
+                        3 ساعات
+                    </button>
+                </div>
+            </div>
+
+            <!-- Custom Rate or Price -->
+            <div class="grid grid-cols-2 gap-2.5">
+                <div>
+                    <label class="block text-slate-300 font-bold mb-1">سعر الساعة / الدور الافتراضي (ل.ل):</label>
+                    <input type="number" id="gamingRatePerHour" value="{{ pc_price_lbp|default(100000) }}" oninput="recalcGamingPrice()" class="w-full bg-slate-950 border border-slate-700 text-white font-mono font-bold rounded-xl px-3 py-2 text-sm focus:border-purple-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-purple-300 font-bold mb-1">المبلغ المحتسب للجلسة (ل.ل):</label>
+                    <input type="number" id="gamingCalculatedPrice" value="{{ pc_price_lbp|default(100000) }}" class="w-full bg-slate-950 border-2 border-purple-500/60 text-purple-300 font-mono font-black rounded-xl px-3 py-2 text-sm focus:border-purple-400 focus:outline-none">
+                </div>
+            </div>
+
+            <!-- Player Name -->
+            <div>
+                <label class="block text-slate-300 font-bold mb-1">اسم اللاعب / الزبون (اختياري):</label>
+                <input type="text" id="gamingPlayerName" placeholder="مثال: أحمد أو لاعب 1" class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 focus:border-purple-500 focus:outline-none">
+            </div>
+
+            <!-- Profit Guarantee Callout -->
+            <div class="p-2.5 rounded-2xl bg-purple-950/40 border border-purple-500/30 flex items-center justify-between text-[11px]">
+                <div class="flex items-center gap-2 text-purple-200">
+                    <span class="text-sm">💎</span>
+                    <span>الربح الصافي: <strong>100%</strong></span>
+                </div>
+                <span class="text-emerald-400 font-black font-mono" id="gamingProfitPreview">100,000 ل.ل صافي ربح</span>
+            </div>
+
+            <div class="pt-2 flex gap-2">
+                <button type="button" onclick="addGamingSessionToOrder()" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-black py-2.5 rounded-xl transition shadow-lg shadow-purple-600/30 flex items-center justify-center gap-2 text-xs">
+                    <span>🎮 إضافة إلى الفاتورة وتسجيل الربح الصافي</span>
+                </button>
+                <button type="button" onclick="closeGamingSessionModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl transition">
+                    إلغاء
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- 4. MANAGE PRODUCTS MODAL (تعديل وإضافة جميع الأصناف والأسعار) -->
+<!-- ====================================================================== -->
+<div id="manageProductsModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-cyan-500/40 rounded-3xl p-6 max-w-4xl w-full shadow-2xl space-y-4 max-h-[90vh] flex flex-col relative">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
+            <div class="flex items-center gap-2">
+                <span class="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-lg font-black">📋</span>
+                <div>
+                    <h3 class="font-black text-sm text-white">إدارة وتعديل الأصناف وقائمة الأسعار</h3>
+                    <span class="text-[10px] text-slate-400">تعديل الأسعار مباشرة أو إضافة صنف جديد فورا</span>
+                </div>
+            </div>
+            <button type="button" onclick="closeManageProductsModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+        </div>
+
+        <!-- Add New Item Quick Form -->
+        <div class="p-3 bg-slate-950 rounded-2xl border border-slate-800 shrink-0">
+            <h4 class="text-xs font-black text-amber-400 mb-2">+ إضافة صنف جديد للقائمة:</h4>
+            <form id="quickAddItemForm" onsubmit="submitQuickAddItem(event)" class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                <input type="text" id="newItName" placeholder="اسم الصنف الجديد..." required class="bg-slate-900 border border-slate-700 text-white rounded-xl px-2.5 py-1.5 focus:border-amber-500 focus:outline-none">
+                <input type="number" id="newItPriceLBP" step="any" placeholder="السعر (ل.ل)..." required class="bg-slate-900 border border-slate-700 text-amber-300 font-mono font-bold rounded-xl px-2.5 py-1.5 focus:border-amber-500 focus:outline-none">
+                <select id="newItCat" class="bg-slate-900 border border-slate-700 text-white rounded-xl px-2 py-1.5 focus:border-amber-500 focus:outline-none">
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+                <select id="newItType" class="bg-slate-900 border border-slate-700 text-white rounded-xl px-2 py-1.5 focus:border-amber-500 focus:outline-none">
+                    <option value="cafe">مشروب ☕</option>
+                    <option value="gaming">ألعاب 🎮</option>
+                    <option value="others">يدوي ✍️</option>
+                </select>
+                <button type="submit" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-3 py-1.5 rounded-xl transition">
+                    + حفظ وإضافة
+                </button>
+            </form>
+        </div>
+
+        <!-- Searchable Items Table -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar border border-slate-800 rounded-2xl">
+            <table class="w-full text-right text-xs">
+                <thead class="bg-slate-950 text-slate-400 sticky top-0 border-b border-slate-800 font-bold">
+                    <tr>
+                        <th class="p-2.5">الصنف</th>
+                        <th class="p-2.5">التصنيف</th>
+                        <th class="p-2.5">السعر (ل.ل)</th>
+                        <th class="p-2.5">السعر ($)</th>
+                        <th class="p-2.5 text-center">إجراء</th>
+                    </tr>
+                </thead>
+                <tbody id="manageProductsTableBody" class="divide-y divide-slate-800/60 font-mono">
+                    {% for it in items %}
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="p-2.5 font-bold font-sans text-white flex items-center gap-2">
+                            {% if it.icon and (it.icon.startswith('/') or it.icon.startswith('http') or it.icon.startswith('data:')) %}
+                            <img src="{{ it.icon }}" alt="{{ it.name }}" class="w-8 h-8 rounded-xl object-contain bg-slate-900 border border-slate-700/80 p-0.5 shrink-0 shadow-sm">
+                            {% else %}
+                            <span class="w-8 h-8 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-base shrink-0">{{ it.icon or '☕' }}</span>
+                            {% endif %}
+                            <span class="truncate">{{ it.name }}</span>
+                        </td>
+                        <td class="p-2.5 text-slate-400 font-sans">{{ it.category_name or 'عام' }}</td>
+                        <td class="p-2.5 font-bold text-amber-400">{{ it.price_lbp|format_currency }}</td>
+                        <td class="p-2.5 text-emerald-400">{{ it.price_usd|to_usd }}</td>
+                        <td class="p-2.5 text-center font-sans">
+                            <button type="button" 
+                                    data-id="{{ it.id }}"
+                                    data-name="{{ it.name|e }}"
+                                    data-price-lbp="{{ it.price_lbp }}"
+                                    data-price-usd="{{ it.price_usd|default(0) }}"
+                                    data-category-id="{{ it.category_id|default(0) }}"
+                                    data-item-type="{{ it.item_type|default('cafe') }}"
+                                    data-icon="{{ it.icon|default('☕') }}"
+                                    onclick="triggerEditSingleItem(this)" 
+                                    class="bg-slate-800 hover:bg-cyan-600 text-cyan-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 mx-auto cursor-pointer">
+                                <i class="fa-solid fa-pen-to-square"></i> تعديل
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- JAVASCRIPT LOGIC FOR ENHANCED FEATURES -->
+<!-- ====================================================================== -->
+<script>
+// 1. Safe Transfer Modal Logic
+function openSafeTransferModal() {
+    document.getElementById('safeTransferModal').classList.remove('hidden');
+}
+function fillSafeAmount(val, noteText) {
+    document.getElementById('safeAmountLBP').value = val;
+    if (noteText) {
+        document.getElementById('safeNote').value = noteText;
+    }
+}
+function closeSafeTransferModal() {
+    document.getElementById('safeTransferModal').classList.add('hidden');
+}
+async function submitSafeTransfer(event) {
+    event.preventDefault();
+    const amountLBP = parseFloat(document.getElementById('safeAmountLBP').value) || 0;
+    const amountUSD = parseFloat(document.getElementById('safeAmountUSD').value) || 0;
+    const empName = document.getElementById('safeEmployeeName').value;
+    const note = document.getElementById('safeNote').value;
+
+    if (amountLBP <= 0 && amountUSD <= 0) {
+        alert('الرجاء إدخال مبلغ صحيح لنقله إلى الخزنة');
+        return;
+    }
+
+    try {
+        const resp = await fetch('/safe/quick_transfer', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                amount_lbp: amountLBP,
+                amount_usd: amountUSD,
+                employee_name: empName,
+                note: note
+            })
+        });
+        const res = await resp.json();
+        if (res.success) {
+            closeSafeTransferModal();
+            alert('✓ ' + res.message);
+            location.reload();
+        } else {
+            alert('خطأ: ' + (res.error || 'فشلت العملية'));
+        }
+    } catch(e) {
+        alert('حدث خطأ في الاتصال: ' + e);
+    }
+}
+
+// 2. Single Item Edit Modal Logic (Supports Name, Price, Icon, and Image Upload!)
+
+function closeEditSingleItemModal() {
+    document.getElementById('editSingleItemModal').classList.add('hidden');
+}
+
+
+
+// 3. Manage Products Modal Logic
+function openManageProductsModal() {
+    document.getElementById('manageProductsModal').classList.remove('hidden');
+}
+function closeManageProductsModal() {
+    document.getElementById('manageProductsModal').classList.add('hidden');
+}
+async function submitQuickAddItem(event) {
+    event.preventDefault();
+    const name = document.getElementById('newItName').value;
+    const priceLBP = parseFloat(document.getElementById('newItPriceLBP').value) || 0;
+    const catId = document.getElementById('newItCat').value;
+    const itemType = document.getElementById('newItType').value;
+
+    try {
+        const resp = await fetch('/api/item/quick_add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                name: name,
+                price_lbp: priceLBP,
+                category_id: catId,
+                item_type: itemType
+            })
+        });
+        const res = await resp.json();
+        if (res.success) {
+            alert('✓ تم إضافة الصنف الجديد بنجاح!');
+            location.reload();
+        } else {
+            alert('خطأ: ' + res.error);
+        }
+    } catch(e) {
+        alert('حدث خطأ: ' + e);
+    }
+}
+
+// 4. Gaming Session Calculator Hub
+let selectedGamingDevice = 'كمبيوتر ألعاب PC 1';
+let selectedGamingMultiplier = 1.0;
+
+function openGamingSessionModal() {
+    document.getElementById('gamingSessionModal').classList.remove('hidden');
+    recalcGamingPrice();
+}
+function closeGamingSessionModal() {
+    document.getElementById('gamingSessionModal').classList.add('hidden');
+}
+function selectGamingDevice(btn, devName) {
+    document.querySelectorAll('.gaming-dev-btn').forEach(b => {
+        b.classList.remove('bg-purple-600', 'text-white');
+        b.classList.add('bg-slate-800', 'text-slate-300');
+    });
+    btn.classList.remove('bg-slate-800', 'text-slate-300');
+    btn.classList.add('bg-purple-600', 'text-white');
+    selectedGamingDevice = devName;
+}
+function selectGamingDuration(btn, minutes, mult) {
+    document.querySelectorAll('.gaming-dur-btn').forEach(b => {
+        b.classList.remove('bg-purple-600', 'text-white');
+        b.classList.add('bg-slate-800', 'text-slate-300');
+    });
+    btn.classList.remove('bg-slate-800', 'text-slate-300');
+    btn.classList.add('bg-purple-600', 'text-white');
+    selectedGamingMultiplier = mult;
+    recalcGamingPrice();
+}
+function recalcGamingPrice() {
+    const rate = parseFloat(document.getElementById('gamingRatePerHour').value) || 100000;
+    const calculated = Math.round(rate * selectedGamingMultiplier);
+    document.getElementById('gamingCalculatedPrice').value = calculated;
+    document.getElementById('gamingProfitPreview').textContent = calculated.toLocaleString() + ' ل.ل صافي ربح';
+}
+function addGamingSessionToOrder() {
+    const finalPrice = parseFloat(document.getElementById('gamingCalculatedPrice').value) || 100000;
+    const playerName = document.getElementById('gamingPlayerName').value.trim();
+    let label = selectedGamingDevice;
+    if (selectedGamingMultiplier === 0.5) label += ' (30د)';
+    else if (selectedGamingMultiplier === 1.0) label += ' (1ساعة)';
+    else if (selectedGamingMultiplier === 2.0) label += ' (2ساعة)';
+    else if (selectedGamingMultiplier === 3.0) label += ' (3ساعات)';
+    if (playerName) label += ' - ' + playerName;
+
+    // Push into active cart items list
+    if (typeof orderItems !== 'undefined') {
+        const gamingItem = {
+            id: 'gaming_' + Date.now(),
+            name: label,
+            price_lbp: finalPrice,
+            qty: 1,
+            item_type: 'gaming',
+            icon: '🎮'
+        };
+        orderItems.push(gamingItem);
+        if (typeof renderOrderItems === 'function') {
+            renderOrderItems();
+        }
+    }
+    closeGamingSessionModal();
+}
+
+
+// ===============================================
+// QUICK EDIT STUDIO & LIVE PREVIEW (INDEX.HTML)
+// ===============================================
+const CAFE_EXCHANGE_RATE = 89500;
+
+function handleQuickDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = document.getElementById('quickEditDropzone');
+    if (el) el.classList.add('border-cyan-400', 'bg-cyan-950/30', 'scale-[1.01]');
+}
+
+function handleQuickDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = document.getElementById('quickEditDropzone');
+    if (el) el.classList.remove('border-cyan-400', 'bg-cyan-950/30', 'scale-[1.01]');
+}
+
+function handleQuickDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    handleQuickDragLeave(e);
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        const file = e.dataTransfer.files[0];
+        const fileInput = document.getElementById('editItemImageFile');
+        if (fileInput) {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            fileInput.files = dt.files;
+            previewItemImage(fileInput);
+        }
+    }
+}
+
+function previewItemImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const prev = document.getElementById('quickEditImgPreview');
+            const cont = document.getElementById('quickEditPreviewContainer');
+            const place = document.getElementById('quickEditPlaceholder');
+            const liveImg = document.getElementById('quickLivePreviewImg');
+            const liveIcon = document.getElementById('quickLivePreviewIcon');
+            const backdrop = document.getElementById('quickEditImgBackdrop');
+            const liveBackdrop = document.getElementById('quickLiveBackdrop');
+
+            if (prev) prev.src = e.target.result;
+            if (backdrop) backdrop.style.backgroundImage = `url('${e.target.result}')`;
+            if (cont) { cont.classList.remove('hidden'); cont.style.display = 'flex'; }
+            if (place) { place.classList.add('hidden'); place.style.display = 'none'; }
+
+            if (liveImg) {
+                liveImg.src = e.target.result;
+                liveImg.classList.remove('hidden');
+                if (liveBackdrop) liveBackdrop.style.backgroundImage = `url('${e.target.result}')`;
+                if (liveIcon) liveIcon.classList.add('hidden');
+            }
+            // Clear icon input text so no raw path or misleading text is shown
+            const iconInput = document.getElementById('editItemIcon');
+            if (iconInput) iconInput.value = '';
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function clearQuickEditImage() {
+    const fileInput = document.getElementById('editItemImageFile');
+    if (fileInput) fileInput.value = '';
+
+    const currentIconHidden = document.getElementById('editItemCurrentIcon');
+    if (currentIconHidden) currentIconHidden.value = '';
+
+    const prev = document.getElementById('quickEditImgPreview');
+    if (prev) prev.src = '';
+
+    const cont = document.getElementById('quickEditPreviewContainer');
+    if (cont) { cont.classList.add('hidden'); cont.style.display = 'none'; }
+
+    const place = document.getElementById('quickEditPlaceholder');
+    if (place) { place.classList.remove('hidden'); place.style.display = 'flex'; }
+
+    const liveImg = document.getElementById('quickLivePreviewImg');
+    if (liveImg) { liveImg.src = ''; liveImg.classList.add('hidden'); }
+    
+    const liveIcon = document.getElementById('quickLivePreviewIcon');
+    if (liveIcon) liveIcon.classList.remove('hidden');
+
+    const iconInput = document.getElementById('editItemIcon');
+    if (iconInput) {
+        if (!iconInput.value) iconInput.value = '☕';
+        if (liveIcon) liveIcon.innerText = iconInput.value;
+    }
+}
+
+function selectEditItemEmoji(ic) {
+    const iconInput = document.getElementById('editItemIcon');
+    if (iconInput) iconInput.value = ic;
+    
+    // Clear any uploaded file or current image
+    const fileInput = document.getElementById('editItemImageFile');
+    if (fileInput) fileInput.value = '';
+    const currentIconHidden = document.getElementById('editItemCurrentIcon');
+    if (currentIconHidden) currentIconHidden.value = '';
+
+    const prev = document.getElementById('quickEditImgPreview');
+    if (prev) prev.src = '';
+    const cont = document.getElementById('quickEditPreviewContainer');
+    if (cont) { cont.classList.add('hidden'); cont.style.display = 'none'; }
+    const place = document.getElementById('quickEditPlaceholder');
+    if (place) { place.classList.remove('hidden'); place.style.display = 'flex'; }
+
+    const liveImg = document.getElementById('quickLivePreviewImg');
+    if (liveImg) { liveImg.src = ''; liveImg.classList.add('hidden'); }
+    const liveIcon = document.getElementById('quickLivePreviewIcon');
+    if (liveIcon) {
+        liveIcon.innerText = ic;
+        liveIcon.classList.remove('hidden');
+    }
+    updateQuickEditLivePreview();
+}
+
+function syncQuickEditPrice(source) {
+    const lbp = document.getElementById('editItemPriceLBP');
+    const usd = document.getElementById('editItemPriceUSD');
+    if (source === 'lbp' && lbp.value) {
+        usd.value = (parseFloat(lbp.value) / CAFE_EXCHANGE_RATE).toFixed(2);
+    } else if (source === 'usd' && usd.value) {
+        lbp.value = Math.round(parseFloat(usd.value) * CAFE_EXCHANGE_RATE);
+    }
+    updateQuickEditLivePreview();
+}
+
+function updateQuickEditLivePreview() {
+    try {
+        const nameEl = document.getElementById('editItemName');
+        const priceLBPEl = document.getElementById('editItemPriceLBP');
+        const priceUSDEl = document.getElementById('editItemPriceUSD');
+        const catSelect = document.getElementById('editItemCategory');
+
+        const name = nameEl ? (nameEl.value || 'اسم المنتج') : 'اسم المنتج';
+        const price = priceLBPEl ? (parseFloat(priceLBPEl.value) || 0) : 0;
+        const usd = priceUSDEl ? (parseFloat(priceUSDEl.value) || (price / CAFE_EXCHANGE_RATE)) : (price / CAFE_EXCHANGE_RATE);
+        
+        let catName = 'عام';
+        if (catSelect && catSelect.selectedIndex >= 0 && catSelect.options[catSelect.selectedIndex]) {
+            catName = catSelect.options[catSelect.selectedIndex].text;
+        }
+
+        const prevName = document.getElementById('quickLivePreviewName');
+        if (prevName) prevName.innerText = name;
+
+        const prevLBP = document.getElementById('quickLivePreviewLBP') || document.getElementById('quickLivePreviewPriceLBP');
+        if (prevLBP) prevLBP.innerText = Number(price).toLocaleString('en-US') + ' ل.ل';
+
+        const prevUSD = document.getElementById('quickLivePreviewUSD') || document.getElementById('quickLivePreviewPriceUSD');
+        if (prevUSD) prevUSD.innerText = '$' + usd.toFixed(2);
+
+        const prevCat = document.getElementById('quickLivePreviewCat');
+        if (prevCat) prevCat.innerText = catName;
+
+        const iconInput = document.getElementById('editItemIcon');
+        const liveIcon = document.getElementById('quickLivePreviewIcon');
+        const liveImg = document.getElementById('quickLivePreviewImg');
+        if (iconInput && iconInput.value && liveIcon && liveImg && liveImg.classList.contains('hidden')) {
+            liveIcon.innerText = iconInput.value;
+        }
+    } catch(err) {
+        console.warn('Live preview note:', err);
+    }
+}
+
+function triggerEditSingleItem(btn) {
+    if (!btn) return;
+    try {
+        const id = btn.getAttribute('data-id');
+        const name = btn.getAttribute('data-name');
+        const priceLBP = btn.getAttribute('data-price-lbp') || 0;
+        const priceUSD = btn.getAttribute('data-price-usd') || 0;
+        const catId = btn.getAttribute('data-category-id') || 0;
+        const itemType = btn.getAttribute('data-item-type') || 'cafe';
+        const icon = btn.getAttribute('data-icon') || '☕';
+        openEditSingleItemModal(id, name, priceLBP, priceUSD, catId, itemType, icon);
+    } catch(err) {
+        console.error('Trigger edit error:', err);
+    }
+}
+
+function openEditSingleItemModal(id, name, priceLBP, priceUSD, catId, itemType, icon) {
+    try {
+        // ALWAYS open the modal FIRST so it immediately responds on screen
+        const modal = document.getElementById('editSingleItemModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+
+        const idEl = document.getElementById('editItemId');
+        if (idEl) idEl.value = id;
+
+        const nameEl = document.getElementById('editItemName');
+        if (nameEl) nameEl.value = name || '';
+
+        const priceLBPEl = document.getElementById('editItemPriceLBP');
+        if (priceLBPEl) priceLBPEl.value = priceLBP || 0;
+
+        const priceUSDEl = document.getElementById('editItemPriceUSD');
+        if (priceUSDEl) priceUSDEl.value = priceUSD || (priceLBP / CAFE_EXCHANGE_RATE).toFixed(2);
+
+        const catEl = document.getElementById('editItemCategory');
+        if (catEl) catEl.value = catId;
+        
+        const typeSelect = document.getElementById('editItemType');
+        if (typeSelect) typeSelect.value = itemType || 'cafe';
+
+        const iconInput = document.getElementById('editItemIcon');
+        const fileInput = document.getElementById('editItemImageFile');
+        const currentIconHidden = document.getElementById('editItemCurrentIcon');
+        const base64Input = document.getElementById('editItemImageBase64');
+        if (fileInput) fileInput.value = '';
+        if (base64Input) base64Input.value = '';
+
+        const prev = document.getElementById('quickEditImgPreview');
+        const cont = document.getElementById('quickEditPreviewContainer');
+        const place = document.getElementById('quickEditPlaceholder');
+        const liveImg = document.getElementById('quickLivePreviewImg');
+        const liveIcon = document.getElementById('quickLivePreviewIcon');
+        const backdrop = document.getElementById('quickEditImgBackdrop');
+        const liveBackdrop = document.getElementById('quickLiveBackdrop');
+
+        if (icon && (icon.startsWith('/static') || icon.startsWith('http') || icon.startsWith('data:'))) {
+            if (currentIconHidden) currentIconHidden.value = icon;
+            if (iconInput) iconInput.value = '';
+            if (prev) prev.src = icon;
+            if (backdrop) backdrop.style.backgroundImage = `url('${icon}')`;
+            if (cont) { cont.classList.remove('hidden'); cont.style.display = 'flex'; }
+            if (place) { place.classList.add('hidden'); place.style.display = 'none'; }
+            if (liveImg) { 
+                liveImg.src = icon; 
+                liveImg.classList.remove('hidden'); 
+                if (liveBackdrop) liveBackdrop.style.backgroundImage = `url('${icon}')`;
+            }
+            if (liveIcon) liveIcon.classList.add('hidden');
+        } else {
+            if (currentIconHidden) currentIconHidden.value = '';
+            if (iconInput) iconInput.value = icon || '☕';
+            if (prev) prev.src = '';
+            if (cont) { cont.classList.add('hidden'); cont.style.display = 'none'; }
+            if (place) { place.classList.remove('hidden'); place.style.display = 'flex'; }
+            if (liveImg) { liveImg.src = ''; liveImg.classList.add('hidden'); }
+            if (liveIcon) { liveIcon.innerText = icon || '☕'; liveIcon.classList.remove('hidden'); }
+        }
+
+        updateQuickEditLivePreview();
+    } catch(err) {
+        console.error('Error in openEditSingleItemModal:', err);
+    }
+}
+
+async function submitEditSingleItem(event) {
+    event.preventDefault();
+    const id = document.getElementById('editItemId').value;
+    const name = document.getElementById('editItemName').value;
+    const priceLBP = parseFloat(document.getElementById('editItemPriceLBP').value) || 0;
+    const priceUSD = parseFloat(document.getElementById('editItemPriceUSD').value) || 0;
+    const catId = document.getElementById('editItemCategory').value;
+    const typeSelect = document.getElementById('editItemType');
+    const itemType = typeSelect ? typeSelect.value : 'cafe';
+    const iconInput = document.getElementById('editItemIcon');
+    const currentIconHidden = document.getElementById('editItemCurrentIcon');
+    const fileInput = document.getElementById('editItemImageFile');
+
+    let iconValue = (iconInput ? iconInput.value : '').trim();
+    const currentIcon = currentIconHidden ? currentIconHidden.value : '';
+
+    const formData = new FormData();
+    formData.append('item_id', id);
+    formData.append('name', name);
+    formData.append('price_lbp', priceLBP);
+    formData.append('price_usd', priceUSD);
+    formData.append('category_id', catId);
+    formData.append('item_type', itemType);
+    formData.append('icon', iconValue);
+    formData.append('current_icon', currentIcon);
+    const base64Val = document.getElementById('editItemImageBase64') ? document.getElementById('editItemImageBase64').value : '';
+    if (base64Val) {
+        formData.append('image_base64', base64Val);
+    }
+    if (fileInput && fileInput.files && fileInput.files[0]) {
+        formData.append('image_file', fileInput.files[0]);
+    }
+
+    try {
+        const resp = await fetch('/api/item/quick_edit', {
+            method: 'POST',
+            body: formData
+        });
+        const res = await resp.json();
+        if (res.success) {
+            closeEditSingleItemModal();
+            window.location.href = '/?t=' + Date.now();
+        } else {
+            alert('خطأ أثناء التعديل: ' + (res.error || 'فشلت العملية'));
+        }
+    } catch (err) {
+        console.error(err);
+        alert('حدث خطأ في الاتصال بالخادم!');
+    }
+}
+
+
+// =========================================================================
+// CLIPBOARD PASTE (Ctrl+V) IMAGE SUPPORT
+// =========================================================================
+window.addEventListener('paste', function(e) {
+    const quickModal = document.getElementById('editSingleItemModal');
+    if (!quickModal || quickModal.classList.contains('hidden')) return;
+
+    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    for (let item of items) {
+        if (item.type.indexOf('image') !== -1) {
+            e.preventDefault();
+            const blob = item.getAsFile();
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const dataUrl = evt.target.result;
+                const prev = document.getElementById('quickEditImgPreview');
+                const cont = document.getElementById('quickEditPreviewContainer');
+                const place = document.getElementById('quickEditPlaceholder');
+                const liveImg = document.getElementById('quickLivePreviewImg');
+                const liveIcon = document.getElementById('quickLivePreviewIcon');
+                const backdrop = document.getElementById('quickEditImgBackdrop');
+                const liveBackdrop = document.getElementById('quickLiveBackdrop');
+                const base64Input = document.getElementById('editItemImageBase64');
+
+                if (base64Input) base64Input.value = dataUrl;
+                if (prev) prev.src = dataUrl;
+                if (backdrop) backdrop.style.backgroundImage = `url('${dataUrl}')`;
+                if (cont) { cont.classList.remove('hidden'); cont.style.display = 'flex'; }
+                if (place) { place.classList.add('hidden'); place.style.display = 'none'; }
+
+                if (liveImg) {
+                    liveImg.src = dataUrl;
+                    liveImg.classList.remove('hidden');
+                    if (liveBackdrop) liveBackdrop.style.backgroundImage = `url('${dataUrl}')`;
+                    if (liveIcon) liveIcon.classList.add('hidden');
+                }
+                const iconInput = document.getElementById('editItemIcon');
+                if (iconInput) iconInput.value = '';
+            };
+            reader.readAsDataURL(blob);
+            break;
+        }
+    }
+});
+
+</script>
+
+{% endblock %}
