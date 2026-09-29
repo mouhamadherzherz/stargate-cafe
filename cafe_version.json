@@ -1,7 +1,7 @@
 {
-    "changelog": "إصلاح شامل لمنظومة المالية: ترحيل الكاش للخزنة، إيداع الخزنة عند تسكير الشفت، ترحيل كامل كاش الدرج بزر واحد، وفصل كاش الدرج عن الخزنة الخاصة.",
-    "version": "4.5.0",
-    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v4.5.0/Stargate_Cafe_Update.zip",
+    "changelog": "v4.6.0: إصلاح حسابات الخزنة والكاش بشكل كامل — تصحيح معادلة كاش الدرج (لا خصم مزدوج للمصاريف)، تتبع موظف في عمليات الخزنة، حذف سجل الخزنة عند ضبط المصنع، تصدير/استيراد سجل الخزنة بالكامل مع النسخة الاحتياطية.",
+    "version": "4.6.0",
+    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v4.6.0/Stargate_Cafe_Update.zip",
     "company": "STARGATE EXPERTS",
     "channel": "cafe",
     "name": "Stargate Cafe & Gaming System",

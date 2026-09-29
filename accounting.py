@@ -1130,7 +1130,9 @@ def factory_reset(reset_type='full'):
             conn.close()
             return True, "تم تصفير جميع المبيعات والفواتير والزبائن الجالسين والمصاريف والديون والخزنة كلياً بنجاح! تم الحفاظ على قائمة المشروبات وأسعار المنيو."
         else: # 'full'
-            all_tables = ['debt_payments', 'customer_debts', 'pc_usage_logs', 'expenses', 'cafe_order_items', 'cafe_orders', 'cafe_items', 'cafe_categories', 'settings']
+            all_tables = ['debt_payments', 'customer_debts', 'pc_usage_logs', 'expenses',
+                          'cafe_order_items', 'cafe_orders', 'safe_transfers',
+                          'cafe_items', 'cafe_categories', 'settings']
             for t in all_tables:
                 cursor.execute(f"DROP TABLE IF EXISTS {t}")
             try:
@@ -1157,7 +1159,7 @@ def factory_reset(reset_type='full'):
                 pass
             conn2.close()
 
-            return True, "تم مسح وتصفير السيستم بالكامل 100%! تم حذف جميع المنتجات، الفواتير، ديون الزبائن، والمصاريف ليصبح السيستم فارغاً ونظيفاً تماماً."
+            return True, "تم مسح وتصفير السيستم بالكامل 100%! تم حذف جميع المنتجات، الفواتير، ديون الزبائن، المصاريف، وسجل الخزنة ليصبح السيستم فارغاً ونظيفاً تماماً."
     except Exception as e:
         return False, f"فشل أثناء ضبط المصنع: {str(e)}"
 
@@ -1519,12 +1521,18 @@ def export_full_system_data():
     
     cursor.execute("SELECT * FROM cafe_order_items ORDER BY id ASC")
     order_items = [dict(r) for r in cursor.fetchall()]
+
+    try:
+        cursor.execute("SELECT * FROM safe_transfers ORDER BY id ASC")
+        safe_transfers = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        safe_transfers = []
     
     conn.close()
     
     return {
         'app': 'STARGATE',
-        'version': '3.0.0',
+        'version': '4.5.0',
         'export_type': 'full_system_backup',
         'exported_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'settings': settings,
@@ -1535,7 +1543,8 @@ def export_full_system_data():
         'expenses': expenses,
         'pc_logs': pc_logs,
         'orders': orders,
-        'order_items': order_items
+        'order_items': order_items,
+        'safe_transfers': safe_transfers
     }
 
 def import_full_system_data(data):
@@ -1623,13 +1632,24 @@ def import_full_system_data(data):
                       int(oi.get('quantity', 1)), float(oi.get('unit_price_lbp') or 0), float(oi.get('unit_price_usd') or 0),
                       float(oi.get('subtotal_lbp') or 0), float(oi.get('subtotal_usd') or 0), oi.get('created_at', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))))
 
+        # 6. Safe Transfers (سجل الخزنة)
+        if 'safe_transfers' in data and data['safe_transfers']:
+            cursor.execute("DELETE FROM safe_transfers")
+            for st in data['safe_transfers']:
+                cursor.execute("""
+                INSERT OR REPLACE INTO safe_transfers (id, amount_lbp, amount_usd, note, transferred_by, operation_type, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (st.get('id'), float(st.get('amount_lbp') or 0), float(st.get('amount_usd') or 0),
+                      st.get('note', ''), st.get('transferred_by', 'المدير'), st.get('operation_type', 'deposit'),
+                      st.get('created_at', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))))
+
         conn.commit()
         try:
             cursor.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         except Exception:
             pass
         conn.close()
-        return True, "تمت استعادة كافة بيانات النظام والمنيو والديون بنجاح 100%!"
+        return True, "تمت استعادة كافة بيانات النظام والمنيو والديون وسجل الخزنة بنجاح 100%!"
     except Exception as e:
         conn.rollback()
         conn.close()
@@ -1938,7 +1958,7 @@ def get_employee_performance_summary(target_date=None, all_time=False):
 # 🏦 وظائف الخزنة الخاصة والمحاسبة المركزية (Advanced Safe/Vault Management)
 # ============================================================
 
-def add_safe_transfer(amount_lbp=0.0, note='', transferred_by='المدير', rate=None, amount_usd=None, operation_type='deposit'):
+def add_safe_transfer(amount_lbp=0.0, note='', transferred_by='المدير', rate=None, amount_usd=None, operation_type='deposit', employee_id=None):
     """نقل أو سحب مبلغ من/إلى الخزنة الخاصة مع التمييز بين الإيداع والسحب."""
     settings = get_settings()
     rate = rate or float(settings.get('exchange_rate') or 89500.0)
@@ -1955,10 +1975,16 @@ def add_safe_transfer(amount_lbp=0.0, note='', transferred_by='المدير', ra
 
     conn = get_db()
     cursor = conn.cursor()
+    # Ensure employee_id column exists (migration-safe)
+    try:
+        cursor.execute("ALTER TABLE safe_transfers ADD COLUMN employee_id INTEGER")
+        conn.commit()
+    except Exception:
+        pass
     cursor.execute("""
-        INSERT INTO safe_transfers (amount_lbp, amount_usd, note, transferred_by, operation_type)
-        VALUES (?, ?, ?, ?, ?)
-    """, (amount_lbp, amount_usd, note.strip(), transferred_by.strip(), op_type))
+        INSERT INTO safe_transfers (amount_lbp, amount_usd, note, transferred_by, operation_type, employee_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (amount_lbp, amount_usd, note.strip(), transferred_by.strip(), op_type, employee_id))
     conn.commit()
     transfer_id = cursor.lastrowid
     conn.close()
@@ -2140,9 +2166,7 @@ def get_safe_weekly_summary():
 def get_drawer_cash_status():
     """
     حساب وضع الكاش الفعلي في درج الكاشير بصورة تراكمية:
-    1. كاش اليوم
-    2. كاش الأمس والفترات السابقة غير المرحّل
-    3. إجمالي الكاش المتاح للترحيل إلى الخزنة الخاصة
+    الصيغة الصحيحة: كاش الدرج = (كل مبيعات الكاش + كل سدادات الديون) - (كل المصاريف + كل ما رُحِّل للخزنة)
     """
     settings = get_settings()
     rate = float(settings.get('exchange_rate') or 89500.0)
@@ -2169,34 +2193,45 @@ def get_drawer_cash_status():
     today_cash_sales_lbp = float(cursor.fetchone()[0] or 0.0)
 
     # 3. مبيعات كاش الأمس والفترات السابقة
-    cursor.execute("""
-        SELECT COALESCE(SUM(total_lbp), 0)
-        FROM cafe_orders
-        WHERE payment_method = 'cash' AND (status = 'paid' OR status IS NULL OR status = '')
-          AND DATE(datetime(created_at, '-5 hours')) < DATE(?)
-    """, (today_bdate,))
-    past_cash_sales_lbp = float(cursor.fetchone()[0] or 0.0)
+    past_cash_sales_lbp = max(0.0, all_cash_sales_lbp - today_cash_sales_lbp)
 
-    # 4. سدادات الديون المستلمة
+    # 4. إجمالي سدادات الديون المستلمة عبر كل التاريخ
     cursor.execute("SELECT COALESCE(SUM(amount_lbp), 0) FROM debt_payments")
     all_debt_rep_lbp = float(cursor.fetchone()[0] or 0.0)
 
-    # 5. المصاريف عبر كل التاريخ
+    # 5. إجمالي المصاريف عبر كل التاريخ
     cursor.execute("SELECT COALESCE(SUM(amount_lbp), 0) FROM expenses")
     all_expenses_lbp = float(cursor.fetchone()[0] or 0.0)
 
-    # 6. المبالغ المرحلة للخزنة الخاصة عبر كل التاريخ
-    cursor.execute("SELECT COALESCE(SUM(amount_lbp), 0) FROM safe_transfers")
-    all_transferred_to_safe_lbp = float(cursor.fetchone()[0] or 0.0)
+    # 6. إجمالي ما رُحِّل للخزنة الخاصة (الإيداعات - المسحوبات)
+    cursor.execute("""
+        SELECT
+            COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN 0 ELSE amount_lbp END), 0) as deposits,
+            COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN amount_lbp ELSE 0 END), 0) as withdrawals
+        FROM safe_transfers
+    """)
+    safe_row = cursor.fetchone()
+    total_safe_deposits_lbp = float(safe_row[0] or 0.0)
+    total_safe_withdrawals_lbp = float(safe_row[1] or 0.0)
+    # الكاش الذي خرج من الدرج باتجاه الخزنة (صافي)
+    net_to_safe_lbp = max(0.0, total_safe_deposits_lbp - total_safe_withdrawals_lbp)
 
     conn.close()
 
     # الكاش الإجمالي الفعلي الموجود بالدرج الآن ولم ينقل للخزنة بعد:
-    total_untransferred_lbp = max(0.0, (all_cash_sales_lbp + all_debt_rep_lbp) - (all_expenses_lbp + all_transferred_to_safe_lbp))
+    # (كل الكاش الداخل) - (المصاريف) - (صافي ما ذهب للخزنة)
+    total_income_lbp = all_cash_sales_lbp + all_debt_rep_lbp
+    total_outflow_lbp = all_expenses_lbp + net_to_safe_lbp
+    total_untransferred_lbp = max(0.0, total_income_lbp - total_outflow_lbp)
     total_untransferred_usd = round(total_untransferred_lbp / rate, 2) if rate > 0 else 0.0
 
-    # حساب الكاش السابق غير المرحّل مع استبعاد المصاريف والمبالغ المرحّلة للخزنة
-    past_untransferred_lbp = max(0.0, past_cash_sales_lbp - all_expenses_lbp - all_transferred_to_safe_lbp)
+    # الكاش السابق (قبل اليوم) غير المرحّل للخزنة
+    # نحسبه بنسبة: (past_cash / all_cash) * total_untransferred
+    if all_cash_sales_lbp > 0:
+        past_ratio = past_cash_sales_lbp / all_cash_sales_lbp
+    else:
+        past_ratio = 0.0
+    past_untransferred_lbp = round(total_untransferred_lbp * past_ratio, 0)
     past_untransferred_usd = round(past_untransferred_lbp / rate, 2) if rate > 0 else 0.0
 
     return {
@@ -2207,7 +2242,9 @@ def get_drawer_cash_status():
         'past_untransferred_usd': past_untransferred_usd,
         'total_untransferred_lbp': total_untransferred_lbp,
         'total_untransferred_usd': total_untransferred_usd,
-        'all_transferred_to_safe_lbp': all_transferred_to_safe_lbp
+        'all_transferred_to_safe_lbp': net_to_safe_lbp,
+        'all_debt_rep_lbp': all_debt_rep_lbp,
+        'all_expenses_lbp': all_expenses_lbp
     }
 
 
