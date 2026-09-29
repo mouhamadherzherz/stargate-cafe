@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul
 title تحديث برنامج ستارجيت كافيه - STARGATE CAFE v4.4.0
 color 0b
@@ -34,9 +34,9 @@ timeout /t 2 /nobreak >nul
 echo     [OK] تم فك قفل الملفات.
 
 :: 3. تنزيل التحديث السحابي الجديد
-echo [3/5] جاري تنزيل حزمة التحديث v4.4.0 من السحابة...
-set "ZIP_URL=https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v4.4.0/Stargate_Cafe_Update.zip"
-set "TEMP_ZIP=%CAFE_DIR%\update_v440.zip"
+echo [3/5] جاري تنزيل حزمة التحديث v4.5.0 من السحابة...
+set "ZIP_URL=https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v4.5.0/Stargate_Cafe_Update.zip"
+set "TEMP_ZIP=%CAFE_DIR%\update_v450.zip"
 set "TEMP_EXTRACT=%CAFE_DIR%\update_extracted"
 
 if exist "%TEMP_EXTRACT%" rmdir /S /Q "%TEMP_EXTRACT%" >nul 2>&1
