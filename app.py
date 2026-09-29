@@ -52,28 +52,33 @@ def _background_update_check():
         'https://stargate-experts-default-rtdb.firebaseio.com/cafe_updates/latest.json',
         'https://raw.githubusercontent.com/mouhamadherzherz/stargate-cafe/master/cafe_version.json'
     ]
+    best_remote = None
+    best_data = None
+    current = _get_current_version()
+    
     for url in endpoints:
         try:
-            req = ur.Request(url, headers={'User-Agent': 'StargateCafe-OTA/4.4'})
+            req = ur.Request(url, headers={'User-Agent': 'StargateCafe-OTA/4.5'})
             with ur.urlopen(req, timeout=6, context=ctx) as r:
                 data = js.loads(r.read().decode('utf-8-sig'))
             remote = data.get('version', '0')
-            current = _get_current_version()
-            if _version_tuple(remote) > _version_tuple(current):
-                _update_cache.update({
-                    'checked': True, 'available': True,
-                    'version': remote,
-                    'download_url': data.get('download_url', ''),
-                    'message': f'يوجد تحديث رسمي جديد v{remote} (حالياً v{current}) - إصلاح الحسابات والخزينة.'
-                })
-                return
-            else:
-                _update_cache.update({'checked': True, 'available': False, 'version': current, 'message': f'البرنامج محدّث لآخر إصدار (v{current})'})
-                return
+            if best_remote is None or _version_tuple(remote) > _version_tuple(best_remote):
+                best_remote = remote
+                best_data = data
         except Exception:
             continue
 
-    _update_cache.update({'checked': True, 'available': False, 'message': 'تعذر الاتصال بخادم التحديثات'})
+    if best_remote and _version_tuple(best_remote) > _version_tuple(current):
+        _update_cache.update({
+            'checked': True, 'available': True,
+            'version': best_remote,
+            'download_url': best_data.get('download_url', ''),
+            'message': f'يوجد تحديث رسمي جديد v{best_remote} (حالياً v{current}) - إصلاح الحسابات والخزينة.'
+        })
+    elif best_remote:
+        _update_cache.update({'checked': True, 'available': False, 'version': current, 'message': f'البرنامج محدّث لآخر إصدار (v{current})'})
+    else:
+        _update_cache.update({'checked': True, 'available': False, 'message': 'تعذر الاتصال بخادم التحديثات'})
 
 def _periodic_update_checker():
     import time
@@ -1310,9 +1315,28 @@ def employee_close_shift():
         else:
             diff_note = " (مطابق 100%)"
 
-        # NOTE: Money STAYS in the cash register / drawer for the next cashier.
-        # It is NOT deposited into the private safe vault on employee shift close!
-        
+        # فحص هل اختار الموظف أو الإدارة توريد الكاش للخزنة الخاصة عند تسكير الوردية
+        transfer_to_safe = request.form.get('transfer_to_safe') in ('yes', '1', 'true', 'on')
+        safe_deposit_val = request.form.get('safe_deposit_lbp', '').strip()
+        safe_deposit_lbp = float(safe_deposit_val) if safe_deposit_val and float(safe_deposit_val) > 0 else 0.0
+
+        safe_transfer_note = ""
+        drawer_remaining_cash = actual_cash
+        if transfer_to_safe and safe_deposit_lbp > 0:
+            try:
+                # تسجيل إيداع بالخزنة الخاصة
+                transfer_id = accounting.add_safe_transfer(
+                    amount_lbp=safe_deposit_lbp,
+                    note=f"توريد كاش تسكير وردية ({emp_name})",
+                    transferred_by=emp_name,
+                    operation_type='deposit',
+                    employee_id=emp_id
+                )
+                drawer_remaining_cash = max(0.0, actual_cash - safe_deposit_lbp)
+                safe_transfer_note = f" (تم ترحيل {safe_deposit_lbp:,.0f} ل.ل إلى الخزنة الخاصة 🏦)"
+            except Exception as e:
+                safe_transfer_note = f" (تنبيه: تعذر إيداع الكاش بالخزنة: {e})"
+
         # Log shift closing in employee performance record
         try:
             accounting.log_shift_close(
@@ -1320,7 +1344,7 @@ def employee_close_shift():
                 employee_name=emp_name,
                 total_sales_lbp=total_sales_lbp,
                 cash_sales_lbp=actual_cash,
-                production_note=f"تسكير وردية ومطابقة الصندوق{diff_note}",
+                production_note=f"تسكير وردية ومطابقة الصندوق{diff_note}{safe_transfer_note}",
                 date=today_str
             )
         except Exception:
@@ -1334,10 +1358,10 @@ def employee_close_shift():
         session.pop('admin_logged_in', None)
         session.pop('is_admin', None)
         session['handover_prev_employee'] = emp_name
-        session['handover_actual_cash'] = actual_cash
-        session['handover_diff_note'] = diff_note
+        session['handover_actual_cash'] = drawer_remaining_cash
+        session['handover_diff_note'] = f"{diff_note}{safe_transfer_note}"
         
-        flash(f"✅ تم تسكير وردية {emp_name} بنجاح ومقارنة الصندوق{diff_note}. يرجى من الموظف التالي تسجيل الدخول لاستلام الصندوق.", "success")
+        flash(f"✅ تم تسكير وردية {emp_name} بنجاح ومقارنة الصندوق{diff_note}{safe_transfer_note}. يرجى من الموظف التالي تسجيل الدخول لاستلام الصندوق.", "success")
         return redirect(url_for('employee_login'))
 
     return render_template(
@@ -1483,34 +1507,46 @@ def safe_page():
 
 
 @app.route('/safe/transfer', methods=['POST'])
-@admin_required
 def safe_transfer():
-    """إضافة عملية إيداع أو سحب للخزنة مع دعم الليرة والدولار."""
+    """إضافة عملية إيداع أو سحب للخزنة مع دعم الليرة والدولار والتحقق من الصلاحيات."""
+    if 'employee_id' not in session and not session.get('is_admin') and not session.get('admin_authenticated'):
+        return redirect(url_for('employee_login'))
+
+    op_type = request.form.get('operation_type', 'deposit').strip()
+    # عمليات السحب فقط محصورة بالمدير:
+    if op_type == 'withdraw' and not session.get('is_admin') and not session.get('admin_authenticated') and session.get('employee_role') != 'admin':
+        flash('⚠️ عذراً، عمليات السحب من الخزنة مخصصة لمدير النظام فقط!', 'danger')
+        return redirect(url_for('safe_page'))
+
     try:
         amount_lbp = float(request.form.get('amount_lbp') or 0)
         amount_usd = float(request.form.get('amount_usd') or 0)
-        op_type = request.form.get('operation_type', 'deposit').strip()
         note = request.form.get('note', '').strip()
         transferred_by = request.form.get('transferred_by', session.get('employee_name', 'المدير')).strip()
 
         if amount_lbp <= 0 and amount_usd <= 0:
-            flash('يرجى إدخال مبلغ صحيح أكبر من صفر بالليرة أو الدولار', 'error')
+            flash('يرجى إدخال مبلغ صحيح أكبر من صفر بالليرة أو الدولار', 'warning')
             return redirect(url_for('safe_page'))
 
         if not note:
             note = 'إيداع نقدي في الخزنة' if op_type == 'deposit' else 'سحب نقدي من الخزنة'
+
+        settings = accounting.get_settings()
+        rate = float(settings.get('exchange_rate') or 89500.0)
 
         accounting.add_safe_transfer(
             amount_lbp=amount_lbp,
             amount_usd=amount_usd,
             note=note,
             transferred_by=transferred_by,
-            operation_type=op_type
+            rate=rate,
+            operation_type=op_type,
+            employee_id=session.get('employee_id')
         )
         op_title = "إيداع" if op_type == 'deposit' else "سحب"
         flash(f'تم تسجيل عملية {op_title} بنجاح في الخزنة الخاصة ✓', 'success')
     except Exception as e:
-        flash(f'خطأ أثناء الحفظ: {str(e)}', 'error')
+        flash(f'خطأ أثناء الحفظ في الخزنة: {str(e)}', 'danger')
 
     return redirect(url_for('safe_page'))
 
@@ -1722,32 +1758,41 @@ def api_item_quick_add():
         return jsonify({'success': False, 'error': str(e)}), 400
 
 @app.route('/safe/quick_transfer', methods=['POST'])
-@admin_required
 def safe_quick_transfer():
+    if 'employee_id' not in session and not session.get('is_admin') and not session.get('admin_authenticated'):
+        return jsonify({'success': False, 'error': 'يجب تسجيل الدخول لتسجيل حركة بالخزنة'}), 401
+
     try:
         data = request.get_json() if request.is_json else request.form
         amount_lbp = float(data.get('amount_lbp') or 0)
         amount_usd = float(data.get('amount_usd') or 0)
-        emp_name = data.get('employee_name') or session.get('employee_name', 'المدير العام')
-        note = data.get('note', 'توريد نقدي إلى الخزنة الخاصة').strip()
-        
+        emp_name = data.get('employee_name') or session.get('employee_name', 'الكاشير')
+        note = (data.get('note') or 'توريد نقدي إلى الخزنة الخاصة').strip()
+
         settings = accounting.get_settings()
         rate = float(settings.get('exchange_rate') or 89500.0)
-        if amount_usd > 0 and amount_lbp == 0:
-            amount_lbp = amount_usd * rate
-        elif amount_lbp > 0 and amount_usd == 0:
-            amount_usd = amount_lbp / rate
+        if amount_usd > 0 and amount_lbp <= 0:
+            amount_lbp = round(amount_usd * rate, 0)
+        elif amount_lbp > 0 and amount_usd <= 0:
+            amount_usd = round(amount_lbp / rate, 2)
 
-        accounting.add_safe_transfer(
+        if amount_lbp <= 0 and amount_usd <= 0:
+            return jsonify({'success': False, 'error': 'يرجى إدخال مبلغ صحيح أكبر من صفر'}), 400
+
+        transfer_id = accounting.add_safe_transfer(
             amount_lbp=amount_lbp,
+            amount_usd=amount_usd,
             note=f"{note} (المسلّم: {emp_name})",
             transferred_by=emp_name,
-            rate=rate
+            rate=rate,
+            operation_type='deposit',
+            employee_id=session.get('employee_id')
         )
         new_balance = accounting.get_safe_balance()
         return jsonify({
             'success': True,
-            'message': 'تم ترحيل المبلغ إلى الخزنة الخاصة بنجاح',
+            'transfer_id': transfer_id,
+            'message': f'تم ترحيل {amount_lbp:,.0f} ل.ل إلى الخزنة الخاصة بنجاح',
             'balance': new_balance
         })
     except Exception as e:
@@ -1932,7 +1977,6 @@ def export_reports_csv():
 # =========================================================================
 
 @app.route('/safe/transfer_daily', methods=['POST'])
-@admin_required
 def safe_transfer_daily():
     """نقل وترحيل صافي نقدية اليوم إلى الخزنة الخاصة مباشرة بنقرة واحدة."""
     if 'employee_id' not in session and not session.get('is_admin') and not session.get('admin_authenticated'):
@@ -1958,7 +2002,24 @@ def safe_transfer_daily():
         )
         flash(f"✓ تم ترحيل مبلغ {res['amount_lbp']:,.0f} ل.ل بنجاح إلى الخزنة الخاصة ليوم {target_date}!", "success")
     except Exception as e:
-        flash(f"خطأ أثناء ترحيل الأموال للخزنة: {e}", "danger")
+        flash(f"تنبيه أثناء الترحيل للخزنة: {e}", "warning")
+
+    next_url = request.form.get('next') or request.referrer or url_for('safe_page')
+    return redirect(next_url)
+
+@app.route('/safe/transfer_drawer_total', methods=['POST'])
+def safe_transfer_drawer_total():
+    """ترحيل كامل الرصيد النقدي المتراكم بالدرج إلى الخزنة الخاصة بنقرة واحدة."""
+    if 'employee_id' not in session and not session.get('is_admin') and not session.get('admin_authenticated'):
+        return redirect(url_for('employee_login'))
+
+    transferred_by = session.get('employee_name') or session.get('admin_name') or 'المدير'
+    note = request.form.get('note', '').strip() or "ترحيل كامل كاش الدرج المتراكم إلى الخزنة الخاصة"
+    try:
+        res = accounting.transfer_drawer_total_to_safe(transferred_by=transferred_by, note=note)
+        flash(f"✓ تم ترحيل كامل كاش الدرج ({res['amount_lbp']:,.0f} ل.ل) بنجاح إلى الخزنة الخاصة!", "success")
+    except Exception as e:
+        flash(f"تنبيه: {e}", "warning")
 
     next_url = request.form.get('next') or request.referrer or url_for('safe_page')
     return redirect(next_url)

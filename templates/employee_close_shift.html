@@ -117,15 +117,60 @@
                     <div id="diffBadge" class="hidden text-xs font-mono font-bold p-3 rounded-xl text-center transition-all duration-300 shadow-inner"></div>
                 </div>
 
-                <!-- Drawer Retention Notice (المال يبقى بالدرج لتسليمه للموظف التالي) -->
-                <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1.5 text-xs">
+                <!-- Safe Transfer Option (إيداع بالكاش في الخزنة الخاصة) -->
+                <div class="bg-gradient-to-r from-amber-950/40 via-slate-900 to-indigo-950/40 border border-amber-500/40 rounded-2xl p-4 space-y-3">
+                    <label class="flex items-center justify-between cursor-pointer select-none">
+                        <div class="flex items-center gap-2.5">
+                            <input type="checkbox" name="transfer_to_safe" id="chkTransferToSafe" value="yes" onchange="toggleSafeOptions()" class="w-4 h-4 rounded text-amber-500 focus:ring-amber-400 bg-slate-950 border-slate-700">
+                            <div>
+                                <span class="text-xs font-black text-amber-300 block">🏦 توريد الكاش إلى الخزنة الخاصة (صندوق المالك)</span>
+                                <span class="text-[10px] text-slate-400">نقل النقدية من الدرج إلى الخزنة وتصفير عهدة الوردية</span>
+                            </div>
+                        </div>
+                        <span class="text-[10px] text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800">متاح للموظف</span>
+                    </label>
+
+                    <div id="safeTransferOptions" class="hidden space-y-3 pt-3 border-t border-slate-800 text-xs">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-300 mb-1">المبلغ المراد إيداعه بالخزنة (ل.ل):</label>
+                                <input type="number" step="1000" name="safe_deposit_lbp" id="safeDepositLBP" oninput="updateDrawerRemainder()" placeholder="0" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-black text-base px-3 py-2 rounded-xl outline-none focus:border-amber-400">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-300 mb-1">المتبقي بالدرج للموظف التالي (فكة/عهدة):</label>
+                                <input type="text" id="drawerRemainingDisplay" readonly value="0 ل.ل" class="w-full bg-slate-950/60 border border-slate-800 text-slate-300 font-mono text-sm px-3 py-2.5 rounded-xl outline-none">
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-slate-400">سيتم تسجيل إيداع رسمي في الخزنة باسمك مع حماية كاملة لسجل الصندوق.</p>
+                    </div>
+                </div>
+
+                <!-- Drawer Retention Notice (الوضع الافتراضي عند عدم التوريد) -->
+                <div id="drawerStayNotice" class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1.5 text-xs">
                     <div class="flex items-center gap-2 text-slate-200 font-bold">
                         <span class="text-base">🏧</span>
                         <span>تسليم الصندوق وعهدة الدرج للموظف التالي:</span>
                     </div>
                     <p class="text-[11px] text-slate-400 leading-relaxed pr-6">
-                        يبقى الكاش الفعلي في درج الصندوق لتسليمه مباشرة للوردية القادمة دون إيداعه في الخزنة الخاصة.
+                        في حال عدم تفعيل التوريد للخزنة، يبقى الكاش الفعلي في درج الصندوق لتسليمه مباشرة للموظف التالي.
                     </p>
+                </div>
+
+                <!-- Submit and Print Action Buttons -->
+                <div class="pt-2 space-y-2">
+                    <button type="submit" id="submitCloseBtn" disabled class="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 font-black py-3.5 rounded-2xl text-sm transition shadow-lg shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer">
+                        <i class="fa-solid fa-lock"></i>
+                        <span id="submitCloseBtnText">ضع المبلغ أولاً لتأكيد تسكير الحساب</span>
+                    </button>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="printShiftSlip()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 rounded-xl text-xs transition border border-slate-700 flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-print"></i>
+                            <span>طباعة إيصال الصندوق 🖨️</span>
+                        </button>
+                        <a href="{{ url_for('index') }}" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl text-xs font-bold transition border border-slate-800 flex items-center justify-center">
+                            إلغاء والعودة
+                        </a>
+                    </div>
                 </div>
             </form>
         </div>
@@ -303,6 +348,43 @@
                 return msg;
             }
         });
+
+        function toggleSafeOptions() {
+            const chk = document.getElementById('chkTransferToSafe');
+            const opts = document.getElementById('safeTransferOptions');
+            const stayNotice = document.getElementById('drawerStayNotice');
+            const safeInput = document.getElementById('safeDepositLBP');
+            const actualInput = document.getElementById('actualCashInput');
+
+            if (chk.checked) {
+                opts.classList.remove('hidden');
+                if (stayNotice) stayNotice.classList.add('hidden');
+                const actual = parseFloat(actualInput.value) || 0;
+                if (!safeInput.value || parseFloat(safeInput.value) <= 0) {
+                    safeInput.value = actual > 0 ? actual : expectedCash;
+                }
+                updateDrawerRemainder();
+            } else {
+                opts.classList.add('hidden');
+                if (stayNotice) stayNotice.classList.remove('hidden');
+                safeInput.value = '';
+            }
+        }
+
+        function updateDrawerRemainder() {
+            const actualInput = document.getElementById('actualCashInput');
+            const safeInput = document.getElementById('safeDepositLBP');
+            const remDisplay = document.getElementById('drawerRemainingDisplay');
+
+            const actual = parseFloat(actualInput.value) || 0;
+            const safeAmt = parseFloat(safeInput.value) || 0;
+            const rem = Math.max(0, actual - safeAmt);
+            if (remDisplay) remDisplay.value = rem.toLocaleString() + ' ل.ل';
+        }
+
+        function printShiftSlip() {
+            window.print();
+        }
 
         // Initialize state
         window.addEventListener('DOMContentLoaded', () => {

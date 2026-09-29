@@ -106,7 +106,7 @@
         </div>
 
         <div class="flex items-center gap-2">
-            {% if daily_transfer_status.recommended_transfer_lbp > 0 or not daily_transfer_status.already_transferred %}
+            {% if daily_transfer_status and daily_transfer_status.recommended_transfer_lbp > 0 %}
             <form action="{{ url_for('safe_transfer_daily') }}" method="POST">
                 <input type="hidden" name="target_date" value="{{ target_date }}">
                 <input type="hidden" name="amount_lbp" value="{{ daily_transfer_status.recommended_transfer_lbp }}">

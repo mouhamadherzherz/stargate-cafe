@@ -124,32 +124,42 @@
                 <span>تاريخ الترحيل المحاسبي: <strong class="text-amber-300 font-mono">{{ target_date }}</strong></span>
             </div>
 
-            <form action="{{ url_for('safe_transfer_daily') }}" method="POST" class="flex items-center gap-2 w-full sm:w-auto">
-                <input type="hidden" name="target_date" value="{{ target_date }}">
-                <input type="hidden" name="amount_lbp" value="{{ daily_transfer_status.recommended_transfer_lbp }}">
-                <input type="hidden" name="amount_usd" value="{{ daily_transfer_status.recommended_transfer_usd }}">
-                <input type="hidden" name="note" value="ترحيل صافي مبيعات يوم {{ target_date }}">
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+                {% if daily_transfer_status and daily_transfer_status.recommended_transfer_lbp > 0 %}
+                <form action="{{ url_for('safe_transfer_daily') }}" method="POST" class="w-full sm:w-auto">
+                    <input type="hidden" name="target_date" value="{{ target_date }}">
+                    <input type="hidden" name="amount_lbp" value="{{ daily_transfer_status.recommended_transfer_lbp }}">
+                    <input type="hidden" name="amount_usd" value="{{ daily_transfer_status.recommended_transfer_usd }}">
+                    <input type="hidden" name="note" value="ترحيل صافي مبيعات يوم {{ target_date }}">
 
-                {% if daily_transfer_status.recommended_transfer_lbp > 0 or not daily_transfer_status.already_transferred %}
-                <button type="submit" 
-                        class="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black px-6 py-3 rounded-xl text-xs transition shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-95">
-                    <i class="fa-solid fa-arrow-down-to-bracket text-sm"></i>
-                    <span>نقل صافي مبيعات اليوم ({{ daily_transfer_status.recommended_transfer_lbp|format_currency }} ل.ل) إلى الخزنة الآن 🏦</span>
-                </button>
+                    <button type="submit" 
+                            class="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black px-6 py-3 rounded-xl text-xs transition shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
+                        <i class="fa-solid fa-arrow-down-to-bracket text-sm"></i>
+                        <span>نقل صافي مبيعات اليوم ({{ daily_transfer_status.recommended_transfer_lbp|format_currency }} ل.ل) إلى الخزنة الآن 🏦</span>
+                    </button>
+                </form>
+                {% elif drawer_status and drawer_status.total_untransferred_lbp > 0 %}
+                <form action="{{ url_for('safe_transfer_drawer_total') }}" method="POST" class="w-full sm:w-auto">
+                    <button type="submit" 
+                            class="w-full sm:w-auto bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-400 hover:to-emerald-500 text-slate-950 font-black px-6 py-3 rounded-xl text-xs transition shadow-xl shadow-amber-500/30 flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
+                        <i class="fa-solid fa-vault text-base"></i>
+                        <span>ترحيل كامل كاش الدرج المتوفر ({{ drawer_status.total_untransferred_lbp|format_currency }} ل.ل) إلى الخزنة الآن 🏦</span>
+                    </button>
+                </form>
                 {% else %}
-                <button type="button" onclick="document.getElementById('safeCustomAmountInput').focus(); document.getElementById('safeManualTransferForm').scrollIntoView({behavior:'smooth'});"
-                        class="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold px-5 py-2.5 rounded-xl text-xs transition border border-amber-500/30 flex items-center justify-center gap-1.5">
+                <button type="button" onclick="focusManualSafeForm()"
+                        class="w-full sm:w-auto bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold px-5 py-2.5 rounded-xl text-xs transition border border-amber-500/30 flex items-center justify-center gap-1.5 cursor-pointer">
                     <i class="fa-solid fa-plus-circle"></i>
-                    <span>ترحيل مبلغ إضافي مخصص للخزنة</span>
+                    <span>إيداع مبلغ مخصص في الخزنة الخاصة</span>
                 </button>
                 {% endif %}
-            </form>
+            </div>
         </div>
         {% endif %}
     </div>
 
 
-<!-- FLASH BANNER: UN-TRANSFERRED CASH IN DRAWER (يشمل كاش الأمس 720,000 ل.ل) -->
+<!-- FLASH BANNER: UN-TRANSFERRED CASH IN DRAWER -->
     {% if drawer_status and drawer_status.total_untransferred_lbp > 0 %}
     <div class="bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border-2 border-amber-500/80 rounded-3xl p-5 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div class="flex items-center gap-4">
@@ -172,15 +182,21 @@
 
         <div class="flex items-center gap-2 flex-wrap">
             {% if drawer_status.past_untransferred_lbp > 0 %}
-            <button type="button" onclick="quickFillSafe({{ drawer_status.past_untransferred_lbp }}, 'deposit', 'ترحيل كاش مبيعات الأمس بالكامل')"
-                    class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-500/25 flex items-center gap-1.5 active:scale-95">
-                <span>⚡ نقل كاش الأمس ({{ drawer_status.past_untransferred_lbp|format_currency }} ل.ل) للخزنة الآن</span>
-            </button>
+            <form action="{{ url_for('safe_transfer_daily') }}" method="POST">
+                <input type="hidden" name="amount_lbp" value="{{ drawer_status.past_untransferred_lbp }}">
+                <input type="hidden" name="note" value="ترحيل كاش مبيعات الأمس المتراكم">
+                <button type="submit"
+                        class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-500/25 flex items-center gap-1.5 active:scale-95 cursor-pointer">
+                    <span>⚡ نقل كاش الأمس ({{ drawer_status.past_untransferred_lbp|format_currency }} ل.ل) للخزنة الآن</span>
+                </button>
+            </form>
             {% endif %}
-            <button type="button" onclick="quickFillSafe({{ drawer_status.total_untransferred_lbp }}, 'deposit', 'ترحيل كامل الكاش المتاح بالدرج للخزنة')"
-                    class="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-4 py-2.5 rounded-xl text-xs transition shadow-lg shadow-emerald-600/25 flex items-center gap-1.5 active:scale-95">
-                <span>💰 نقل كامل الكاش المتوفر</span>
-            </button>
+            <form action="{{ url_for('safe_transfer_drawer_total') }}" method="POST">
+                <button type="submit"
+                        class="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-4 py-2.5 rounded-xl text-xs transition shadow-lg shadow-emerald-600/25 flex items-center gap-1.5 active:scale-95 cursor-pointer">
+                    <span>💰 نقل كامل الكاش المتوفر ({{ drawer_status.total_untransferred_lbp|format_currency }} ل.ل)</span>
+                </button>
+            </form>
         </div>
     </div>
     {% endif %}
@@ -302,7 +318,7 @@
                     </div>
                 </div>
 
-                <form action="{{ url_for('safe_transfer') }}" method="POST" class="space-y-3.5">
+                <form action="{{ url_for('safe_transfer') }}" method="POST" id="safeManualTransferForm" class="space-y-3.5">
                     <input type="hidden" name="operation_type" id="safeOpType" value="deposit">
 
                     <div>
@@ -471,6 +487,18 @@ function quickFillSafe(amountLBP, opType, note) {
         document.getElementById('safeNote').value = note;
     }
     window.scrollTo({ top: document.getElementById('safeAmountLBP').offsetTop - 100, behavior: 'smooth' });
+}
+
+function focusManualSafeForm(amountLBP, note) {
+    setOpType('deposit');
+    const input = document.getElementById('safeAmountLBP');
+    const noteInput = document.getElementById('safeNote');
+    if (amountLBP && input) input.value = amountLBP;
+    if (note && noteInput) noteInput.value = note;
+    calcFromLBP();
+    const form = document.getElementById('safeManualTransferForm');
+    if (form) form.scrollIntoView({ behavior: 'smooth' });
+    if (input) input.focus();
 }
 </script>
 {% endblock %}

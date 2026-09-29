@@ -2313,22 +2313,37 @@ def check_daily_safe_transfer_status(target_date=None):
 def transfer_daily_net_to_safe(target_date=None, transferred_by='المدير', custom_amount_lbp=None, custom_amount_usd=None, note=None):
     """
     ترحيل صافي مبيعات يوم محدد ونقلها مباشرة للخزنة الخاصة.
+    يدعم تمرير مبالغ مخصصة أو استخدام صافي اليوم أو كاش الدرج المتوفر.
     """
     target_date = target_date or get_business_date()
     status = check_daily_safe_transfer_status(target_date=target_date)
     settings = get_settings()
     rate = float(settings.get('exchange_rate') or 89500.0)
 
-    amount_lbp = float(custom_amount_lbp) if custom_amount_lbp is not None and float(custom_amount_lbp) > 0 else status['recommended_transfer_lbp']
-    if amount_lbp <= 0 and status['total_sales_lbp'] > 0:
-        amount_lbp = status['total_sales_lbp']
+    # 1. تحديد المبلغ بالليرة
+    amount_lbp = 0.0
+    if custom_amount_lbp is not None and float(custom_amount_lbp) > 0:
+        amount_lbp = float(custom_amount_lbp)
+    elif status['recommended_transfer_lbp'] > 0:
+        amount_lbp = float(status['recommended_transfer_lbp'])
+    elif status['total_sales_lbp'] > 0:
+        amount_lbp = float(status['total_sales_lbp'])
+    else:
+        # فحص هل يوجد كاش غير مرحّل في الدرج عموماً
+        drawer = get_drawer_cash_status()
+        if drawer.get('total_untransferred_lbp', 0.0) > 0:
+            amount_lbp = float(drawer['total_untransferred_lbp'])
 
+    # 2. معالجة المبلغ بالدولار
     if custom_amount_usd is not None and float(custom_amount_usd) > 0:
         amount_usd = float(custom_amount_usd)
         if amount_lbp <= 0:
             amount_lbp = round(amount_usd * rate, 0)
     else:
         amount_usd = round(amount_lbp / rate, 2) if rate > 0 else 0.0
+
+    if amount_lbp <= 0 and amount_usd <= 0:
+        raise ValueError("لا يوجد رصيد نقدي متاح للترحيل (المبلغ 0 ل.ل). يرجى إدخال المبلغ المراد نقله يدوياً.")
 
     transfer_note = note.strip() if note and note.strip() else f"ترحيل صافي مبيعات يوم {target_date}"
 
@@ -2348,6 +2363,40 @@ def transfer_daily_net_to_safe(target_date=None, transferred_by='المدير', 
         'amount_lbp': amount_lbp,
         'amount_usd': amount_usd,
         'note': transfer_note
+    }
+
+def transfer_drawer_total_to_safe(transferred_by='المدير', note=None):
+    """
+    ترحيل كامل الرصيد النقدي المتراكم في درج الكاشير إلى الخزنة الخاصة (صندوق المالك).
+    """
+    drawer = get_drawer_cash_status()
+    total_lbp = float(drawer.get('total_untransferred_lbp') or 0.0)
+    settings = get_settings()
+    rate = float(settings.get('exchange_rate') or 89500.0)
+    total_usd = float(drawer.get('total_untransferred_usd') or 0.0)
+    if total_usd <= 0 and total_lbp > 0:
+        total_usd = round(total_lbp / rate, 2) if rate > 0 else 0.0
+
+    if total_lbp <= 0 and total_usd <= 0:
+        raise ValueError("درج الكاشير فارغ حالياً ولا توجد مبالغ نقدية غير مرحّلة.")
+
+    actual_note = note.strip() if note and note.strip() else "ترحيل كامل كاش الدرج المتراكم إلى الخزنة الخاصة"
+
+    transfer_id = add_safe_transfer(
+        amount_lbp=total_lbp,
+        amount_usd=total_usd,
+        note=actual_note,
+        transferred_by=transferred_by,
+        rate=rate,
+        operation_type='deposit'
+    )
+
+    return {
+        'success': True,
+        'transfer_id': transfer_id,
+        'amount_lbp': total_lbp,
+        'amount_usd': total_usd,
+        'note': actual_note
     }
 
 def get_hourly_sales_distribution(target_date=None):

@@ -1365,7 +1365,7 @@
                 <label class="block text-slate-300 font-bold mb-1">المبلغ المراد نقله (بالليرة اللبنانية ل.ل):</label>
                 <div class="flex gap-2">
                     <input type="number" id="safeAmountLBP" step="any" placeholder="مثال: 500000" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold rounded-xl px-3 py-2 text-sm focus:border-amber-500 focus:outline-none">
-                    <button type="button" onclick="document.getElementById('safeAmountLBP').value = '{{ summary.total_revenue_lbp }}'" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap border border-slate-700">
+                    <button type="button" onclick="document.getElementById('safeAmountLBP').value = '{{ drawer_status.total_untransferred_lbp if drawer_status and drawer_status.total_untransferred_lbp > 0 else (summary.total_revenue_lbp or 0) }}'" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap border border-slate-700">
                         كامل الكاش
                     </button>
                 </div>
