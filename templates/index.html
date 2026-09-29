@@ -77,17 +77,25 @@
             </div>
         </div>
         {% endif %}
-        <!-- 4. Grand Total Cash in Drawer -->
-        <div class="bg-slate-900/90 border border-emerald-500/40 p-2.5 rounded-2xl flex items-center justify-between shadow-sm">
+        <!-- 4. Available Cash In Drawer (صافي كاش الدرج الفعلي المتاح حالياً) -->
+        <div class="bg-slate-900/90 border {% if (drawer_status.total_untransferred_lbp or 0) > 0 %}border-emerald-500/40{% else %}border-slate-800{% endif %} p-2.5 rounded-2xl flex items-center justify-between shadow-sm" title="صافي الكاش الفعلي المتوفر في درج الكاشير الآن بعد خصم مبالغ الخزنة والمصاريف">
             <div>
-                <span class="text-[10px] text-emerald-400 font-bold block">💵 نقدية الكاش بالصندوق:</span>
-                <div class="text-base font-black font-mono text-emerald-400">
-                    {{ summary.total_revenue_lbp|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span>
+                <span class="text-[10px] text-emerald-400 font-bold block">💼 كاش الدرج المتوفر الآن:</span>
+                <div class="text-base font-black font-mono {% if (drawer_status.total_untransferred_lbp or 0) > 0 %}text-emerald-400{% else %}text-slate-400{% endif %}">
+                    {{ (drawer_status.total_untransferred_lbp or 0)|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span>
                 </div>
-                <span class="text-[9px] text-slate-400 font-mono">{{ summary.total_revenue_usd|to_usd }}</span>
+                <div class="text-[9px] font-mono font-bold flex items-center gap-1 mt-0.5">
+                    {% if (drawer_status.total_untransferred_lbp or 0) > 0 %}
+                    <span class="text-emerald-300">{{ (drawer_status.total_untransferred_usd or 0)|to_usd }}</span>
+                    <span class="text-slate-500">•</span>
+                    <span class="text-emerald-400 font-sans">متاح بالصندوق</span>
+                    {% else %}
+                    <span class="text-amber-400 font-sans font-bold">تم ترحيل الكاش كاملاً للخزنة 🔒</span>
+                    {% endif %}
+                </div>
             </div>
-            <div class="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-base">
-                💰
+            <div class="w-8 h-8 rounded-xl {% if (drawer_status.total_untransferred_lbp or 0) > 0 %}bg-emerald-500/20 text-emerald-400{% else %}bg-slate-800 text-slate-500{% endif %} flex items-center justify-center text-base">
+                💼
             </div>
         </div>
 

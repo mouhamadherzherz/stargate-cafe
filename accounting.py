@@ -1024,6 +1024,19 @@ def get_daily_summary(target_date=None):
     """, (target_date,))
     exp_res = dict(cursor.fetchone() or {})
 
+    # 6. Safe Transfers for this day (المرحل للخزنة الخاصة لهذا اليوم)
+    cursor.execute("""
+        SELECT
+            COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN 0 ELSE amount_lbp END), 0) as safe_deposit_lbp,
+            COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN amount_lbp ELSE 0 END), 0) as safe_withdraw_lbp,
+            COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN 0 ELSE amount_usd END), 0) as safe_deposit_usd,
+            COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN amount_usd ELSE 0 END), 0) as safe_withdraw_usd,
+            COUNT(id) as transfers_count
+        FROM safe_transfers
+        WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?) OR note LIKE ?)
+    """, (target_date, target_date, f"%{target_date}%"))
+    safe_day_row = dict(cursor.fetchone() or {})
+
     conn.close()
 
     total_production_lbp = all_orders['total_lbp']
@@ -1037,9 +1050,17 @@ def get_daily_summary(target_date=None):
     actual_cash_in_lbp = cash_sales_lbp + debt_collected_lbp
     actual_cash_in_usd = round(actual_cash_in_lbp / rate, 2) if rate > 0 else 0.0
 
-    # Net Cash in Register = Actual Cash In - Expenses
+    # Net Cash in Register Before Safe = Actual Cash In - Expenses
     net_cash_profit_lbp = actual_cash_in_lbp - exp_res['total_lbp']
     net_cash_profit_usd = round(net_cash_profit_lbp / rate, 2) if rate > 0 else 0.0
+
+    # صافي ما تم ترحيله للخزنة اليوم
+    safe_transferred_day_lbp = max(0.0, float(safe_day_row.get('safe_deposit_lbp') or 0.0) - float(safe_day_row.get('safe_withdraw_lbp') or 0.0))
+    safe_transferred_day_usd = round(safe_transferred_day_lbp / rate, 2) if rate > 0 else 0.0
+
+    # المتبقي الفعلي في درج الصندوق لهذا اليوم بعد خصم المصاريف والخزنة
+    drawer_remaining_lbp = max(0.0, net_cash_profit_lbp - safe_transferred_day_lbp)
+    drawer_remaining_usd = round(drawer_remaining_lbp / rate, 2) if rate > 0 else 0.0
 
     grand_totals = {
         'revenue_lbp': actual_cash_in_lbp,
@@ -1052,6 +1073,10 @@ def get_daily_summary(target_date=None):
         'debt_sales_usd': round(debt_sales_lbp / rate, 2) if rate > 0 else 0.0,
         'debt_collected_lbp': debt_collected_lbp,
         'debt_collected_usd': round(debt_collected_lbp / rate, 2) if rate > 0 else 0.0,
+        'transferred_to_safe_lbp': safe_transferred_day_lbp,
+        'transferred_to_safe_usd': safe_transferred_day_usd,
+        'drawer_remaining_lbp': drawer_remaining_lbp,
+        'drawer_remaining_usd': drawer_remaining_usd,
         'net_profit_lbp': net_cash_profit_lbp,
         'net_profit_usd': net_cash_profit_usd
     }
@@ -1064,6 +1089,13 @@ def get_daily_summary(target_date=None):
         'others': others_res,
         'open_tabs': open_tabs_res,
         'expenses': exp_res,
+        'safe_day': {
+            'transferred_lbp': safe_transferred_day_lbp,
+            'transferred_usd': safe_transferred_day_usd,
+            'deposits_lbp': float(safe_day_row.get('safe_deposit_lbp') or 0.0),
+            'withdrawals_lbp': float(safe_day_row.get('safe_withdraw_lbp') or 0.0),
+            'transfers_count': int(safe_day_row.get('transfers_count') or 0)
+        },
         'debt_info': {
             'debt_sales_lbp': debt_sales_lbp,
             'debt_sales_usd': round(debt_sales_lbp / rate, 2) if rate > 0 else 0.0,
@@ -1077,6 +1109,10 @@ def get_daily_summary(target_date=None):
         'total_production_usd': total_production_usd,
         'total_revenue_lbp': actual_cash_in_lbp,
         'total_revenue_usd': actual_cash_in_usd,
+        'transferred_to_safe_lbp': safe_transferred_day_lbp,
+        'transferred_to_safe_usd': safe_transferred_day_usd,
+        'drawer_remaining_lbp': drawer_remaining_lbp,
+        'drawer_remaining_usd': drawer_remaining_usd,
         'net_profit_lbp': net_cash_profit_lbp,
         'net_profit_usd': net_cash_profit_usd,
         'cafe_share_pct': round((cafe_res['total_lbp'] / total_production_lbp * 100), 1) if total_production_lbp > 0 else 0,

@@ -333,14 +333,18 @@ function checkOtaUpdates() {
                 const badge = document.getElementById('navUpdateBtn');
                 const verText = document.getElementById('otaVersionText');
                 const msgText = document.getElementById('otaMessageText');
-                if (verText && data.version) verText.innerText = 'v' + data.version;
+                const verStr = data.version || '4.6.0';
+                if (verText) verText.innerText = 'v' + verStr;
                 if (msgText && data.message) msgText.innerText = data.message;
-                if (banner && sessionStorage.getItem('dismissOtaBanner') !== 'true') {
+                
+                // Show top banner if this specific version wasn't dismissed
+                if (banner && sessionStorage.getItem('dismissOtaBanner_' + verStr) !== 'true') {
                     banner.classList.remove('hidden');
                 }
+                // Always show pulsing nav badge
                 if (badge) {
                     badge.classList.remove('hidden');
-                    badge.classList.add('flex');
+                    badge.classList.add('inline-flex');
                 }
             }
         })
@@ -350,7 +354,9 @@ function checkOtaUpdates() {
 function dismissOtaBanner() {
     const banner = document.getElementById('otaUpdateBanner');
     if (banner) banner.classList.add('hidden');
-    sessionStorage.setItem('dismissOtaBanner', 'true');
+    const verText = document.getElementById('otaVersionText');
+    const ver = verText ? verText.innerText.replace('v', '').trim() : 'latest';
+    sessionStorage.setItem('dismissOtaBanner_' + ver, 'true');
 }
 
 function triggerUpdateModal() {

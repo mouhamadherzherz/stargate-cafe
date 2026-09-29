@@ -72,6 +72,20 @@
             {% endif %}
         {% endwith %}
 
+        <!-- Live OTA Alert on Login Screen -->
+        <div id="loginOtaAlert" class="hidden bg-gradient-to-r from-amber-600 via-indigo-600 to-purple-600 border border-amber-400 p-4 rounded-2xl text-center space-y-2.5 shadow-xl animate-pulse">
+            <div class="text-xs text-white font-black flex items-center justify-center gap-2">
+                <i class="fa-solid fa-cloud-arrow-down text-amber-200 text-sm"></i>
+                <span>يتوفر تحديث رسمي جديد للمنظومة: <strong id="loginOtaVer" class="text-amber-200 font-mono text-sm">v4.6.0</strong></span>
+            </div>
+            <p id="loginOtaMsg" class="text-[11px] text-white/90 leading-tight"></p>
+            <button type="button" id="btnLoginOta" onclick="startLoginOtaUpdate()" class="w-full bg-white hover:bg-amber-100 text-slate-950 font-black py-2.5 rounded-xl text-xs transition shadow flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+                <i class="fa-solid fa-circle-down text-indigo-600"></i>
+                <span>تحديث وتثبيت النسخة الجديدة الآن</span>
+            </button>
+            <div id="loginOtaProgress" class="hidden text-[11px] text-amber-200 font-bold bg-slate-950/60 p-2 rounded-xl border border-amber-500/40"></div>
+        </div>
+
         <!-- Quick PIN Form with Numpad -->
         <form method="POST" action="{{ url_for('employee_login') }}" class="space-y-4 relative z-10" id="loginForm">
             <div>
