@@ -29,7 +29,7 @@ def _get_current_version():
               os.path.join(base, '_internal', 'cafe_version.json')]:
         if os.path.exists(p):
             try:
-                with open(p, encoding='utf-8') as f:
+                with open(p, encoding='utf-8-sig') as f:
                     return json.load(f).get('version', '0.0.0')
             except Exception:
                 pass
