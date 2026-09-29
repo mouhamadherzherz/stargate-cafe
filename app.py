@@ -6,11 +6,86 @@ import os
 import secrets
 import sys
 import json
+import threading
 from datetime import datetime, timedelta
 from flask import Flask, render_template, render_template_string, request, redirect, url_for, flash, jsonify, session, send_file, Response
 import database
 from database import init_db, get_db, reset_operational_data
 import accounting
+
+# ============================================================
+# 🔄 نظام التحديث التلقائي عبر الإنترنت (OTA)
+# ============================================================
+_update_cache = {'checked': False, 'available': False, 'version': None, 'download_url': None, 'message': ''}
+
+def _get_base_dir():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+def _get_current_version():
+    base = _get_base_dir()
+    for p in [os.path.join(base, 'cafe_version.json'),
+              os.path.join(base, '_internal', 'cafe_version.json')]:
+        if os.path.exists(p):
+            try:
+                with open(p, encoding='utf-8') as f:
+                    return json.load(f).get('version', '0.0.0')
+            except Exception:
+                pass
+    return '0.0.0'
+
+def _version_tuple(v):
+    try:
+        return tuple(int(x) for x in str(v).lstrip('v').split('.'))
+    except Exception:
+        return (0,)
+
+def _background_update_check():
+    """يتحقق من التحديثات في الخلفية عبر Firebase و GitHub."""
+    import ssl, urllib.request as ur, json as js
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    
+    endpoints = [
+        'https://stargate-experts-default-rtdb.firebaseio.com/cafe_updates/latest.json',
+        'https://raw.githubusercontent.com/mouhamadherzherz/stargate-cafe/master/cafe_version.json'
+    ]
+    for url in endpoints:
+        try:
+            req = ur.Request(url, headers={'User-Agent': 'StargateCafe-OTA/4.4'})
+            with ur.urlopen(req, timeout=6, context=ctx) as r:
+                data = js.loads(r.read().decode('utf-8-sig'))
+            remote = data.get('version', '0')
+            current = _get_current_version()
+            if _version_tuple(remote) > _version_tuple(current):
+                _update_cache.update({
+                    'checked': True, 'available': True,
+                    'version': remote,
+                    'download_url': data.get('download_url', ''),
+                    'message': f'يوجد تحديث رسمي جديد v{remote} (حالياً v{current}) - إصلاح الحسابات والخزينة.'
+                })
+                return
+            else:
+                _update_cache.update({'checked': True, 'available': False, 'version': current, 'message': f'البرنامج محدّث لآخر إصدار (v{current})'})
+                return
+        except Exception:
+            continue
+
+    _update_cache.update({'checked': True, 'available': False, 'message': 'تعذر الاتصال بخادم التحديثات'})
+
+def _periodic_update_checker():
+    import time
+    while True:
+        try:
+            _background_update_check()
+        except Exception:
+            pass
+        time.sleep(300)
+
+# بدء الفحص الدوري في الخلفية
+threading.Thread(target=_periodic_update_checker, daemon=True).start()
 
 if getattr(sys, 'frozen', False):
     # In PyInstaller, check sys._MEIPASS, executable dir, and _internal
@@ -1894,3 +1969,89 @@ def api_safe_daily_status():
     target_date = request.args.get('date', '').strip() or accounting.get_business_date()
     status = accounting.check_daily_safe_transfer_status(target_date)
     return jsonify(status)
+
+
+# ============================================================
+# 🔄 API مسارات التحديث التلقائي OTA
+# ============================================================
+
+@app.route('/api/check_update')
+def api_check_update():
+    """يُعيد حالة التحديث المتاح (JSON)."""
+    # إعادة الفحص إذا كان الوقت قد مضى أو لم يتم الفحص بعد
+    if not _update_cache.get('checked'):
+        threading.Thread(target=_background_update_check, daemon=True).start()
+    return jsonify(_update_cache)
+
+
+@app.route('/api/force_check_update')
+def api_force_check_update():
+    """إعادة الفحص الفوري من GitHub."""
+    _update_cache['checked'] = False
+    _background_update_check()
+    return jsonify(_update_cache)
+
+
+@app.route('/api/do_update', methods=['POST'])
+def api_do_update():
+    """تنزيل وتثبيت التحديث."""
+    import subprocess, tempfile, shutil, zipfile as zf
+    try:
+        url = _update_cache.get('download_url', '')
+        if not url or not url.startswith('http'):
+            return jsonify({'success': False, 'error': 'رابط التحديث غير صالح'})
+
+        import ssl, urllib.request as ur
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+        base_dir = _get_base_dir()
+        zip_path = os.path.join(base_dir, 'cafe_update_package.zip')
+        tmp_dir  = os.path.join(base_dir, 'cafe_update_tmp')
+
+        # تحميل الـ ZIP
+        req = ur.Request(url, headers={'User-Agent': 'StargateCafe-OTA/4.4'})
+        with ur.urlopen(req, timeout=120, context=ctx) as resp, open(zip_path, 'wb') as out:
+            shutil.copyfileobj(resp, out)
+
+        # فك الضغط
+        if os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        os.makedirs(tmp_dir, exist_ok=True)
+        with zf.ZipFile(zip_path, 'r') as z:
+            for m in z.namelist():
+                if '..' not in m and not m.startswith('/'):
+                    z.extract(m, tmp_dir)
+
+        # إنشاء BAT يُطبّق التحديث بعد إغلاق البرنامج
+        bat = os.path.join(base_dir, 'apply_update_now.bat')
+        bat_content = f"""@echo off
+chcp 65001 >nul
+title تطبيق تحديث STARGATE CAFE
+echo جاري تطبيق التحديث...
+timeout /t 3 /nobreak >nul
+taskkill /F /IM STARGATE.exe >nul 2>&1
+taskkill /F /IM python.exe >nul 2>&1
+robocopy "{tmp_dir}" "{base_dir}" /E /IS /IT /XF "*.db" "*.sqlite" "cafe_accounting.db" /XD "data" "Safe_Backups" >nul
+if exist "{base_dir}\\_internal" (
+    robocopy "{tmp_dir}\\templates" "{base_dir}\\_internal\\templates" /E /IS >nul 2>&1
+    robocopy "{tmp_dir}\\static"    "{base_dir}\\_internal\\static"    /E /IS >nul 2>&1
+    copy /Y "{tmp_dir}\\*.py" "{base_dir}\\_internal\\" >nul 2>&1
+    copy /Y "{tmp_dir}\\cafe_version.json" "{base_dir}\\_internal\\" >nul 2>&1
+)
+rmdir /S /Q "{tmp_dir}" >nul 2>&1
+del /F /Q "{zip_path}" >nul 2>&1
+echo اكتمل التحديث! جاري إعادة التشغيل...
+cd /d "{base_dir}"
+if exist "STARGATE.exe" ( start "" "STARGATE.exe" ) else ( start "" pythonw.exe desktop_app.py )
+del "%~f0"
+"""
+        with open(bat, 'w', encoding='utf-8') as f:
+            f.write(bat_content)
+
+        subprocess.Popen([bat], shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        return jsonify({'success': True, 'message': 'جاري تطبيق التحديث... سيُعاد تشغيل البرنامج تلقائياً!'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
