@@ -291,11 +291,32 @@ def init_db(seed_items=True):
             note TEXT DEFAULT '',
             transferred_by TEXT DEFAULT 'المدير',
             operation_type TEXT DEFAULT 'deposit',
+            source TEXT DEFAULT 'drawer',
+            target TEXT DEFAULT 'safe',
+            employee_id INTEGER,
+            employee_name TEXT DEFAULT 'المدير',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
     except Exception:
         pass
+
+    # Financial Migrations
+    for col_sql in [
+        "ALTER TABLE expenses ADD COLUMN source TEXT DEFAULT 'drawer'",
+        "ALTER TABLE expenses ADD COLUMN employee_id INTEGER",
+        "ALTER TABLE expenses ADD COLUMN employee_name TEXT DEFAULT 'كاشير'",
+        "ALTER TABLE safe_transfers ADD COLUMN source TEXT DEFAULT 'drawer'",
+        "ALTER TABLE safe_transfers ADD COLUMN target TEXT DEFAULT 'safe'",
+        "ALTER TABLE safe_transfers ADD COLUMN employee_id INTEGER",
+        "ALTER TABLE safe_transfers ADD COLUMN employee_name TEXT DEFAULT 'المدير'",
+        "ALTER TABLE debt_payments ADD COLUMN employee_id INTEGER",
+        "ALTER TABLE debt_payments ADD COLUMN employee_name TEXT DEFAULT 'كاشير'",
+    ]:
+        try:
+            cursor.execute(col_sql)
+        except Exception:
+            pass
 
     # Professional Performance Indexes
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_orders_created_at ON cafe_orders(created_at)")

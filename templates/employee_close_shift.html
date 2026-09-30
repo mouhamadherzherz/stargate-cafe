@@ -63,24 +63,56 @@
             </button>
         </div>
 
-        <!-- 1. CASH REGISTER COMPARISON CARD (مقارنة الكاش مع الصندوق فقط بدون تفاصيل المبيع) -->
+        <!-- 1. CASH REGISTER COMPARISON CARD (مقارنة الكاش مع الصندوق بدقة محاسبية شاملة) -->
         <div class="space-y-3">
             
             <!-- Expected System Cash (الصندوق) -->
-            <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+            <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
                 <div class="flex items-center justify-between">
                     <span class="text-xs text-slate-400 font-bold flex items-center gap-1.5">
-                        <span>🏧</span> رصيد الصندوق المفترض (النظام):
+                        <span>🏧</span> رصيد الصندوق المفترض (النظام المحاسبي):
                     </span>
-                    <span class="text-[10px] text-slate-500 font-mono">درج الكاشير</span>
+                    <span class="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/60 font-mono">حساب دقيق 100%</span>
                 </div>
                 <div class="flex items-baseline justify-between pt-1">
                     <div class="text-xl sm:text-2xl font-black text-emerald-400 font-mono tracking-tight" id="expectedCashVal">
-                        {{ cash_sales_lbp|format_currency }} <span class="text-xs font-sans font-bold">ل.ل</span>
+                        {{ expected_cash_lbp|format_currency }} <span class="text-xs font-sans font-bold">ل.ل</span>
                     </div>
                     <div class="text-xs text-slate-400 font-mono font-bold">
-                        ≈ {{ ((cash_sales_lbp / exchange_rate)|round(2)) if exchange_rate else 0 }}$
+                        ≈ {{ ((expected_cash_lbp / exchange_rate)|round(2)) if exchange_rate else 0 }}$
                     </div>
+                </div>
+
+                <!-- Detailed Breakdown Pills (المعادلة المحاسبية الشفافة للدرج) -->
+                <div class="pt-2 border-t border-slate-800/80 grid grid-cols-2 gap-1.5 text-[10px]">
+                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800 flex justify-between">
+                        <span class="text-slate-400">💵 مبيعات كاش:</span>
+                        <span class="text-emerald-400 font-mono font-bold">+{{ cash_sales_lbp|format_currency }}</span>
+                    </div>
+                    {% if debt_collected_lbp > 0 %}
+                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800 flex justify-between">
+                        <span class="text-slate-400">🤝 تحصيل ديون:</span>
+                        <span class="text-cyan-400 font-mono font-bold">+{{ debt_collected_lbp|format_currency }}</span>
+                    </div>
+                    {% endif %}
+                    {% if opening_float > 0 %}
+                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800 flex justify-between">
+                        <span class="text-slate-400">💼 عهدة افتتاحية:</span>
+                        <span class="text-amber-400 font-mono font-bold">+{{ opening_float|format_currency }}</span>
+                    </div>
+                    {% endif %}
+                    {% if shift_expenses_lbp > 0 %}
+                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800 flex justify-between">
+                        <span class="text-slate-400">💸 مصاريف الصندوق:</span>
+                        <span class="text-rose-400 font-mono font-bold">-{{ shift_expenses_lbp|format_currency }}</span>
+                    </div>
+                    {% endif %}
+                    {% if prior_safe_transfers_lbp > 0 %}
+                    <div class="bg-slate-900/90 p-1.5 rounded-lg border border-slate-800 flex justify-between">
+                        <span class="text-slate-400">🏦 مرحل للخزنة سابقاً:</span>
+                        <span class="text-amber-400 font-mono font-bold">-{{ prior_safe_transfers_lbp|format_currency }}</span>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -109,7 +141,7 @@
                         <span class="text-[10px] text-slate-400 font-medium">إذا كان الصندوق مطابقاً بالتمام:</span>
                         <button type="button" onclick="fillExactMatch()" 
                                 class="text-[10px] bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold px-2.5 py-1 rounded-lg border border-slate-700 transition">
-                            ✓ مطابق لرصيد الصندوق ({{ cash_sales_lbp|format_currency }} ل.ل)
+                            ✓ مطابق لرصيد الصندوق ({{ expected_cash_lbp|format_currency }} ل.ل)
                         </button>
                     </div>
 
@@ -191,7 +223,7 @@
             <div class="border-b border-dashed border-black my-1"></div>
             <div class="flex justify-between font-bold">
                 <span>رصيد الصندوق المتوقع:</span>
-                <span class="font-mono">{{ cash_sales_lbp|format_currency }} ل.ل</span>
+                <span class="font-mono">{{ expected_cash_lbp|format_currency }} ل.ل</span>
             </div>
             <div class="flex justify-between font-bold">
                 <span>الكاش الفعلي المعدود:</span>
@@ -210,7 +242,7 @@
     </div>
 
     <script>
-        const expectedCash = {{ cash_sales_lbp }};
+        const expectedCash = {{ expected_cash_lbp }};
         let isShiftFormSubmitted = false;
 
         function fillExactMatch() {

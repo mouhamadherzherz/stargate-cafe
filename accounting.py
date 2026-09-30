@@ -850,20 +850,45 @@ def delete_pc_log(log_id):
 
 # ----------------- EXPENSES -----------------
 
-def add_expense(title, amount_lbp, category='مصاريف عامة', notes=''):
+def add_expense(title, amount_lbp, category='مصاريف عامة', notes='', source='drawer', employee_id=None, employee_name='كاشير'):
+    """
+    تسجيل مصروف جديد مع تحديد مصدر الدفع:
+    - 'drawer': مدفوع نقداً من درج الكاشير (يُخصم من كاش الدرج وصافي أرباح التشغيل)
+    - 'safe': مدفوع من الخزنة الخاصة (يُخصم من رصيد الخزنة مع تسجيل حركة سحب تلقائية)
+    """
     settings = get_settings()
     rate = float(settings.get('exchange_rate') or 89500.0)
     a_lbp = float(amount_lbp or 0)
     a_usd = round(a_lbp / rate, 2) if rate > 0 else 0.0
+    src = 'safe' if str(source).lower() in ('safe', 'خزنة', 'الخزنة') else 'drawer'
+    emp_name = str(employee_name or 'كاشير').strip()
 
     conn = get_db()
     cursor = conn.cursor()
     try:
+        # التأكد من وجود الأعمدة
+        try:
+            cursor.execute("ALTER TABLE expenses ADD COLUMN source TEXT DEFAULT 'drawer'")
+            cursor.execute("ALTER TABLE expenses ADD COLUMN employee_id INTEGER")
+            cursor.execute("ALTER TABLE expenses ADD COLUMN employee_name TEXT DEFAULT 'كاشير'")
+            conn.commit()
+        except Exception:
+            pass
+
+        now_str = get_local_now()
         cursor.execute("""
-        INSERT INTO expenses (title, amount_lbp, amount_usd, category, notes, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """, (title.strip(), a_lbp, a_usd, category, notes, get_local_now()))
+        INSERT INTO expenses (title, amount_lbp, amount_usd, category, notes, source, employee_id, employee_name, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (title.strip(), a_lbp, a_usd, category, notes.strip(), src, employee_id, emp_name, now_str))
         eid = cursor.lastrowid
+
+        # إذا كان المصروف مسدداً من الخزنة، نربطه بحركة سحب في الخزنة
+        if src == 'safe':
+            cursor.execute("""
+            INSERT INTO safe_transfers (amount_lbp, amount_usd, note, transferred_by, operation_type, source, target, employee_id, employee_name, created_at)
+            VALUES (?, ?, ?, ?, 'withdraw', 'safe', 'expense', ?, ?, ?)
+            """, (a_lbp, a_usd, f"مصروف من الخزنة: {title.strip()}", emp_name, employee_id, emp_name, now_str))
+
         conn.commit()
         conn.close()
         return True, eid
@@ -871,7 +896,8 @@ def add_expense(title, amount_lbp, category='مصاريف عامة', notes=''):
         conn.close()
         return False, str(e)
 
-def get_expenses(target_date=None, limit=50):
+def get_expenses(target_date=None, limit=200, source=None):
+    """جلب سجل المصاريف مع دعم التصفية باليوم ومصدر السداد."""
     conn = get_db()
     cursor = conn.cursor()
     query = "SELECT * FROM expenses WHERE 1=1"
@@ -879,18 +905,31 @@ def get_expenses(target_date=None, limit=50):
     if target_date:
         query += " AND DATE(datetime(created_at, '-5 hours')) = DATE(?)"
         params.append(target_date)
+    if source and source != 'all':
+        query += " AND source = ?"
+        params.append(source)
     query += " ORDER BY id DESC LIMIT ?"
     params.append(limit)
     cursor.execute(query, params)
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
+    for r in rows:
+        r['source_label'] = 'من الخزنة الخاصة 🏦' if r.get('source') == 'safe' else 'من درج الصندوق 💵'
     return rows
 
 def delete_expense(expense_id):
+    """حذف مصروف وإلغاء أثره المحاسبي في الخزنة إذا كان مرتبطاً بها."""
     conn = get_db()
     cursor = conn.cursor()
-    cursor.execute(f"DELETE FROM expenses WHERE id = ?", (expense_id,))
-    conn.commit()
+    cursor.execute("SELECT * FROM expenses WHERE id = ?", (expense_id,))
+    row = cursor.fetchone()
+    if row:
+        exp = dict(row)
+        if exp.get('source') == 'safe':
+            # تنظيف حركة سحب الخزنة المرتبطة
+            cursor.execute("DELETE FROM safe_transfers WHERE note LIKE ? AND operation_type = 'withdraw'", (f"%مصروف من الخزنة: {exp.get('title')}%",))
+        cursor.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+        conn.commit()
     conn.close()
     return True
 
@@ -1013,12 +1052,16 @@ def get_daily_summary(target_date=None):
     """)
     open_tabs_res = dict(cursor.fetchone() or {})
 
-    # 5. Expenses
+    # 5. Expenses (مفصولة بدقة: مصاريف مسددة من درج الكاشير مقابل مصاريف مسددة من الخزنة الخاصة)
     cursor.execute("""
     SELECT 
         COUNT(id) as expenses_count,
         COALESCE(SUM(amount_lbp), 0) as total_lbp,
-        COALESCE(SUM(amount_usd), 0) as total_usd
+        COALESCE(SUM(amount_usd), 0) as total_usd,
+        COALESCE(SUM(CASE WHEN source = 'safe' THEN amount_lbp ELSE 0 END), 0) as expenses_safe_lbp,
+        COALESCE(SUM(CASE WHEN source != 'safe' OR source IS NULL THEN amount_lbp ELSE 0 END), 0) as expenses_drawer_lbp,
+        COALESCE(SUM(CASE WHEN source = 'safe' THEN amount_usd ELSE 0 END), 0) as expenses_safe_usd,
+        COALESCE(SUM(CASE WHEN source != 'safe' OR source IS NULL THEN amount_usd ELSE 0 END), 0) as expenses_drawer_usd
     FROM expenses
     WHERE DATE(datetime(created_at, '-5 hours')) = DATE(?)
     """, (target_date,))
@@ -1027,9 +1070,11 @@ def get_daily_summary(target_date=None):
     # 6. Safe Transfers for this day (المرحل للخزنة الخاصة لهذا اليوم)
     cursor.execute("""
         SELECT
-            COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN 0 ELSE amount_lbp END), 0) as safe_deposit_lbp,
+            COALESCE(SUM(CASE WHEN operation_type = 'deposit' AND (source != 'external' OR source IS NULL) THEN amount_lbp ELSE 0 END), 0) as drawer_to_safe_lbp,
+            COALESCE(SUM(CASE WHEN operation_type = 'deposit' THEN amount_lbp ELSE 0 END), 0) as safe_deposit_lbp,
             COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN amount_lbp ELSE 0 END), 0) as safe_withdraw_lbp,
-            COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN 0 ELSE amount_usd END), 0) as safe_deposit_usd,
+            COALESCE(SUM(CASE WHEN operation_type = 'deposit' AND (source != 'external' OR source IS NULL) THEN amount_usd ELSE 0 END), 0) as drawer_to_safe_usd,
+            COALESCE(SUM(CASE WHEN operation_type = 'deposit' THEN amount_usd ELSE 0 END), 0) as safe_deposit_usd,
             COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN amount_usd ELSE 0 END), 0) as safe_withdraw_usd,
             COUNT(id) as transfers_count
         FROM safe_transfers
@@ -1050,16 +1095,23 @@ def get_daily_summary(target_date=None):
     actual_cash_in_lbp = cash_sales_lbp + debt_collected_lbp
     actual_cash_in_usd = round(actual_cash_in_lbp / rate, 2) if rate > 0 else 0.0
 
-    # Net Cash in Register Before Safe = Actual Cash In - Expenses
-    net_cash_profit_lbp = actual_cash_in_lbp - exp_res['total_lbp']
+    expenses_drawer_lbp = float(exp_res.get('expenses_drawer_lbp') or 0.0)
+    expenses_safe_lbp = float(exp_res.get('expenses_safe_lbp') or 0.0)
+    total_expenses_lbp = float(exp_res.get('total_lbp') or 0.0)
+
+    # Net Operating Cash Profit = actual cash collected - all expenses
+    net_cash_profit_lbp = actual_cash_in_lbp - total_expenses_lbp
     net_cash_profit_usd = round(net_cash_profit_lbp / rate, 2) if rate > 0 else 0.0
 
-    # صافي ما تم ترحيله للخزنة اليوم
-    safe_transferred_day_lbp = max(0.0, float(safe_day_row.get('safe_deposit_lbp') or 0.0) - float(safe_day_row.get('safe_withdraw_lbp') or 0.0))
+    # صافي ما تم ترحيله من درج الكاشير للخزنة الخاصة لهذا اليوم
+    drawer_to_safe_lbp = float(safe_day_row.get('drawer_to_safe_lbp') or 0.0)
+    if drawer_to_safe_lbp == 0.0 and float(safe_day_row.get('safe_deposit_lbp') or 0.0) > 0.0:
+        drawer_to_safe_lbp = float(safe_day_row.get('safe_deposit_lbp') or 0.0)
+    safe_transferred_day_lbp = drawer_to_safe_lbp
     safe_transferred_day_usd = round(safe_transferred_day_lbp / rate, 2) if rate > 0 else 0.0
 
-    # المتبقي الفعلي في درج الصندوق لهذا اليوم بعد خصم المصاريف والخزنة
-    drawer_remaining_lbp = max(0.0, net_cash_profit_lbp - safe_transferred_day_lbp)
+    # المتبقي الفعلي في درج الصندوق لهذا اليوم = الكاش الوارد - مصاريف الدرج - ما تم ترحيله للخزنة
+    drawer_remaining_lbp = max(0.0, actual_cash_in_lbp - expenses_drawer_lbp - safe_transferred_day_lbp)
     drawer_remaining_usd = round(drawer_remaining_lbp / rate, 2) if rate > 0 else 0.0
 
     grand_totals = {
@@ -1073,6 +1125,12 @@ def get_daily_summary(target_date=None):
         'debt_sales_usd': round(debt_sales_lbp / rate, 2) if rate > 0 else 0.0,
         'debt_collected_lbp': debt_collected_lbp,
         'debt_collected_usd': round(debt_collected_lbp / rate, 2) if rate > 0 else 0.0,
+        'expenses_drawer_lbp': expenses_drawer_lbp,
+        'expenses_drawer_usd': round(expenses_drawer_lbp / rate, 2) if rate > 0 else 0.0,
+        'expenses_safe_lbp': expenses_safe_lbp,
+        'expenses_safe_usd': round(expenses_safe_lbp / rate, 2) if rate > 0 else 0.0,
+        'expenses_total_lbp': total_expenses_lbp,
+        'expenses_total_usd': round(total_expenses_lbp / rate, 2) if rate > 0 else 0.0,
         'transferred_to_safe_lbp': safe_transferred_day_lbp,
         'transferred_to_safe_usd': safe_transferred_day_usd,
         'drawer_remaining_lbp': drawer_remaining_lbp,
@@ -1994,8 +2052,8 @@ def get_employee_performance_summary(target_date=None, all_time=False):
 # 🏦 وظائف الخزنة الخاصة والمحاسبة المركزية (Advanced Safe/Vault Management)
 # ============================================================
 
-def add_safe_transfer(amount_lbp=0.0, note='', transferred_by='المدير', rate=None, amount_usd=None, operation_type='deposit', employee_id=None):
-    """نقل أو سحب مبلغ من/إلى الخزنة الخاصة مع التمييز بين الإيداع والسحب."""
+def add_safe_transfer(amount_lbp=0.0, note='', transferred_by='المدير', rate=None, amount_usd=None, operation_type='deposit', employee_id=None, source='drawer', target='safe'):
+    """نقل أو سحب مبلغ من/إلى الخزنة الخاصة مع التمييز الدقيق بين مصادر النقدية والوجهات."""
     settings = get_settings()
     rate = rate or float(settings.get('exchange_rate') or 89500.0)
     amount_lbp = float(amount_lbp or 0.0)
@@ -2011,16 +2069,19 @@ def add_safe_transfer(amount_lbp=0.0, note='', transferred_by='المدير', ra
 
     conn = get_db()
     cursor = conn.cursor()
-    # Ensure employee_id column exists (migration-safe)
     try:
         cursor.execute("ALTER TABLE safe_transfers ADD COLUMN employee_id INTEGER")
+        cursor.execute("ALTER TABLE safe_transfers ADD COLUMN source TEXT DEFAULT 'drawer'")
+        cursor.execute("ALTER TABLE safe_transfers ADD COLUMN target TEXT DEFAULT 'safe'")
+        cursor.execute("ALTER TABLE safe_transfers ADD COLUMN employee_name TEXT DEFAULT 'المدير'")
         conn.commit()
     except Exception:
         pass
+
     cursor.execute("""
-        INSERT INTO safe_transfers (amount_lbp, amount_usd, note, transferred_by, operation_type, employee_id)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (amount_lbp, amount_usd, note.strip(), transferred_by.strip(), op_type, employee_id))
+        INSERT INTO safe_transfers (amount_lbp, amount_usd, note, transferred_by, operation_type, source, target, employee_id, employee_name, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (amount_lbp, amount_usd, note.strip(), transferred_by.strip(), op_type, source, target, employee_id, transferred_by.strip(), get_local_now()))
     conn.commit()
     transfer_id = cursor.lastrowid
     conn.close()
@@ -2235,27 +2296,28 @@ def get_drawer_cash_status():
     cursor.execute("SELECT COALESCE(SUM(amount_lbp), 0) FROM debt_payments")
     all_debt_rep_lbp = float(cursor.fetchone()[0] or 0.0)
 
-    # 5. إجمالي المصاريف عبر كل التاريخ
-    cursor.execute("SELECT COALESCE(SUM(amount_lbp), 0) FROM expenses")
+    # 5. إجمالي المصاريف المسددة من الدرج عبر كل التاريخ (المصاريف من الخزنة لا تخصم من الدرج)
+    cursor.execute("SELECT COALESCE(SUM(amount_lbp), 0) FROM expenses WHERE source != 'safe' OR source IS NULL")
     all_expenses_lbp = float(cursor.fetchone()[0] or 0.0)
 
-    # 6. إجمالي ما رُحِّل للخزنة الخاصة (الإيداعات - المسحوبات)
+    # 6. إجمالي ما رُحِّل للخزنة الخاصة من الدرج (خصماً من الدرج)
+    # ملاحظة جوهرية: مسحوبات الخزنة الشخصية للمدير لا تُعاد للدرج إلا إذا حُدد صراحة أنها تمويل للدرج (target='drawer')
     cursor.execute("""
         SELECT
-            COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN 0 ELSE amount_lbp END), 0) as deposits,
-            COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN amount_lbp ELSE 0 END), 0) as withdrawals
+            COALESCE(SUM(CASE WHEN operation_type = 'deposit' AND (source != 'external' OR source IS NULL) THEN amount_lbp ELSE 0 END), 0) as deposits_from_drawer,
+            COALESCE(SUM(CASE WHEN operation_type = 'withdraw' AND target = 'drawer' THEN amount_lbp ELSE 0 END), 0) as returned_to_drawer
         FROM safe_transfers
     """)
     safe_row = cursor.fetchone()
     total_safe_deposits_lbp = float(safe_row[0] or 0.0)
-    total_safe_withdrawals_lbp = float(safe_row[1] or 0.0)
-    # الكاش الذي خرج من الدرج باتجاه الخزنة (صافي)
-    net_to_safe_lbp = max(0.0, total_safe_deposits_lbp - total_safe_withdrawals_lbp)
+    total_returned_to_drawer_lbp = float(safe_row[1] or 0.0)
+    # الكاش الصافي الذي خرج من الدرج باتجاه الخزنة
+    net_to_safe_lbp = max(0.0, total_safe_deposits_lbp - total_returned_to_drawer_lbp)
 
     conn.close()
 
     # الكاش الإجمالي الفعلي الموجود بالدرج الآن ولم ينقل للخزنة بعد:
-    # (كل الكاش الداخل) - (المصاريف) - (صافي ما ذهب للخزنة)
+    # (كل الكاش الداخل للدرج) - (مصاريف الدرج) - (صافي ما نُقل للخزنة)
     total_income_lbp = all_cash_sales_lbp + all_debt_rep_lbp
     total_outflow_lbp = all_expenses_lbp + net_to_safe_lbp
     total_untransferred_lbp = max(0.0, total_income_lbp - total_outflow_lbp)
@@ -2336,11 +2398,11 @@ def check_daily_safe_transfer_status(target_date=None):
     total_sales_lbp += today_debt_collected_lbp
     total_sales_usd = round(total_sales_lbp / rate, 2) if rate > 0 else 0.0
 
-    # 3. احتساب مصاريف اليوم المدفوعة من الدرج
+    # 3. احتساب مصاريف اليوم المدفوعة من الدرج (لا نحتسب مصاريف الخزنة هنا لأنها خرجت من الخزنة مسبقاً)
     cursor.execute("""
         SELECT 
-            COALESCE(SUM(amount_lbp), 0) as expenses_lbp,
-            COALESCE(SUM(amount_usd), 0) as expenses_usd,
+            COALESCE(SUM(CASE WHEN source != 'safe' OR source IS NULL THEN amount_lbp ELSE 0 END), 0) as expenses_lbp,
+            COALESCE(SUM(CASE WHEN source != 'safe' OR source IS NULL THEN amount_usd ELSE 0 END), 0) as expenses_usd,
             COUNT(id) as expenses_count
         FROM expenses
         WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?))
@@ -2349,9 +2411,9 @@ def check_daily_safe_transfer_status(target_date=None):
     total_expenses_lbp = float(exp_row.get('expenses_lbp') or 0.0)
     total_expenses_usd = float(exp_row.get('expenses_usd') or 0.0)
 
-    # 4. مجموع ما تم ترحيله بالفعل لهذا التاريخ
-    already_transferred_lbp = sum(float(t.get('amount_lbp') or 0.0) for t in existing_transfers)
-    already_transferred_usd = sum(float(t.get('amount_usd') or 0.0) for t in existing_transfers)
+    # 4. مجموع ما تم ترحيله بالفعل لهذا التاريخ من الدرج إلى الخزنة
+    already_transferred_lbp = sum(float(t.get('amount_lbp') or 0.0) for t in existing_transfers if t.get('source') != 'external')
+    already_transferred_usd = sum(float(t.get('amount_usd') or 0.0) for t in existing_transfers if t.get('source') != 'external')
 
     conn.close()
 

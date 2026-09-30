@@ -763,17 +763,67 @@ def expense_add():
     amount = float(request.form.get('amount_lbp') or 0)
     category = request.form.get('category', 'مصاريف عامة')
     notes = request.form.get('notes', '')
+    source = request.form.get('source', 'drawer')
 
     if not title or amount <= 0:
         flash("يرجى إدخال بيان المصروف والمبلغ", "danger")
         return redirect(url_for('admin_panel'))
 
-    success, res = accounting.add_expense(title, amount, category, notes)
+    emp_id = session.get('employee_id')
+    emp_name = session.get('employee_name', 'المدير')
+    success, res = accounting.add_expense(
+        title=title,
+        amount_lbp=amount,
+        category=category,
+        notes=notes,
+        source=source,
+        employee_id=emp_id,
+        employee_name=emp_name
+    )
     if success:
-        flash(f"تم تسجيل مصروف [{title}] بمبلغ {amount:,.0f} ل.ل بنجاح", "success")
+        src_label = 'الخزنة الخاصة 🏦' if source == 'safe' else 'درج الصندوق 💵'
+        flash(f"✅ تم تسجيل مصروف [{title}] بمبلغ {amount:,.0f} ل.ل بنجاح ({src_label})", "success")
     else:
         flash(f"خطأ: {res}", "danger")
     return redirect(url_for('admin_panel'))
+
+@app.route('/expense/quick-add', methods=['POST'])
+def expense_quick_add():
+    """تسجيل مصروف سريع من درج الكاشير بواسطة الموظف أو الإدارة."""
+    emp_id = session.get('employee_id')
+    emp_name = session.get('employee_name', 'كاشير')
+    is_admin = session.get('is_admin') or session.get('admin_authenticated')
+
+    title = request.form.get('title', '').strip()
+    amount = float(request.form.get('amount_lbp') or 0)
+    category = request.form.get('category', 'مصاريف تشغيلية')
+    notes = request.form.get('notes', '')
+    source = request.form.get('source', 'drawer')
+
+    # الدفع من الخزنة محصور بالإدارة فقط
+    if source == 'safe' and not is_admin:
+        flash("⚠️ الصرف من الخزنة الخاصة مخصص للإدارة فقط", "danger")
+        return redirect(request.referrer or url_for('index'))
+
+    if not title or amount <= 0:
+        flash("⚠️ يرجى إدخال بيان المصروف والمبلغ بشكل صحيح", "danger")
+        return redirect(request.referrer or url_for('index'))
+
+    success, res = accounting.add_expense(
+        title=title,
+        amount_lbp=amount,
+        category=category,
+        notes=notes,
+        source=source,
+        employee_id=emp_id,
+        employee_name=emp_name
+    )
+    if success:
+        src_label = 'الخزنة الخاصة 🏦' if source == 'safe' else 'درج الصندوق 💵'
+        flash(f"✅ تم تسجيل مصروف [{title}] بقيمة {amount:,.0f} ل.ل بنجاح من {src_label}", "success")
+    else:
+        flash(f"خطأ في تسجيل المصروف: {res}", "danger")
+    return redirect(request.referrer or url_for('index'))
 
 @app.route('/expense/<int:expense_id>/delete', methods=['POST'])
 @admin_required
@@ -1312,12 +1362,82 @@ def employee_close_shift():
         return redirect(url_for('employee_login'))
 
     today_str = accounting.get_business_date()
-    # Get employee sales for today
+    settings = accounting.get_settings()
+    exchange_rate = float(settings.get('exchange_rate') or 89500.0)
+    company_name = settings.get('company_name', 'STARGATE CAFE')
+
+    # 1. مبيعات الموظف لليوم
     emp_orders = accounting.get_orders(target_date=today_str, employee_id=emp_id)
     total_sales_lbp = sum(float(o.get('total_lbp', 0)) for o in emp_orders)
     total_sales_usd = sum(float(o.get('total_usd', 0)) for o in emp_orders)
     cash_sales_lbp = sum(float(o.get('total_lbp', 0)) for o in emp_orders if o.get('payment_method') == 'cash')
     debt_sales_lbp = sum(float(o.get('total_lbp', 0)) for o in emp_orders if o.get('payment_method') == 'debt')
+
+    # 2. حركة الكاش الشاملة للصندوق (تحصيل ديون، مصاريف الدرج، تحويلات الخزنة السابقة، عهدة افتتاحية)
+    conn = accounting.get_db()
+    c = conn.cursor()
+
+    # سدادات ديون مستلمة اليوم
+    if emp_id:
+        c.execute("""
+            SELECT COALESCE(SUM(amount_lbp), 0)
+            FROM debt_payments
+            WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?))
+              AND (employee_id = ? OR employee_id IS NULL)
+        """, (today_str, today_str, emp_id))
+    else:
+        c.execute("""
+            SELECT COALESCE(SUM(amount_lbp), 0)
+            FROM debt_payments
+            WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?))
+        """, (today_str, today_str))
+    debt_collected_lbp = float(c.fetchone()[0] or 0.0)
+
+    # مصاريف مدفوعة من الدرج اليوم
+    if emp_id:
+        c.execute("""
+            SELECT COALESCE(SUM(amount_lbp), 0)
+            FROM expenses
+            WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?))
+              AND (source != 'safe' OR source IS NULL)
+              AND (employee_id = ? OR employee_id IS NULL)
+        """, (today_str, today_str, emp_id))
+    else:
+        c.execute("""
+            SELECT COALESCE(SUM(amount_lbp), 0)
+            FROM expenses
+            WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?))
+              AND (source != 'safe' OR source IS NULL)
+        """, (today_str, today_str))
+    shift_expenses_lbp = float(c.fetchone()[0] or 0.0)
+
+    # مبالغ تم توريدها للخزنة مسبقاً خلال الوردية
+    if emp_id:
+        c.execute("""
+            SELECT COALESCE(SUM(amount_lbp), 0)
+            FROM safe_transfers
+            WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?) OR note LIKE ?)
+              AND operation_type = 'deposit'
+              AND (source != 'external' OR source IS NULL)
+              AND (employee_id = ? OR employee_id IS NULL)
+        """, (today_str, today_str, f"%{today_str}%", emp_id))
+    else:
+        c.execute("""
+            SELECT COALESCE(SUM(amount_lbp), 0)
+            FROM safe_transfers
+            WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?) OR note LIKE ?)
+              AND operation_type = 'deposit'
+              AND (source != 'external' OR source IS NULL)
+        """, (today_str, today_str, f"%{today_str}%"))
+    prior_safe_transfers_lbp = float(c.fetchone()[0] or 0.0)
+    conn.close()
+
+    # عهدة افتتاحية للدرج إن وجدت
+    opening_float = float(session.get('opening_cash_lbp') or session.get('handover_actual_cash') or 0.0)
+
+    # رصيد الكاش المتوقع في الدرج بدقة متناهية
+    # الكاش المتوقع = (عهدة افتتاحية + مبيعات كاش + تحصيل ديون) - (مصاريف الصندوق + توريدات الخزنة السابقة)
+    expected_cash_lbp = max(0.0, opening_float + cash_sales_lbp + debt_collected_lbp - shift_expenses_lbp - prior_safe_transfers_lbp)
 
     if request.method == 'POST':
         actual_cash_val = request.form.get('actual_cash_lbp', '').strip()
@@ -1331,13 +1451,18 @@ def employee_close_shift():
                 total_sales_usd=total_sales_usd,
                 cash_sales_lbp=cash_sales_lbp,
                 debt_sales_lbp=debt_sales_lbp,
+                debt_collected_lbp=debt_collected_lbp,
+                shift_expenses_lbp=shift_expenses_lbp,
+                prior_safe_transfers_lbp=prior_safe_transfers_lbp,
+                opening_float=opening_float,
+                expected_cash_lbp=expected_cash_lbp,
                 target_date=today_str,
-                company_name=accounting.get_settings().get('company_name', 'STARGATE CAFE'),
-                exchange_rate=float(accounting.get_settings().get('exchange_rate') or 89500.0)
+                company_name=company_name,
+                exchange_rate=exchange_rate
             )
 
         actual_cash = float(actual_cash_val)
-        diff = actual_cash - cash_sales_lbp
+        diff = actual_cash - expected_cash_lbp
         
         diff_note = ""
         if diff > 0:
@@ -1345,7 +1470,7 @@ def employee_close_shift():
         elif diff < 0:
             diff_note = f" (عجز نقدي: -{abs(diff):,.0f} ل.ل)"
         else:
-            diff_note = " (مطابق 100%)"
+            diff_note = " (مطابق 100% بدون أي عجز)"
 
         # فحص هل اختار الموظف أو الإدارة توريد الكاش للخزنة الخاصة عند تسكير الوردية
         transfer_to_safe = request.form.get('transfer_to_safe') in ('yes', '1', 'true', 'on')
@@ -1356,16 +1481,19 @@ def employee_close_shift():
         drawer_remaining_cash = actual_cash
         if transfer_to_safe and safe_deposit_lbp > 0:
             try:
-                # تسجيل إيداع بالخزنة الخاصة
+                # تسجيل إيداع بالخزنة الخاصة من الدرج
                 transfer_id = accounting.add_safe_transfer(
                     amount_lbp=safe_deposit_lbp,
                     note=f"توريد كاش تسكير وردية ({emp_name})",
                     transferred_by=emp_name,
                     operation_type='deposit',
-                    employee_id=emp_id
+                    source='drawer',
+                    target='safe',
+                    employee_id=emp_id,
+                    employee_name=emp_name
                 )
                 drawer_remaining_cash = max(0.0, actual_cash - safe_deposit_lbp)
-                safe_transfer_note = f" (تم ترحيل {safe_deposit_lbp:,.0f} ل.ل إلى الخزنة الخاصة 🏦)"
+                safe_transfer_note = f" (تم ترحيل {safe_deposit_lbp:,.0f} ل.ل إلى الخزنة الخاصة 🏦 والمتبقي بالصندوق {drawer_remaining_cash:,.0f} ل.ل)"
             except Exception as e:
                 safe_transfer_note = f" (تنبيه: تعذر إيداع الكاش بالخزنة: {e})"
 
@@ -1376,7 +1504,7 @@ def employee_close_shift():
                 employee_name=emp_name,
                 total_sales_lbp=total_sales_lbp,
                 cash_sales_lbp=actual_cash,
-                production_note=f"تسكير وردية ومطابقة الصندوق{diff_note}{safe_transfer_note}",
+                production_note=f"تسكير وردية ومطابقة الصندوق [متوقع: {expected_cash_lbp:,.0f} | فعلي: {actual_cash:,.0f}]{diff_note}{safe_transfer_note}",
                 date=today_str
             )
         except Exception:
@@ -1404,9 +1532,14 @@ def employee_close_shift():
         total_sales_usd=total_sales_usd,
         cash_sales_lbp=cash_sales_lbp,
         debt_sales_lbp=debt_sales_lbp,
+        debt_collected_lbp=debt_collected_lbp,
+        shift_expenses_lbp=shift_expenses_lbp,
+        prior_safe_transfers_lbp=prior_safe_transfers_lbp,
+        opening_float=opening_float,
+        expected_cash_lbp=expected_cash_lbp,
         target_date=today_str,
-        company_name=accounting.get_settings().get('company_name', 'STARGATE CAFE'),
-        exchange_rate=float(accounting.get_settings().get('exchange_rate') or 89500.0)
+        company_name=company_name,
+        exchange_rate=exchange_rate
     )
 
 def favicon():

@@ -53,10 +53,10 @@
             </div>
         </div>
 
-        <!-- Summary KPI Boxes -->
-        <div class="grid grid-cols-4 gap-2.5 text-center">
+        <!-- Summary KPI Boxes (الوضع المالي والصندوق الشامل) -->
+        <div class="grid grid-cols-3 gap-2.5 text-center">
             <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
-                <span class="text-[10px] text-slate-500 font-bold block mb-1">إجمالي الإنتاج الكلي</span>
+                <span class="text-[10px] text-slate-500 font-bold block mb-1">إجمالي الإنتاج الكلي (شامل الديون)</span>
                 <div class="text-base font-black font-mono text-indigo-800">
                     {{ summary.total_production_lbp|format_currency }} ل.ل
                 </div>
@@ -64,27 +64,43 @@
             </div>
 
             <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-300">
-                <span class="text-[10px] text-emerald-800 font-bold block mb-1">نقدية الصندوق (كاش مستلم)</span>
+                <span class="text-[10px] text-emerald-800 font-bold block mb-1">نقدية الصندوق (كاش مبيعات + ديون)</span>
                 <div class="text-base font-black font-mono text-emerald-700">
                     {{ summary.total_revenue_lbp|format_currency }} ل.ل
                 </div>
                 <span class="text-[10px] font-mono text-slate-600 font-bold">{{ summary.total_revenue_usd|to_usd }}</span>
             </div>
 
-            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                <span class="text-[11px] text-slate-500 font-bold block mb-1">المصاريف المسجلة</span>
-                <div class="text-lg font-black font-mono text-rose-700">
+            <div class="p-3 rounded-xl bg-rose-50 border border-rose-200">
+                <span class="text-[10px] text-rose-700 font-bold block mb-1">إجمالي المصاريف المسجلة</span>
+                <div class="text-base font-black font-mono text-rose-700">
                     {{ summary.expenses.total_lbp|format_currency }} ل.ل
                 </div>
-                <span class="text-[11px] font-mono text-slate-500">{{ summary.expenses.total_usd|to_usd }}</span>
+                <span class="text-[10px] font-mono text-slate-500">من الدرج: {{ summary.grand_totals.expenses_drawer_lbp|default(0)|format_currency }} ل.ل</span>
             </div>
 
-            <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                <span class="text-[11px] text-emerald-800 font-bold block mb-1">صافي الربح المتبقي</span>
-                <div class="text-lg font-black font-mono text-emerald-800">
+            <div class="p-3 rounded-xl bg-blue-50 border border-blue-200">
+                <span class="text-[10px] text-blue-800 font-bold block mb-1">صافي أرباح التشغيل</span>
+                <div class="text-base font-black font-mono text-blue-800">
                     {{ summary.grand_totals.net_profit_lbp|format_currency }} ل.ل
                 </div>
-                <span class="text-[11px] font-mono text-emerald-700 font-bold">{{ summary.grand_totals.net_profit_usd|to_usd }}</span>
+                <span class="text-[10px] font-mono text-blue-700 font-bold">{{ summary.grand_totals.net_profit_usd|to_usd }}</span>
+            </div>
+
+            <div class="p-3 rounded-xl bg-amber-50 border border-amber-300">
+                <span class="text-[10px] text-amber-800 font-bold block mb-1">المحوّل إلى الخزنة الخاصة 🏦</span>
+                <div class="text-base font-black font-mono text-amber-700">
+                    {{ (summary.safe_day.transferred_lbp or summary.grand_totals.transferred_to_safe_lbp)|format_currency }} ل.ل
+                </div>
+                <span class="text-[10px] font-mono text-slate-600">{{ summary.safe_day.transferred_usd|default(0)|to_usd }}</span>
+            </div>
+
+            <div class="p-3 rounded-xl bg-emerald-100 border-2 border-emerald-400">
+                <span class="text-[10px] text-emerald-900 font-black block mb-1">المتبقي الفعلي بدرج الكاشير 💼</span>
+                <div class="text-lg font-black font-mono text-emerald-800">
+                    {{ summary.grand_totals.drawer_remaining_lbp|format_currency }} ل.ل
+                </div>
+                <span class="text-[10px] font-mono text-emerald-700 font-black">{{ summary.grand_totals.drawer_remaining_usd|to_usd }}</span>
             </div>
         </div>
 
