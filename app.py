@@ -493,11 +493,33 @@ def ensure_default_session():
     public_endpoints = ['employee_login', 'admin_login', 'static', 'favicon']
     if request.endpoint and any(ep in (request.endpoint or '') for ep in public_endpoints):
         return
-    if 'employee_id' not in session and not session.get('admin_authenticated'):
-        if request.endpoint and request.endpoint.startswith('api_'):
-            pass
-        elif request.endpoint and request.endpoint not in ('employee_login', 'admin_login'):
-            pass
+    if 'employee_id' not in session or not session.get('employee_id'):
+        if session.get('admin_authenticated') or session.get('is_admin'):
+            session['employee_id'] = session.get('user_id') or 1
+            session['employee_name'] = session.get('user_name') or 'المدير العام'
+            session['employee_role'] = 'admin'
+        else:
+            try:
+                conn = database.get_db()
+                c = conn.cursor()
+                c.execute("SELECT id, name, role FROM employees WHERE role = 'cashier' AND is_active = 1 ORDER BY id ASC LIMIT 1")
+                row = c.fetchone()
+                if not row:
+                    c.execute("SELECT id, name, role FROM employees WHERE is_active = 1 ORDER BY id ASC LIMIT 1")
+                    row = c.fetchone()
+                conn.close()
+                if row:
+                    session['employee_id'] = row['id']
+                    session['employee_name'] = row['name']
+                    session['employee_role'] = row['role']
+                else:
+                    session['employee_id'] = 1
+                    session['employee_name'] = 'كاشير'
+                    session['employee_role'] = 'cashier'
+            except Exception:
+                session['employee_id'] = 1
+                session['employee_name'] = 'كاشير'
+                session['employee_role'] = 'cashier'
 
 @app.context_processor
 def inject_global_data():
@@ -635,13 +657,34 @@ def order_create():
             flash("⚠️ لا يمكن حفظ فاتورة فارغة بدون أصناف", "warning")
             return redirect(url_for('index'))
 
+        emp_id = session.get('employee_id')
+        emp_name = session.get('employee_name')
+        if not emp_id:
+            try:
+                conn = database.get_db()
+                r_emp = conn.execute("SELECT id, name FROM employees WHERE role='cashier' AND is_active=1 ORDER BY id ASC LIMIT 1").fetchone()
+                if not r_emp:
+                    r_emp = conn.execute("SELECT id, name FROM employees WHERE is_active=1 ORDER BY id ASC LIMIT 1").fetchone()
+                conn.close()
+                if r_emp:
+                    emp_id = r_emp['id']
+                    emp_name = r_emp['name']
+                else:
+                    emp_id = 1
+                    emp_name = 'كاشير'
+            except Exception:
+                emp_id = 1
+                emp_name = 'كاشير'
+            session['employee_id'] = emp_id
+            session['employee_name'] = emp_name
+
         order_data = {
             'customer_name': customer_name,
             'notes': notes,
             'payment_method': payment_method,
             'phone': phone,
-            'employee_id': session.get('employee_id'),
-            'employee_name': session.get('employee_name', 'كاشير')
+            'employee_id': emp_id,
+            'employee_name': emp_name or 'كاشير'
         }
         success, result = accounting.create_order(order_data, items_list, tab_id=tab_id)
 
@@ -2049,23 +2092,43 @@ def employee_close_shift():
     """Close employee shift, calculate sales, reconcile cash drawer, and handover to next employee."""
     emp_id = session.get('employee_id')
     emp_name = session.get('employee_name')
+    if not emp_name:
+        emp_name = 'كاشير'
 
     today_str = accounting.get_business_date()
     settings = accounting.get_settings()
     exchange_rate = float(settings.get('exchange_rate') or 89500.0)
     company_name = settings.get('company_name', 'STARGATE CAFE')
 
-    # 1. مبيعات الموظف لليوم
-    emp_orders = accounting.get_orders(target_date=today_str, employee_id=emp_id)
+    # 1. مبيعات الموظف والدرج لليوم (شاملة كل الطلبات بدون استثناء وبدون أي حد)
+    conn = accounting.get_db()
+    c = conn.cursor()
+
+    if emp_id:
+        c.execute("""
+            SELECT o.* 
+            FROM cafe_orders o
+            WHERE (DATE(datetime(o.created_at, '-5 hours')) = DATE(?) OR DATE(o.created_at) = DATE(?))
+              AND (o.status = 'paid' OR o.status IS NULL OR o.status = '')
+              AND (o.employee_id = ? OR o.employee_id IS NULL)
+            ORDER BY o.id DESC
+        """, (today_str, today_str, emp_id))
+    else:
+        c.execute("""
+            SELECT o.* 
+            FROM cafe_orders o
+            WHERE (DATE(datetime(o.created_at, '-5 hours')) = DATE(?) OR DATE(o.created_at) = DATE(?))
+              AND (o.status = 'paid' OR o.status IS NULL OR o.status = '')
+            ORDER BY o.id DESC
+        """, (today_str, today_str))
+    emp_orders = [dict(r) for r in c.fetchall()]
+
     total_sales_lbp = sum(float(o.get('total_lbp', 0)) for o in emp_orders)
     total_sales_usd = sum(float(o.get('total_usd', 0)) for o in emp_orders)
     cash_sales_lbp = sum(float(o.get('total_lbp', 0)) for o in emp_orders if o.get('payment_method') == 'cash')
     debt_sales_lbp = sum(float(o.get('total_lbp', 0)) for o in emp_orders if o.get('payment_method') == 'debt')
 
     # 2. حركة الكاش الشاملة للصندوق (تحصيل ديون، مصاريف الدرج، تحويلات الخزنة السابقة، عهدة افتتاحية)
-    conn = accounting.get_db()
-    c = conn.cursor()
-
     # سدادات ديون مستلمة اليوم
     if emp_id:
         c.execute("""
@@ -2121,8 +2184,10 @@ def employee_close_shift():
     prior_safe_transfers_lbp = float(c.fetchone()[0] or 0.0)
     conn.close()
 
-    # عهدة افتتاحية للدرج إن وجدت
-    opening_float = float(session.get('opening_cash_lbp') or session.get('handover_actual_cash') or 0.0)
+    # عهدة افتتاحية للدرج إن وجدت (أو المتبقي النقدي من الأمس في الصندوق تلقائياً)
+    drawer_stat = accounting.get_drawer_cash_status()
+    past_untransferred = float(drawer_stat.get('past_untransferred_lbp') or 0.0)
+    opening_float = float(session.get('opening_cash_lbp') or session.get('handover_actual_cash') or past_untransferred or 0.0)
 
     # رصيد الكاش المتوقع في الدرج بدقة متناهية
     # الكاش المتوقع = (عهدة افتتاحية + مبيعات كاش + تحصيل ديون) - (مصاريف الصندوق + توريدات الخزنة السابقة)

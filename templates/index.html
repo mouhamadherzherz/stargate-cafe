@@ -89,17 +89,13 @@
                 <div class="text-base font-black font-mono {% if (drawer_status.total_untransferred_lbp or 0) > 0 %}text-emerald-400{% else %}text-slate-400{% endif %} mt-0.5">
                     {{ (drawer_status.total_untransferred_lbp or 0)|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span>
                 </div>
-                <div class="text-[9px] font-mono font-bold flex items-center gap-1 mt-0.5">
-                    {% if (drawer_status.total_untransferred_lbp or 0) > 0 %}
+                <div class="text-[9px] font-mono font-bold flex items-center gap-1.5 mt-0.5 flex-wrap">
                     <span class="text-emerald-300">{{ (drawer_status.total_untransferred_usd or 0)|to_usd }}</span>
                     <span class="text-slate-500">•</span>
-                    <span class="text-emerald-400 font-sans">متاح</span>
-                    {% else %}
-                    <span class="text-amber-400 font-sans font-bold">مرحل للخزنة 🔒</span>
-                    {% endif %}
+                    <span class="text-slate-300 font-sans">كاش اليوم: <strong class="text-emerald-400 font-mono">{{ (summary.grand_totals.cash_sales_lbp or 0)|format_currency }}</strong></span>
                 </div>
             </div>
-            <div class="w-8 h-8 rounded-xl {% if (drawer_status.total_untransferred_lbp or 0) > 0 %}bg-emerald-500/20 text-emerald-400{% else %}bg-slate-800 text-slate-500{% endif %} flex items-center justify-center text-base">
+            <div class="w-8 h-8 rounded-xl {% if (drawer_status.total_untransferred_lbp or 0) > 0 %}bg-emerald-500/20 text-emerald-400{% else %}bg-slate-800 text-slate-500{% endif %} flex items-center justify-center text-base shrink-0">
                 💼
             </div>
         </div>

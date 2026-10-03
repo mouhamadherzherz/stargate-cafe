@@ -1619,7 +1619,7 @@ def delete_tab(tab_id):
         conn.close()
         return False
 
-def get_orders(target_date=None, limit=100, employee_id=None):
+def get_orders(target_date=None, limit=5000, employee_id=None):
     conn = get_db()
     cursor = conn.cursor()
     query = """
@@ -1634,10 +1634,10 @@ def get_orders(target_date=None, limit=100, employee_id=None):
     """
     params = []
     if target_date:
-        query += " AND DATE(datetime(o.created_at, '-5 hours')) = DATE(?)"
-        params.append(target_date)
+        query += " AND (DATE(datetime(o.created_at, '-5 hours')) = DATE(?) OR DATE(o.created_at) = DATE(?))"
+        params.extend([target_date, target_date])
     if employee_id is not None:
-        query += " AND o.employee_id = ?"
+        query += " AND (o.employee_id = ? OR o.employee_id IS NULL)"
         params.append(employee_id)
     query += " GROUP BY o.id ORDER BY o.id DESC LIMIT ?"
     params.append(limit)
@@ -1886,7 +1886,7 @@ def delete_order(order_id):
 
 
 
-def log_single_pc_click(price_lbp=None, note='استخدام كمبيوتر GAMING'):
+def log_single_pc_click(price_lbp=None, note='استخدام كمبيوتر GAMING', employee_id=None, employee_name=None):
     settings = get_settings()
     rate = float(settings.get('exchange_rate') or 89500.0)
     p_lbp = float(price_lbp) if price_lbp else float(settings.get('pc_price_per_click_lbp') or 100000.0)
@@ -1900,7 +1900,14 @@ def log_single_pc_click(price_lbp=None, note='استخدام كمبيوتر GAMI
         'item_type': 'gaming',
         'item_id': None
     }]
-    success, res = create_order({'customer_name': 'لاعب GAMING', 'notes': note}, items_list)
+    order_data = {
+        'customer_name': 'لاعب GAMING',
+        'notes': note,
+        'payment_method': 'cash',
+        'employee_id': employee_id,
+        'employee_name': employee_name or 'كاشير'
+    }
+    success, res = create_order(order_data, items_list)
     return success, res
 
 def get_pc_logs(target_date=None, limit=50):
