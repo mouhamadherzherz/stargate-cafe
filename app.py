@@ -479,7 +479,7 @@ def csrf_protect():
         if submitted_token and session_token and secrets.compare_digest(session_token, submitted_token):
             return None
             
-        if request.endpoint in ('employee_login', 'admin_login', 'api_do_update', 'api_check_update') or request.path in ('/api/do_update', '/api/check_update'):
+        if request.endpoint in ('employee_login', 'admin_login', 'api_do_update', 'api_check_update', 'api_manual_update') or request.path in ('/api/do_update', '/api/check_update', '/api/manual_update'):
             return None
 
         # CSRF failed
@@ -3147,7 +3147,8 @@ def api_do_update():
                 pass
 
         if not url or not url.startswith('http'):
-            return jsonify({'success': False, 'error': 'رابط التحديث غير صالح أو لم يتم العثور عليه'}), 400
+            # الرابط السحابي المباشر المضمون لآخر إصدار v5.3.2
+            url = 'https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.3.2/Stargate_Cafe_Update.zip'
 
         import ssl, urllib.request as ur
         ctx = ssl.create_default_context()
@@ -3216,6 +3217,99 @@ del "%~f0"
 
     except Exception as e:
         logger.logger.error(f"OTA Update error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/manual_update', methods=['POST'])
+def api_manual_update():
+    """تطبيق تحديث يدوي إما برفع ملف ZIP أو من ملف موجود على سطح المكتب أو مجلد البرنامج."""
+    import subprocess, shutil, zipfile as zf, tempfile
+    try:
+        base_dir = _get_base_dir()
+        tmp_base = tempfile.gettempdir()
+        zip_path = os.path.join(tmp_base, 'manual_stargate_update.zip')
+        tmp_dir = os.path.join(tmp_base, 'manual_stargate_tmp')
+
+        # 1. فحص هل تم رفع ملف عبر الـ Form
+        uploaded_file = request.files.get('update_zip') or request.files.get('file')
+        if uploaded_file and uploaded_file.filename:
+            uploaded_file.save(zip_path)
+        else:
+            # البحث عن ملف Stargate_Cafe_Update.zip في الأماكن المعروفة تلقائياً
+            candidates = [
+                os.path.join(base_dir, 'Stargate_Cafe_Update.zip'),
+                os.path.expanduser('~/Desktop/Stargate_Cafe_Update.zip'),
+                r'C:\STARGATE_CAFE\Stargate_Cafe_Update.zip',
+                r'C:\Users\mouha\Desktop\Stargate_Cafe_Update.zip',
+                r'd:\STARGATE\stargate_cafe_source\Stargate_Cafe_Update.zip'
+            ]
+            found_cand = None
+            for cand in candidates:
+                if os.path.exists(cand) and os.path.getsize(cand) > 100000:
+                    found_cand = cand
+                    break
+            if found_cand:
+                shutil.copy2(found_cand, zip_path)
+            else:
+                return jsonify({'success': False, 'error': 'لم يتم العثور على ملف تحديث. يرجى اختيار ملف Stargate_Cafe_Update.zip أو وضعه على سطح المكتب.'}), 400
+
+        # إنشاء نسخة احتياطية فورية لقاعدة البيانات قبل أي تعديل
+        try:
+            database.create_backup_copy()
+        except Exception as e:
+            logger.logger.warning(f"Pre-update backup warning: {e}")
+
+        # فحص سلامة ملف الـ ZIP وتجنب ثغرات Directory Traversal (Zip Slip)
+        if os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+        os.makedirs(tmp_dir, exist_ok=True)
+
+        with zf.ZipFile(zip_path, 'r') as z:
+            bad_file = z.testzip()
+            if bad_file:
+                raise Exception(f"ملف التحديث تالف عند الملف: {bad_file}")
+            abs_tmp = os.path.abspath(tmp_dir)
+            for m in z.namelist():
+                dest = os.path.abspath(os.path.join(abs_tmp, m))
+                if not dest.startswith(abs_tmp):
+                    continue  # Block zip slip attempts
+                z.extract(m, abs_tmp)
+
+        # التأكد من احتواء الملف على ملفات النظام الأساسية
+        if not (os.path.exists(os.path.join(tmp_dir, 'app.py')) or os.path.exists(os.path.join(tmp_dir, 'cafe_version.json'))):
+            return jsonify({'success': False, 'error': 'ملف الـ ZIP المرفوع ليس حزمة تحديث صالحة لبرنامج STARGATE (لا يحتوي على app.py).'}), 400
+
+        # إنشاء BAT يُطبّق التحديث بعد إغلاق البرنامج
+        bat = os.path.join(base_dir, 'apply_manual_update.bat')
+        bat_content = f"""@echo off
+chcp 65001 >nul
+title تطبيق تحديث STARGATE CAFE اليدوي
+echo جاري تطبيق حزمة التحديث...
+timeout /t 3 /nobreak >nul
+taskkill /F /IM STARGATE.exe >nul 2>&1
+taskkill /F /IM python.exe >nul 2>&1
+robocopy "{tmp_dir}" "{base_dir}" /E /IS /IT /XF "*.db" "*.sqlite" "cafe_accounting.db" /XD "data" "Safe_Backups" >nul
+if exist "{base_dir}\\_internal" (
+    robocopy "{tmp_dir}\\templates" "{base_dir}\\_internal\\templates" /E /IS >nul 2>&1
+    robocopy "{tmp_dir}\\static"    "{base_dir}\\_internal\\static"    /E /IS >nul 2>&1
+    copy /Y "{tmp_dir}\\*.py" "{base_dir}\\_internal\\" >nul 2>&1
+    copy /Y "{tmp_dir}\\cafe_version.json" "{base_dir}\\_internal\\" >nul 2>&1
+)
+rmdir /S /Q "{tmp_dir}" >nul 2>&1
+del /F /Q "{zip_path}" >nul 2>&1
+echo اكتمل التحديث بنجاح! جاري إعادة تشغيل النظام...
+cd /d "{base_dir}"
+if exist "STARGATE.exe" ( start "" "STARGATE.exe" ) else ( start "" "{sys.executable}" app.py )
+del "%~f0"
+"""
+        with open(bat, 'w', encoding='utf-8') as f:
+            f.write(bat_content)
+
+        subprocess.Popen([bat], shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
+        return jsonify({'success': True, 'message': 'تم استلام وتثبيت حزمة التحديث بنجاح! سيتم إعادة تشغيل البرنامج فوراً.'})
+
+    except Exception as e:
+        logger.logger.error(f"Manual Update error: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 
@@ -3339,70 +3433,215 @@ exit
 
 @app.route('/update-tool')
 def update_tool_page():
-    """صفحة ويب مباشرة ومبسطة لجهاز الموظف لتنزيل وتطبيق التحديث بنقرة واحدة."""
+    """صفحة ويب مباشرة ومبسطة لجهاز الموظف لتنزيل وتطبيق التحديث بنقرة واحدة مع إمكانية التحديث اليدوي برفع الملف."""
     from flask import render_template_string
     html = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تحديث برنامج STARGATE CAFE v5.3.1</title>
+    <title>تحديث برنامج STARGATE CAFE v5.3.2</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', sans-serif; }
         body { background: #0b1120; color: #f8fafc; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-        .card { background: #1e293b; border: 1px solid #334155; border-radius: 24px; padding: 40px; max-width: 600px; width: 100%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); text-align: center; }
-        .badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 6px 16px; border-radius: 9999px; font-weight: 700; font-size: 14px; margin-bottom: 20px; }
-        h1 { font-size: 26px; font-weight: 900; margin-bottom: 12px; color: #fff; }
-        p { color: #94a3b8; font-size: 15px; line-height: 1.6; margin-bottom: 30px; }
-        .btn-group { display: flex; flex-direction: column; gap: 14px; }
-        .btn { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px 24px; border-radius: 16px; font-size: 16px; font-weight: 700; text-decoration: none; transition: all 0.2s; cursor: pointer; border: none; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 24px; padding: 35px; max-width: 620px; width: 100%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); text-align: center; }
+        .badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 6px 16px; border-radius: 9999px; font-weight: 700; font-size: 14px; margin-bottom: 16px; }
+        h1 { font-size: 24px; font-weight: 900; margin-bottom: 8px; color: #fff; }
+        p { color: #94a3b8; font-size: 14px; line-height: 1.6; margin-bottom: 24px; }
+        .btn-group { display: flex; flex-direction: column; gap: 12px; }
+        .btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 20px; border-radius: 16px; font-size: 14px; font-weight: 700; text-decoration: none; transition: all 0.2s; cursor: pointer; border: none; }
         .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.5); }
         .btn-primary:hover { background: linear-gradient(135deg, #1d4ed8, #1e40af); transform: translateY(-2px); }
         .btn-success { background: linear-gradient(135deg, #16a34a, #15803d); color: white; box-shadow: 0 10px 25px -5px rgba(22, 163, 74, 0.4); }
         .btn-success:hover { background: linear-gradient(135deg, #15803d, #166534); transform: translateY(-2px); }
         .btn-secondary { background: #334155; color: #e2e8f0; }
         .btn-secondary:hover { background: #475569; }
-        .steps { margin-top: 30px; text-align: right; background: #0f172a; padding: 20px; border-radius: 16px; border: 1px solid #1e293b; font-size: 14px; color: #cbd5e1; }
-        .steps h3 { color: #38bdf8; margin-bottom: 10px; font-size: 15px; }
+        .manual-box { margin-top: 24px; background: #0f172a; padding: 20px; border-radius: 18px; border: 1px dashed #6366f1; text-align: right; }
+        .manual-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-weight: 800; font-size: 14px; color: #a5b4fc; }
+        .file-upload-row { display: flex; gap: 8px; align-items: center; }
+        .file-input { display: none; }
+        .file-label { flex: 1; background: #1e293b; border: 1px solid #475569; padding: 10px 14px; border-radius: 12px; font-size: 12px; color: #cbd5e1; cursor: pointer; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-label:hover { border-color: #818cf8; color: #fff; }
+        .btn-upload { background: #6366f1; color: white; padding: 10px 18px; border-radius: 12px; font-size: 12px; font-weight: bold; border: none; cursor: pointer; }
+        .btn-upload:hover { background: #4f46e5; }
+        .btn-upload:disabled { opacity: 0.5; cursor: not-allowed; }
+        .status-msg { margin-top: 10px; padding: 10px; border-radius: 10px; font-size: 12px; font-family: monospace; display: none; text-align: center; }
+        .steps { margin-top: 24px; text-align: right; background: #0f172a; padding: 18px; border-radius: 16px; border: 1px solid #1e293b; font-size: 13px; color: #cbd5e1; }
+        .steps h3 { color: #38bdf8; margin-bottom: 8px; font-size: 14px; }
         .steps ol { padding-right: 20px; }
-        .steps li { margin-bottom: 8px; }
+        .steps li { margin-bottom: 6px; }
     </style>
 </head>
 <body>
     <div class="card">
         <div class="badge">
             <i class="fa-solid fa-cloud-arrow-down"></i>
-            STARGATE CAFE OTA v5.3.1
+            STARGATE CAFE OTA v5.3.2
         </div>
-        <h1>تحديث جهاز الموظف والكاشير</h1>
-        <p>اختر إحدى الطرق التالية لتحديث جهاز الموظف فورياً وحل مشكلة الكاش والخزينة 100%:</p>
+        <h1>مركز تحديث برنامج الكافيه</h1>
+        <p>تحديث النظام تلقائياً عن بعد أو يدوياً عبر رفع ملف التحديث المباشر:</p>
 
-        <div class="btn-group">
-            <a href="/download/installer.exe" class="btn btn-primary">
-                <i class="fa-solid fa-shield-halved"></i>
-                1. تنزيل برنامج التثبيت الرسمي الكامل (Setup v5.3.1.exe)
-            </a>
+        <!-- 📦 خانة التحديث اليدوي -->
+        <div class="manual-box">
+            <div class="manual-title">
+                <span><i class="fa-solid fa-box-open"></i> وضع وتثبيت التحديث يدوياً (ملف ZIP)</span>
+                <span style="font-size: 11px; color: #fbbf24;">بضغطة زر</span>
+            </div>
+            <div class="file-upload-row">
+                <input type="file" id="toolManualZip" accept=".zip" class="file-input" onchange="onToolFileChange(this)">
+                <label for="toolManualZip" id="toolFileLbl" class="file-label">
+                    <i class="fa-solid fa-file-zipper" style="color: #fbbf24; margin-left: 6px;"></i>
+                    اضغط لاختيار ملف Stargate_Cafe_Update.zip
+                </label>
+                <button type="button" id="toolUploadBtn" onclick="submitToolManualUpdate()" disabled class="btn-upload">
+                    تثبيت التحديث 🚀
+                </button>
+            </div>
+            <div style="margin-top: 8px; font-size: 11px; text-align: left;">
+                <button type="button" onclick="submitToolDesktopScan()" style="background: none; border: none; color: #818cf8; cursor: pointer; text-decoration: underline; font-weight: bold;">
+                    ⚡ أو التثبيت التلقائي للملف الموجود على سطح المكتب
+                </button>
+            </div>
+            <div id="toolStatusMsg" class="status-msg"></div>
+        </div>
+
+        <div style="margin-top: 20px;" class="btn-group">
+            <button type="button" onclick="triggerCloudRemoteUpdate()" id="btnRemoteCloud" class="btn btn-primary">
+                <i class="fa-solid fa-globe"></i>
+                1. تحديث عن بعد بنقرة واحدة (سحابي مباشر من الإنترنت)
+            </button>
             <a href="/download/update_employee.bat" class="btn btn-success">
                 <i class="fa-solid fa-bolt"></i>
                 2. تنزيل ملف التحديث السريع بنقرة واحدة (update_employee.bat)
             </a>
             <a href="/download/update.zip" class="btn btn-secondary">
-                <i class="fa-solid fa-file-zipper"></i>
-                3. تنزيل حزمة التحديث ZIP المضغوطة
+                <i class="fa-solid fa-download"></i>
+                3. تنزيل حزمة التحديث ZIP مباشرة
+            </a>
+            <a href="/download/installer.exe" class="btn btn-secondary" style="background: #1e1b4b; color: #c7d2fe; border: 1px solid #4338ca;">
+                <i class="fa-solid fa-shield-halved"></i>
+                4. تنزيل ملف التثبيت الكامل (Setup.exe)
             </a>
         </div>
 
         <div class="steps">
-            <h3><i class="fa-solid fa-circle-info"></i> خطوات سهلة جداً:</h3>
+            <h3><i class="fa-solid fa-circle-info"></i> مسارات البرنامج والتحديث:</h3>
             <ol>
-                <li>اضغط على <b>الخيار رقم 1</b> لتنزيل ملف التثبيت المباشر.</li>
-                <li>عند انتهاء التنزيل، اضغط على الملف لتشغيله واضغط <b>Next ثم Install</b>.</li>
-                <li>سيتم استبدال كل الملفات تلقائياً وتصحيح الكاش والصندوق وحفظ جميع البيانات بنسبة 100%.</li>
+                <li><b>مسار البرنامج على الكمبيوتر:</b> <span style="font-family: monospace; color: #fbbf24;">C:\\STARGATE_CAFE</span></li>
+                <li><b>مسار حزمة التحديث:</b> تجدها على سطح المكتب باسم <span style="font-family: monospace; color: #a5b4fc;">Stargate_Cafe_Update.zip</span></li>
+                <li>كافة المبيعات والفواتير وقواعد البيانات محمية ومؤمنة 100% ولا تتأثر بالتحديث.</li>
             </ol>
         </div>
     </div>
+
+    <script>
+        function onToolFileChange(input) {
+            const file = input.files[0];
+            const lbl = document.getElementById('toolFileLbl');
+            const btn = document.getElementById('toolUploadBtn');
+            if (file) {
+                lbl.innerText = file.name + ' (' + (file.size / (1024*1024)).toFixed(1) + ' MB)';
+                btn.disabled = false;
+            } else {
+                lbl.innerText = 'اضغط لاختيار ملف Stargate_Cafe_Update.zip';
+                btn.disabled = true;
+            }
+        }
+
+        function submitToolManualUpdate() {
+            const input = document.getElementById('toolManualZip');
+            const file = input.files[0];
+            if (!file) return alert('يرجى اختيار ملف التحديث أولاً');
+
+            const btn = document.getElementById('toolUploadBtn');
+            const status = document.getElementById('toolStatusMsg');
+            btn.disabled = true;
+            status.style.display = 'block';
+            status.style.background = '#1e1b4b';
+            status.style.color = '#c7d2fe';
+            status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري رفع وتطبيق التحديث...';
+
+            const formData = new FormData();
+            formData.append('update_zip', file);
+
+            fetch('/api/manual_update', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.success) {
+                        status.style.background = '#064e3b';
+                        status.style.color = '#6ee7b7';
+                        status.innerHTML = '✅ ' + res.message;
+                        setTimeout(() => location.reload(), 4000);
+                    } else {
+                        alert('تعذر التحديث: ' + (res.error || ''));
+                        status.style.display = 'none';
+                        btn.disabled = false;
+                    }
+                })
+                .catch(err => {
+                    alert('خطأ أثناء التحديث: ' + err);
+                    status.style.display = 'none';
+                    btn.disabled = false;
+                });
+        }
+
+        function submitToolDesktopScan() {
+            const status = document.getElementById('toolStatusMsg');
+            status.style.display = 'block';
+            status.style.background = '#1e1b4b';
+            status.style.color = '#c7d2fe';
+            status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري فحص ملفات التحديث على سطح المكتب...';
+
+            fetch('/api/manual_update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: 'scan_local' })
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    status.style.background = '#064e3b';
+                    status.style.color = '#6ee7b7';
+                    status.innerHTML = '✅ ' + res.message;
+                    setTimeout(() => location.reload(), 4000);
+                } else {
+                    alert(res.error || 'لم يتم العثور على الملف');
+                    status.style.display = 'none';
+                }
+            })
+            .catch(err => {
+                alert('خطأ: ' + err);
+                status.style.display = 'none';
+            });
+        }
+
+        function triggerCloudRemoteUpdate() {
+            const btn = document.getElementById('btnRemoteCloud');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الاتصال وتنزيل التحديث عن بعد...';
+
+            fetch('/api/do_update', { method: 'POST' })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.success) {
+                        btn.style.background = '#15803d';
+                        btn.innerHTML = '✅ تم التنزيل والتثبيت! سيُعاد تشغيل البرنامج تلقائياً...';
+                        setTimeout(() => location.reload(), 4000);
+                    } else {
+                        alert('تعذر التحديث عن بعد: ' + (res.error || ''));
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fa-solid fa-globe"></i> 1. تحديث عن بعد بنقرة واحدة (سحابي مباشر من الإنترنت)';
+                    }
+                })
+                .catch(err => {
+                    alert('خطأ في الاتصال: ' + err);
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-globe"></i> 1. تحديث عن بعد بنقرة واحدة (سحابي مباشر من الإنترنت)';
+                });
+        }
+    </script>
 </body>
 </html>"""
     return render_template_string(html)
