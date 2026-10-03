@@ -929,16 +929,20 @@
         renderCart();
     }
 
-    function syncOthersPrice(source) {
+    function syncOthersPrice(source, force = false) {
         const lbpIn = document.getElementById('othersPrice');
         const usdIn = document.getElementById('othersPriceUSD');
         if (!lbpIn || !usdIn) return;
         if (source === 'lbp') {
-            const v = parseFloat(lbpIn.value) || 0;
-            usdIn.value = (v > 0 && EXCHANGE_RATE > 0) ? (v / EXCHANGE_RATE).toFixed(2) : '';
+            if (force || !usdIn.value || parseFloat(usdIn.value) === 0) {
+                const v = parseFloat(lbpIn.value) || 0;
+                usdIn.value = (v > 0 && EXCHANGE_RATE > 0) ? (v / EXCHANGE_RATE).toFixed(2) : '';
+            }
         } else if (source === 'usd') {
-            const v = parseFloat(usdIn.value) || 0;
-            lbpIn.value = (v > 0 && EXCHANGE_RATE > 0) ? Math.round(v * EXCHANGE_RATE) : '';
+            if (force || !lbpIn.value || parseFloat(lbpIn.value) === 0) {
+                const v = parseFloat(usdIn.value) || 0;
+                lbpIn.value = (v > 0 && EXCHANGE_RATE > 0) ? Math.round(v * EXCHANGE_RATE) : '';
+            }
         }
     }
 
@@ -1867,7 +1871,12 @@ function closeCoffeeBlockedModal() {
                 </div>
                 <div>
                     <label class="block text-slate-300 font-bold mb-1">السعر بالدولار ($):</label>
-                    <input type="number" id="editItemPriceUSD" step="any" oninput="syncQuickEditPrice('usd')" class="w-full bg-slate-950 border border-slate-700 text-emerald-400 font-mono font-bold rounded-xl px-3 py-2.5 text-xs focus:border-cyan-500 focus:outline-none">
+                    <div class="flex items-center gap-1.5">
+                        <input type="number" id="editItemPriceUSD" step="any" oninput="syncQuickEditPrice('usd')" class="w-full bg-slate-950 border border-slate-700 text-emerald-400 font-mono font-bold rounded-xl px-3 py-2.5 text-xs focus:border-cyan-500 focus:outline-none">
+                        <button type="button" onclick="syncQuickEditPrice('lbp', true)" title="تحويل السعر بالدولار حسب الصرف" class="p-2.5 bg-slate-900 hover:bg-slate-800 text-amber-400 rounded-xl border border-slate-700 text-xs shrink-0 cursor-pointer">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -2592,13 +2601,22 @@ function selectEditItemEmoji(ic) {
     updateQuickEditLivePreview();
 }
 
-function syncQuickEditPrice(source) {
+function syncQuickEditPrice(source, force = false) {
     const lbp = document.getElementById('editItemPriceLBP');
     const usd = document.getElementById('editItemPriceUSD');
-    if (source === 'lbp' && lbp.value) {
-        usd.value = (parseFloat(lbp.value) / CAFE_EXCHANGE_RATE).toFixed(2);
-    } else if (source === 'usd' && usd.value) {
-        lbp.value = Math.round(parseFloat(usd.value) * CAFE_EXCHANGE_RATE);
+    if (!lbp || !usd) return;
+    if (source === 'lbp') {
+        if (force || !usd.value || parseFloat(usd.value) === 0) {
+            if (lbp.value && CAFE_EXCHANGE_RATE > 0) {
+                usd.value = (parseFloat(lbp.value) / CAFE_EXCHANGE_RATE).toFixed(2);
+            }
+        }
+    } else if (source === 'usd') {
+        if (force || !lbp.value || parseFloat(lbp.value) === 0) {
+            if (usd.value && CAFE_EXCHANGE_RATE > 0) {
+                lbp.value = Math.round(parseFloat(usd.value) * CAFE_EXCHANGE_RATE);
+            }
+        }
     }
     updateQuickEditLivePreview();
 }

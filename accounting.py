@@ -989,7 +989,7 @@ def add_item(data):
     settings = get_settings()
     rate = float(settings.get('exchange_rate') or 89500.0)
     if price_lbp == 0 and price_usd > 0 and rate > 0:
-        price_lbp = round(price_usd * rate, -2)
+        price_lbp = round(price_usd * rate, 0)
     elif price_usd == 0 and price_lbp > 0 and rate > 0:
         price_usd = round(price_lbp / rate, 2)
 
@@ -998,14 +998,14 @@ def add_item(data):
     if wholesale_price_lbp > 0 and wholesale_price_usd == 0 and rate > 0:
         wholesale_price_usd = round(wholesale_price_lbp / rate, 2)
     elif wholesale_price_usd > 0 and wholesale_price_lbp == 0 and rate > 0:
-        wholesale_price_lbp = round(wholesale_price_usd * rate, -2)
+        wholesale_price_lbp = round(wholesale_price_usd * rate, 0)
 
     cost_price_lbp = float(data.get('cost_price_lbp') or 0.0)
     cost_price_usd = float(data.get('cost_price_usd') or 0.0)
     if cost_price_lbp > 0 and cost_price_usd == 0 and rate > 0:
         cost_price_usd = round(cost_price_lbp / rate, 2)
     elif cost_price_usd > 0 and cost_price_lbp == 0 and rate > 0:
-        cost_price_lbp = round(cost_price_usd * rate, -2)
+        cost_price_lbp = round(cost_price_usd * rate, 0)
 
     if not name or not category_id:
         return False, "اسم الصنف والتصنيف مطلوبان"
@@ -1052,7 +1052,7 @@ def update_item(item_id, data):
     settings = get_settings()
     rate = float(settings.get('exchange_rate') or 89500.0)
     if price_lbp == 0 and price_usd > 0 and rate > 0:
-        price_lbp = round(price_usd * rate, -2)
+        price_lbp = round(price_usd * rate, 0)
     elif price_usd == 0 and price_lbp > 0 and rate > 0:
         price_usd = round(price_lbp / rate, 2)
 
@@ -1061,14 +1061,14 @@ def update_item(item_id, data):
     if wholesale_price_lbp > 0 and wholesale_price_usd == 0 and rate > 0:
         wholesale_price_usd = round(wholesale_price_lbp / rate, 2)
     elif wholesale_price_usd > 0 and wholesale_price_lbp == 0 and rate > 0:
-        wholesale_price_lbp = round(wholesale_price_usd * rate, -2)
+        wholesale_price_lbp = round(wholesale_price_usd * rate, 0)
 
     cost_price_lbp = float(data.get('cost_price_lbp') or 0.0)
     cost_price_usd = float(data.get('cost_price_usd') or 0.0)
     if cost_price_lbp > 0 and cost_price_usd == 0 and rate > 0:
         cost_price_usd = round(cost_price_lbp / rate, 2)
     elif cost_price_usd > 0 and cost_price_lbp == 0 and rate > 0:
-        cost_price_lbp = round(cost_price_usd * rate, -2)
+        cost_price_lbp = round(cost_price_usd * rate, 0)
 
     conn = get_db()
     cursor = conn.cursor()
@@ -3212,34 +3212,44 @@ def quick_update_item_field(item_id, field, value):
         updated_data = {}
         if field == 'price_lbp':
             p_lbp = float(value or 0)
-            p_usd = round(p_lbp / rate, 2) if rate > 0 else 0
-            cursor.execute("UPDATE cafe_items SET price_lbp = ?, price_usd = ? WHERE id = ?", (p_lbp, p_usd, item_id))
-            updated_data = {'price_lbp': int(p_lbp), 'price_usd': p_usd}
+            cursor.execute("UPDATE cafe_items SET price_lbp = ? WHERE id = ?", (p_lbp, item_id))
+            cursor.execute("SELECT price_usd FROM cafe_items WHERE id = ?", (item_id,))
+            row = cursor.fetchone()
+            curr_usd = float(row['price_usd'] or 0) if row else 0
+            if curr_usd == 0 and rate > 0 and p_lbp > 0:
+                p_usd = round(p_lbp / rate, 2)
+                cursor.execute("UPDATE cafe_items SET price_usd = ? WHERE id = ?", (p_usd, item_id))
+                updated_data = {'price_lbp': p_lbp, 'price_usd': p_usd}
+            else:
+                updated_data = {'price_lbp': p_lbp}
         elif field == 'price_usd':
             p_usd = float(value or 0)
-            p_lbp = round(p_usd * rate, -3) if rate > 0 else 0
-            cursor.execute("UPDATE cafe_items SET price_lbp = ?, price_usd = ? WHERE id = ?", (p_lbp, p_usd, item_id))
-            updated_data = {'price_lbp': int(p_lbp), 'price_usd': p_usd}
+            cursor.execute("UPDATE cafe_items SET price_usd = ? WHERE id = ?", (p_usd, item_id))
+            cursor.execute("SELECT price_lbp FROM cafe_items WHERE id = ?", (item_id,))
+            row = cursor.fetchone()
+            curr_lbp = float(row['price_lbp'] or 0) if row else 0
+            if curr_lbp == 0 and rate > 0 and p_usd > 0:
+                p_lbp = round(p_usd * rate, 0)
+                cursor.execute("UPDATE cafe_items SET price_lbp = ? WHERE id = ?", (p_lbp, item_id))
+                updated_data = {'price_lbp': p_lbp, 'price_usd': p_usd}
+            else:
+                updated_data = {'price_usd': p_usd}
         elif field == 'wholesale_price_lbp':
             w_lbp = float(value or 0)
-            w_usd = round(w_lbp / rate, 2) if rate > 0 else 0
-            cursor.execute("UPDATE cafe_items SET wholesale_price_lbp = ?, wholesale_price_usd = ? WHERE id = ?", (w_lbp, w_usd, item_id))
-            updated_data = {'wholesale_price_lbp': int(w_lbp), 'wholesale_price_usd': w_usd}
+            cursor.execute("UPDATE cafe_items SET wholesale_price_lbp = ? WHERE id = ?", (w_lbp, item_id))
+            updated_data = {'wholesale_price_lbp': w_lbp}
         elif field == 'wholesale_price_usd':
             w_usd = float(value or 0)
-            w_lbp = round(w_usd * rate, -3) if rate > 0 else 0
-            cursor.execute("UPDATE cafe_items SET wholesale_price_lbp = ?, wholesale_price_usd = ? WHERE id = ?", (w_lbp, w_usd, item_id))
-            updated_data = {'wholesale_price_lbp': int(w_lbp), 'wholesale_price_usd': w_usd}
+            cursor.execute("UPDATE cafe_items SET wholesale_price_usd = ? WHERE id = ?", (w_usd, item_id))
+            updated_data = {'wholesale_price_usd': w_usd}
         elif field == 'cost_price_lbp':
             c_lbp = float(value or 0)
-            c_usd = round(c_lbp / rate, 2) if rate > 0 else 0
-            cursor.execute("UPDATE cafe_items SET cost_price_lbp = ?, cost_price_usd = ? WHERE id = ?", (c_lbp, c_usd, item_id))
-            updated_data = {'cost_price_lbp': int(c_lbp), 'cost_price_usd': c_usd}
+            cursor.execute("UPDATE cafe_items SET cost_price_lbp = ? WHERE id = ?", (c_lbp, item_id))
+            updated_data = {'cost_price_lbp': c_lbp}
         elif field == 'cost_price_usd':
             c_usd = float(value or 0)
-            c_lbp = round(c_usd * rate, -3) if rate > 0 else 0
-            cursor.execute("UPDATE cafe_items SET cost_price_lbp = ?, cost_price_usd = ? WHERE id = ?", (c_lbp, c_usd, item_id))
-            updated_data = {'cost_price_lbp': int(c_lbp), 'cost_price_usd': c_usd}
+            cursor.execute("UPDATE cafe_items SET cost_price_usd = ? WHERE id = ?", (c_usd, item_id))
+            updated_data = {'cost_price_usd': c_usd}
         elif field == 'stock_qty':
             cursor.execute("SELECT name, stock_qty, cost_price_lbp, cost_price_usd FROM cafe_items WHERE id = ?", (item_id,))
             row = cursor.fetchone()
@@ -4990,7 +5000,7 @@ def import_inventory_from_csv(file_stream):
         price_lbp = parse_num(r[idx_price_lbp]) if idx_price_lbp != -1 and len(r) > idx_price_lbp else 0.0
         price_usd = parse_num(r[idx_price_usd]) if idx_price_usd != -1 and len(r) > idx_price_usd else 0.0
         if price_lbp == 0 and price_usd > 0 and rate > 0:
-            price_lbp = round(price_usd * rate, -2)
+            price_lbp = round(price_usd * rate, 0)
         elif price_usd == 0 and price_lbp > 0 and rate > 0:
             price_usd = round(price_lbp / rate, 2)
 

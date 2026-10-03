@@ -2711,7 +2711,7 @@ def api_item_quick_edit():
         if price_lbp > 0 and price_usd == 0 and rate > 0:
             price_usd = round(price_lbp / rate, 2)
         elif price_usd > 0 and price_lbp == 0 and rate > 0:
-            price_lbp = round(price_usd * rate, -3)
+            price_lbp = round(price_usd * rate, 0)
             
         conn = database.get_db()
         cursor = conn.cursor()

@@ -202,13 +202,18 @@
                             </span>
                             {% endif %}
                             <div>
-                                <span class="text-white text-xs font-bl                        <!-- Cost Price LBP (Fast Inline Editable) -->
+                                <span class="text-white text-xs font-bold block">{{ item.name }}</span>
+                                <span class="text-[10px] text-slate-400 block">{{ item.category_name or 'عام' }}</span>
+                            </div>
+                        </td>
+
+                        <!-- Cost Price LBP (Fast Inline Editable) -->
                         <td class="p-3.5 font-mono">
                             <div class="flex items-center gap-1.5">
                                 <input type="number" 
-                                       step="1000" 
+                                       step="any" 
                                        data-field="cost_price_lbp"
-                                       value="{{ item.cost_price_lbp|default(0)|int }}" 
+                                       value="{{ item.cost_price_lbp|default(0) }}" 
                                        onchange="inlineUpdateField({{ item.id }}, 'cost_price_lbp', this.value, this)" 
                                        class="w-24 bg-slate-950 border border-slate-700 focus:border-rose-400 text-rose-300 font-mono font-bold text-xs rounded-xl px-2 py-1 focus:outline-none transition"
                                        title="سعر التكلفة">
@@ -220,9 +225,9 @@
                         <td class="p-3.5 font-mono font-black text-amber-400">
                             <div class="flex items-center gap-1.5">
                                 <input type="number" 
-                                       step="1000" 
+                                       step="any" 
                                        data-field="price_lbp"
-                                       value="{{ item.price_lbp|int }}" 
+                                       value="{{ item.price_lbp }}" 
                                        onchange="inlineUpdateField({{ item.id }}, 'price_lbp', this.value, this)" 
                                        class="w-24 bg-slate-950 border border-amber-500/40 focus:border-amber-400 text-amber-300 font-mono font-black text-xs rounded-xl px-2 py-1 focus:outline-none transition">
                                 <span class="text-[10px] text-slate-400 font-normal">ل.ل</span>
@@ -233,9 +238,9 @@
                         <td class="p-3.5 font-mono font-black text-purple-400">
                             <div class="flex items-center gap-1.5">
                                 <input type="number" 
-                                       step="1000" 
+                                       step="any" 
                                        data-field="wholesale_price_lbp"
-                                       value="{{ item.wholesale_price_lbp|default(0)|int }}" 
+                                       value="{{ item.wholesale_price_lbp|default(0) }}" 
                                        onchange="inlineUpdateField({{ item.id }}, 'wholesale_price_lbp', this.value, this)" 
                                        class="w-24 bg-slate-950 border border-purple-500/40 focus:border-purple-400 text-purple-300 font-mono font-black text-xs rounded-xl px-2 py-1 focus:outline-none transition"
                                        title="سعر الجملة للزبائن التجاريين">
@@ -248,13 +253,13 @@
                             <div class="flex items-center gap-1">
                                 <span class="text-emerald-400 font-bold text-xs">$</span>
                                 <input type="number" 
-                                       step="0.05" 
+                                       step="any" 
                                        min="0"
                                        data-field="price_usd"
-                                       value="{{ item.price_usd|round(2) }}" 
+                                       value="{{ item.price_usd }}" 
                                        onchange="inlineUpdateField({{ item.id }}, 'price_usd', this.value, this)" 
                                        class="w-20 bg-slate-950 border border-emerald-500/40 focus:border-emerald-400 text-emerald-300 font-mono font-black text-xs rounded-xl px-2 py-1 focus:outline-none transition"
-                                       title="تعديل السعر بالدولار مباشرة وسيتم حساب اللبناني تلقائياً">
+                                       title="تعديل السعر بالدولار">
                             </div>
                         </td>
 
@@ -461,9 +466,12 @@
             <div class="grid grid-cols-2 gap-2">
                 <div>
                     <label class="text-xs text-amber-400 font-bold block mb-1">سعر البيع تجزئة (ل.ل أو $):</label>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-1.5">
                         <input type="number" id="quickAddPriceLBP" name="price_lbp" required step="any" min="0" placeholder="تجزئة (100000)" oninput="syncModalPrice('lbp')" class="w-full bg-slate-950 border border-amber-500/50 text-amber-300 font-mono font-black rounded-xl px-3 py-2 text-xs focus:border-amber-400 focus:outline-none">
-                        <input type="number" id="quickAddPriceUSD" name="price_usd" step="0.05" min="0" placeholder="$" oninput="syncModalPrice('usd')" class="w-24 bg-slate-950 border border-emerald-500/50 text-emerald-300 font-mono font-black rounded-xl px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none">
+                        <input type="number" id="quickAddPriceUSD" name="price_usd" step="any" min="0" placeholder="$" oninput="syncModalPrice('usd')" class="w-20 bg-slate-950 border border-emerald-500/50 text-emerald-300 font-mono font-black rounded-xl px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none">
+                        <button type="button" onclick="syncModalPrice('lbp', true)" title="تحويل السعر بالدولار حسب الصرف" class="p-2 bg-slate-900 hover:bg-slate-800 text-amber-400 rounded-xl border border-slate-700 text-xs shrink-0 cursor-pointer">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </button>
                     </div>
                 </div>
                 <div>
@@ -561,9 +569,12 @@
             <div class="grid grid-cols-2 gap-2">
                 <div>
                     <label class="text-xs text-amber-400 font-bold block mb-1">سعر البيع مفرق (ل.ل أو $):</label>
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-1.5">
                         <input type="number" id="editItemPriceLBP" name="price_lbp" required step="any" min="0" oninput="syncEditModalPrice('lbp')" class="w-full bg-slate-950 border border-amber-500/50 text-amber-300 font-mono font-black rounded-xl px-3 py-2 text-xs focus:border-amber-400 focus:outline-none">
-                        <input type="number" id="editItemPriceUSD" name="price_usd" step="0.05" min="0" oninput="syncEditModalPrice('usd')" class="w-24 bg-slate-950 border border-emerald-500/50 text-emerald-300 font-mono font-black rounded-xl px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none">
+                        <input type="number" id="editItemPriceUSD" name="price_usd" step="any" min="0" oninput="syncEditModalPrice('usd')" class="w-20 bg-slate-950 border border-emerald-500/50 text-emerald-300 font-mono font-black rounded-xl px-2.5 py-2 text-xs focus:border-emerald-400 focus:outline-none">
+                        <button type="button" onclick="syncEditModalPrice('lbp', true)" title="تحويل السعر بالدولار حسب الصرف" class="p-2 bg-slate-900 hover:bg-slate-800 text-amber-400 rounded-xl border border-slate-700 text-xs shrink-0 cursor-pointer">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </button>
                     </div>
                 </div>
                 <div>
@@ -621,24 +632,24 @@ function inlineUpdateField(itemId, field, value, inputEl) {
             inputEl.classList.add('border-emerald-500');
             setTimeout(() => inputEl.classList.remove('border-emerald-500'), 1500);
 
-            // Auto-sync sibling input on the same table row
+            // Auto-sync sibling input ONLY if sibling input is empty or 0
             const tr = inputEl.closest('tr');
             if (tr && data.data) {
                 if (data.data.price_lbp !== undefined && field === 'price_usd') {
                     const lbpInput = tr.querySelector('input[data-field="price_lbp"]');
-                    if (lbpInput) lbpInput.value = data.data.price_lbp;
+                    if (lbpInput && (!lbpInput.value || parseFloat(lbpInput.value) === 0)) lbpInput.value = data.data.price_lbp;
                 }
                 if (data.data.price_usd !== undefined && field === 'price_lbp') {
                     const usdInput = tr.querySelector('input[data-field="price_usd"]');
-                    if (usdInput) usdInput.value = data.data.price_usd;
+                    if (usdInput && (!usdInput.value || parseFloat(usdInput.value) === 0)) usdInput.value = data.data.price_usd;
                 }
                 if (data.data.wholesale_price_lbp !== undefined && field === 'wholesale_price_usd') {
                     const wInput = tr.querySelector('input[data-field="wholesale_price_lbp"]');
-                    if (wInput) wInput.value = data.data.wholesale_price_lbp;
+                    if (wInput && (!wInput.value || parseFloat(wInput.value) === 0)) wInput.value = data.data.wholesale_price_lbp;
                 }
                 if (data.data.cost_price_lbp !== undefined && field === 'cost_price_usd') {
                     const cInput = tr.querySelector('input[data-field="cost_price_lbp"]');
-                    if (cInput) cInput.value = data.data.cost_price_lbp;
+                    if (cInput && (!cInput.value || parseFloat(cInput.value) === 0)) cInput.value = data.data.cost_price_lbp;
                 }
             }
         } else {
@@ -651,31 +662,39 @@ function inlineUpdateField(itemId, field, value, inputEl) {
     });
 }
 
-function syncModalPrice(source) {
+function syncModalPrice(source, force = false) {
     const rate = {{ settings.exchange_rate or exchange_rate or 89500.0 }};
     const lbpInput = document.getElementById('quickAddPriceLBP');
     const usdInput = document.getElementById('quickAddPriceUSD');
     if (!lbpInput || !usdInput) return;
     if (source === 'lbp') {
         const val = parseFloat(lbpInput.value) || 0;
-        usdInput.value = (val > 0 && rate > 0) ? (val / rate).toFixed(2) : '';
+        if (force || !usdInput.value || parseFloat(usdInput.value) === 0) {
+            usdInput.value = (val > 0 && rate > 0) ? (val / rate).toFixed(2) : '';
+        }
     } else if (source === 'usd') {
         const val = parseFloat(usdInput.value) || 0;
-        lbpInput.value = (val > 0 && rate > 0) ? Math.round(val * rate) : '';
+        if (force || !lbpInput.value || parseFloat(lbpInput.value) === 0) {
+            lbpInput.value = (val > 0 && rate > 0) ? Math.round(val * rate) : '';
+        }
     }
 }
 
-function syncEditModalPrice(source) {
+function syncEditModalPrice(source, force = false) {
     const rate = {{ settings.exchange_rate or exchange_rate or 89500.0 }};
     const lbpInput = document.getElementById('editItemPriceLBP');
     const usdInput = document.getElementById('editItemPriceUSD');
     if (!lbpInput || !usdInput) return;
     if (source === 'lbp') {
         const val = parseFloat(lbpInput.value) || 0;
-        usdInput.value = (val > 0 && rate > 0) ? (val / rate).toFixed(2) : '';
+        if (force || !usdInput.value || parseFloat(usdInput.value) === 0) {
+            usdInput.value = (val > 0 && rate > 0) ? (val / rate).toFixed(2) : '';
+        }
     } else if (source === 'usd') {
         const val = parseFloat(usdInput.value) || 0;
-        lbpInput.value = (val > 0 && rate > 0) ? Math.round(val * rate) : '';
+        if (force || !lbpInput.value || parseFloat(lbpInput.value) === 0) {
+            lbpInput.value = (val > 0 && rate > 0) ? Math.round(val * rate) : '';
+        }
     }
 }
 
