@@ -479,7 +479,7 @@ def csrf_protect():
         if submitted_token and session_token and secrets.compare_digest(session_token, submitted_token):
             return None
             
-        if request.endpoint in ('employee_login', 'admin_login'):
+        if request.endpoint in ('employee_login', 'admin_login', 'api_do_update', 'api_check_update') or request.path in ('/api/do_update', '/api/check_update'):
             return None
 
         # CSRF failed
@@ -3153,8 +3153,10 @@ def api_do_update():
         ctx = ssl.create_default_context()
 
         base_dir = _get_base_dir()
-        zip_path = os.path.join(base_dir, 'cafe_update_package.zip')
-        tmp_dir  = os.path.join(base_dir, 'cafe_update_tmp')
+        import tempfile
+        tmp_base = tempfile.gettempdir()
+        zip_path = os.path.join(tmp_base, 'stargate_cafe_update_package.zip')
+        tmp_dir  = os.path.join(tmp_base, 'stargate_cafe_update_tmp')
 
         # إنشاء نسخة احتياطية فورية قبل أي تعديل
         try:
