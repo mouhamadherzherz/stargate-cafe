@@ -178,23 +178,42 @@
                 prog.innerText = 'جاري تنزيل ملفات التحديث الرسمية وتثبيتها...';
             }
 
-            fetch('/api/do_update', { method: 'POST' })
-                .then(r => r.json())
-                .then(res => {
-                    if (res.success) {
-                        if (prog) prog.innerText = '✅ تم بنجاح! سيُعاد تشغيل البرنامج تلقائياً خلال لحظات...';
-                        setTimeout(() => location.reload(), 4000);
-                    } else {
-                        alert('تعذر التحديث: ' + (res.error || 'خطأ'));
-                        if (btn) btn.disabled = false;
-                        if (prog) prog.classList.add('hidden');
+            fetch('/api/do_update', { 
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(async response => {
+                const text = await response.text();
+                let res;
+                try {
+                    res = JSON.parse(text);
+                } catch (jsonErr) {
+                    console.error('Non-JSON server response:', text);
+                    if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+                        throw new Error('انتهت الجلسة أو يلزم تسجيل دخول المدير. يرجى إدخال رمز المدير وإعادة المحاولة.');
                     }
-                })
-                .catch(err => {
-                    alert('خطأ: ' + err);
+                    throw new Error('استجابة غير متوقعة من خادم البرنامج.');
+                }
+                return res;
+            })
+            .then(res => {
+                if (res && res.success) {
+                    if (prog) prog.innerText = '✅ تم بنجاح! سيُعاد تشغيل البرنامج تلقائياً خلال لحظات...';
+                    setTimeout(() => location.reload(), 4000);
+                } else {
+                    alert('تعذر التحديث: ' + ((res && res.error) || 'خطأ غير معروف'));
                     if (btn) btn.disabled = false;
                     if (prog) prog.classList.add('hidden');
-                });
+                }
+            })
+            .catch(err => {
+                alert('حدث خطأ أثناء التحديث: ' + (err.message || err));
+                if (btn) btn.disabled = false;
+                if (prog) prog.classList.add('hidden');
+            });
         }
 
         document.addEventListener('DOMContentLoaded', () => {

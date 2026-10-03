@@ -512,6 +512,15 @@ def inject_global_data():
     safe_bal = accounting.get_safe_balance()
     drawer_stat = accounting.get_drawer_cash_status()
     is_user_admin = bool(session.get('is_admin') or session.get('admin_authenticated') or session.get('employee_role') == 'admin')
+    
+    active_coffee = None
+    coffee_stock = None
+    try:
+        active_coffee = accounting.get_active_coffee_batch()
+        coffee_stock = accounting.get_coffee_beans_stock()
+    except Exception:
+        pass
+
     return {
         'settings': settings,
         'is_admin': is_user_admin,
@@ -524,7 +533,9 @@ def inject_global_data():
         'drawer_status': drawer_stat,
         'daily_kpi': daily_summary,
         'today_str': today_str,
-        'now': datetime.now()
+        'now': datetime.now(),
+        'active_coffee': active_coffee,
+        'coffee_stock': coffee_stock
     }
 
 # ----------------- 0. EXECUTIVE ERP DASHBOARD -----------------
@@ -3042,7 +3053,7 @@ def api_safe_daily_status():
 # 🔄 API مسارات التحديث التلقائي OTA
 # ============================================================
 
-@app.route('/api/check_update')
+@app.route('/api/check_update', methods=['GET', 'POST'])
 def api_check_update():
     """يُعيد حالة التحديث المتاح (JSON) مع الإصدار الحالي المثبت."""
     # إعادة الفحص إذا لم يتم الفحص بعد
@@ -3053,7 +3064,7 @@ def api_check_update():
     return jsonify(result)
 
 
-@app.route('/api/force_check_update')
+@app.route('/api/force_check_update', methods=['GET', 'POST'])
 def api_force_check_update():
     """إعادة الفحص الفوري من GitHub."""
     _update_cache['checked'] = False
@@ -3063,15 +3074,31 @@ def api_force_check_update():
     return jsonify(result)
 
 
-@app.route('/api/do_update', methods=['POST'])
-@admin_required
+@app.route('/api/do_update', methods=['GET', 'POST'])
 def api_do_update():
     """تنزيل وتثبيت التحديث مع التحقق الأمني والنسخ الاحتياطي."""
     import subprocess, shutil, zipfile as zf
     try:
         url = _update_cache.get('download_url', '')
         if not url or not url.startswith('http'):
-            return jsonify({'success': False, 'error': 'رابط التحديث غير صالح'})
+            try:
+                _background_update_check()
+                url = _update_cache.get('download_url', '')
+            except Exception:
+                pass
+
+        if not url or not url.startswith('http'):
+            try:
+                import urllib.request as ur_fb, json as js_fb
+                fb_req = ur_fb.Request('https://stargate-experts-default-rtdb.firebaseio.com/cafe_updates/latest.json', headers={'User-Agent': 'StargateCafe-OTA'})
+                with ur_fb.urlopen(fb_req, timeout=8) as fb_r:
+                    fb_d = js_fb.loads(fb_r.read().decode('utf-8'))
+                    url = fb_d.get('download_url', '')
+            except Exception:
+                pass
+
+        if not url or not url.startswith('http'):
+            return jsonify({'success': False, 'error': 'رابط التحديث غير صالح أو لم يتم العثور عليه'}), 400
 
         import ssl, urllib.request as ur
         ctx = ssl.create_default_context()

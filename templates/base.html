@@ -660,29 +660,48 @@ function startOtaUpdateProcess() {
     if (bar) bar.style.width = '40%';
     if (status) status.innerText = 'جاري تنزيل ملفات التحديث الرسمية من السحابة...';
 
-    fetch('/api/do_update', { method: 'POST' })
-        .then(r => r.json())
-        .then(res => {
-            if (res.success) {
-                if (bar) bar.style.width = '100%';
-                if (status) status.innerText = '✅ تم التنزيل بنجاح! جاري تثبيت التحديث وإعادة تشغيل البرنامج...';
-                let counter = 4;
-                const interval = setInterval(() => {
-                    if (status) status.innerText = `سيُعاد فتح البرنامج تلقائياً خلال ${counter} ثوانٍ...`;
-                    counter--;
-                    if (counter < 0) { clearInterval(interval); location.reload(); }
-                }, 1000);
-            } else {
-                alert('تعذر تطبيق التحديث: ' + (res.error || 'خطأ غير معروف'));
-                if (modal) modal.classList.add('hidden');
-                if (btn) btn.disabled = false;
+    fetch('/api/do_update', { 
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(async response => {
+        const text = await response.text();
+        let res;
+        try {
+            res = JSON.parse(text);
+        } catch (jsonErr) {
+            console.error('Non-JSON server response:', text);
+            if (text.includes('<!DOCTYPE') || text.includes('<html')) {
+                throw new Error('انتهت الجلسة أو تعذر الوصول للصلاحيات. يرجى تسجيل الدخول وإعادة المحاولة.');
             }
-        })
-        .catch(err => {
-            alert('حدث خطأ أثناء التحديث: ' + err);
+            throw new Error('استجابة غير متوقعة من خادم البرنامج.');
+        }
+        return res;
+    })
+    .then(res => {
+        if (res && res.success) {
+            if (bar) bar.style.width = '100%';
+            if (status) status.innerText = '✅ تم التنزيل بنجاح! جاري تثبيت التحديث وإعادة تشغيل البرنامج...';
+            let counter = 4;
+            const interval = setInterval(() => {
+                if (status) status.innerText = `سيُعاد فتح البرنامج تلقائياً خلال ${counter} ثوانٍ...`;
+                counter--;
+                if (counter < 0) { clearInterval(interval); location.reload(); }
+            }, 1000);
+        } else {
+            alert('تعذر تطبيق التحديث: ' + ((res && res.error) || 'خطأ غير معروف'));
             if (modal) modal.classList.add('hidden');
             if (btn) btn.disabled = false;
-        });
+        }
+    })
+    .catch(err => {
+        alert('حدث خطأ أثناء التحديث: ' + (err.message || err));
+        if (modal) modal.classList.add('hidden');
+        if (btn) btn.disabled = false;
+    });
 }
 
 // Auto check update 15 seconds after page load and every 10 minutes (never block UI)

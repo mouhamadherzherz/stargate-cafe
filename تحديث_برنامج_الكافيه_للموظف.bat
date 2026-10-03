@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
-title تحديث برنامج ستارجيت كافيه - STARGATE CAFE v4.4.0
+title تحديث برنامج ستارجيت كافيه - STARGATE CAFE v5.3.0
 color 0b
 
 echo ======================================================================
-echo          STARGATE EXPERTS - تحديث برنامج الكافيه v4.4.0
+echo          STARGATE EXPERTS - تحديث برنامج الكافيه v5.3.0
 echo ======================================================================
 echo.
 
@@ -21,7 +21,7 @@ if not exist "%CAFE_DIR%" (
 echo [1/5] جاري حفظ نسخة احتياطية آمنة للبيانات والمبيعات...
 if exist "%CAFE_DIR%\data\cafe_accounting.db" (
     if not exist "%CAFE_DIR%\Safe_Backups" mkdir "%CAFE_DIR%\Safe_Backups"
-    copy /Y "%CAFE_DIR%\data\cafe_accounting.db" "%CAFE_DIR%\Safe_Backups\backup_before_v440_%random%.db" >nul 2>&1
+    copy /Y "%CAFE_DIR%\data\cafe_accounting.db" "%CAFE_DIR%\Safe_Backups\backup_before_v530_%random%.db" >nul 2>&1
     echo     [OK] تم تأمين نسخة احتياطية بنجاح 100%%.
 )
 
@@ -34,9 +34,9 @@ timeout /t 2 /nobreak >nul
 echo     [OK] تم فك قفل الملفات.
 
 :: 3. تنزيل التحديث السحابي الجديد
-echo [3/5] جاري تنزيل حزمة التحديث v4.5.0 من السحابة...
-set "ZIP_URL=https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v4.5.0/Stargate_Cafe_Update.zip"
-set "TEMP_ZIP=%CAFE_DIR%\update_v450.zip"
+echo [3/5] جاري تنزيل حزمة التحديث v5.3.0 من السحابة...
+set "ZIP_URL=https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.3.0/Stargate_Cafe_Update.zip"
+set "TEMP_ZIP=%CAFE_DIR%\update_v530.zip"
 set "TEMP_EXTRACT=%CAFE_DIR%\update_extracted"
 
 if exist "%TEMP_EXTRACT%" rmdir /S /Q "%TEMP_EXTRACT%" >nul 2>&1
