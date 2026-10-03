@@ -28,12 +28,17 @@
 
         <!-- Stock Indicator & Actions -->
         <div class="flex flex-wrap items-center gap-4 bg-slate-950/90 border border-amber-500/40 p-4 rounded-2xl shadow-inner">
-            <div class="text-right">
-                <span class="text-xs text-slate-400 font-bold block mb-0.5">📦 رصيد حبوب القهوة بالمحل:</span>
+            <div class="text-right space-y-1">
+                <span class="text-xs text-slate-400 font-bold block mb-0.5">📦 رصيد حبوب القهوة بالمخزن:</span>
                 <div class="text-2xl font-black font-mono text-amber-300">
                     {{ summary.stock_info.stock_kg }} <span class="text-sm font-normal text-slate-400">كيلو (KG)</span>
                 </div>
-                <span class="text-xs text-emerald-400 font-mono font-bold block mt-0.5">
+                <div class="text-xs text-emerald-400 font-mono font-bold flex flex-wrap items-center gap-2">
+                    <span>💵 سعر الكيلو: {{ summary.stock_info.cost_per_kg_lbp|format_currency }} ل.ل ≈ {{ summary.stock_info.cost_per_kg_usd|to_usd }}</span>
+                    <span class="text-slate-600">|</span>
+                    <span>إجمالي القيمة: {{ summary.stock_info.total_cost_lbp|format_currency }} ل.ل ≈ {{ summary.stock_info.total_cost_usd|to_usd }}</span>
+                </div>
+                <span class="text-xs text-slate-300 font-mono block mt-0.5">
                     {% if summary.get('benchmark_cups', 0) > 0 %}
                     ≈ {{ summary.stock_info.expected_cups }} فنجان متوقع (وفق الكيلو السابق: {{ summary.get('benchmark_cups', 0) }} فنجان)
                     {% else %}
@@ -408,11 +413,11 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-xs font-bold text-slate-300 mb-1.5">سعر هذا الكيلو (ل.ل) - معتمد تلقائياً:</label>
-                    <input type="number" step="any" min="0" name="cost_per_kg_lbp" id="openBagCostLbp" value="{{ summary.stock_info.cost_per_kg if summary.stock_info.cost_per_kg > 0 else '' }}" placeholder="{{ summary.stock_info.cost_per_kg }}" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold text-sm px-4 py-3 rounded-2xl focus:border-amber-400 outline-none">
+                    <input type="number" step="any" min="0" name="cost_per_kg_lbp" id="openBagCostLbp" value="{{ summary.stock_info.cost_per_kg_lbp if summary.stock_info and summary.stock_info.cost_per_kg_lbp > 0 else '' }}" oninput="syncOpenBagCost('lbp')" placeholder="{{ summary.stock_info.cost_per_kg_lbp }}" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold text-sm px-4 py-3 rounded-2xl focus:border-amber-400 outline-none">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-300 mb-1.5">أو بالدولار ($):</label>
-                    <input type="number" step="any" min="0" name="cost_per_kg_usd" id="openBagCostUsd" placeholder="اختياري" class="w-full bg-slate-950 border border-slate-700 text-emerald-300 font-mono font-bold text-sm px-4 py-3 rounded-2xl focus:border-amber-400 outline-none">
+                    <input type="number" step="any" min="0" name="cost_per_kg_usd" id="openBagCostUsd" value="{{ summary.stock_info.cost_per_kg_usd if summary.stock_info and summary.stock_info.cost_per_kg_usd > 0 else '' }}" oninput="syncOpenBagCost('usd')" placeholder="اختياري" class="w-full bg-slate-950 border border-slate-700 text-emerald-300 font-mono font-bold text-sm px-4 py-3 rounded-2xl focus:border-amber-400 outline-none">
                 </div>
             </div>
 
@@ -601,17 +606,36 @@
 
             <div>
                 <label class="block text-xs font-bold text-slate-300 mb-1.5">الكمية الإجمالية بالمخزن بالكيلو (KG) *</label>
-                <input type="number" step="any" min="0" name="stock_kg" id="stockKgInput" value="{{ summary.stock_info.stock_kg }}" required placeholder="مثال: 10" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-black text-xl px-4 py-3 rounded-2xl focus:border-amber-400 outline-none text-center">
+                <input type="number" step="any" min="0" name="stock_kg" id="stockKgInput" value="{{ summary.stock_info.stock_kg }}" oninput="syncUpdateStock('qty')" required placeholder="مثال: 10" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-black text-xl px-4 py-3 rounded-2xl focus:border-amber-400 outline-none text-center">
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                    <label class="block text-xs font-bold text-amber-300 mb-1.5">سعر الكيلو الموحد (ل.ل):</label>
-                    <input type="number" step="any" min="0" name="cost_per_kg_lbp" id="costPerKgLbpInput" value="{{ summary.stock_info.cost_per_kg }}" placeholder="مثال: 1,163,500" class="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm font-mono font-bold px-4 py-3 rounded-2xl focus:border-amber-400 outline-none">
+            <!-- Dual Currency for Single Kg and Total Stock -->
+            <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+                <div class="flex items-center justify-between text-xs border-b border-slate-800/80 pb-2">
+                    <span class="text-slate-400">💵 سعر الصرف المعتمد بالبرنامج:</span>
+                    <strong class="font-mono text-white text-sm">{{ settings.exchange_rate|format_currency if settings else 89500 }} ل.ل / $</strong>
                 </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-300 mb-1.5">إجمالي ثمن الكمية (ل.ل):</label>
-                    <input type="number" step="any" min="0" name="total_cost_lbp" id="totalCostLbpInput" value="{{ (summary.stock_info.stock_kg * summary.stock_info.cost_per_kg)|int if summary.stock_info.cost_per_kg > 0 else '' }}" placeholder="مثال: 11,635,000" class="w-full bg-slate-950 border border-slate-700 text-emerald-400 text-sm font-mono font-bold px-4 py-3 rounded-2xl focus:border-amber-400 outline-none">
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-amber-300 mb-1">سعر الكيلو (ل.ل):</label>
+                        <input type="number" step="any" min="0" name="cost_per_kg_lbp" id="costPerKgLbpInput" value="{{ summary.stock_info.cost_per_kg_lbp if summary.stock_info else 1163500 }}" oninput="syncUpdateStock('kg_lbp')" placeholder="مثال: 1,163,500" class="w-full bg-slate-900 border border-slate-700 text-amber-300 font-mono font-bold text-sm px-3.5 py-2.5 rounded-xl focus:border-amber-400 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-emerald-300 mb-1">سعر الكيلو بالدولار ($):</label>
+                        <input type="number" step="any" min="0" name="cost_per_kg_usd" id="costPerKgUsdInput" value="{{ summary.stock_info.cost_per_kg_usd if summary.stock_info else 13.0 }}" oninput="syncUpdateStock('kg_usd')" placeholder="مثال: 13.00" class="w-full bg-slate-900 border border-slate-700 text-emerald-300 font-mono font-bold text-sm px-3.5 py-2.5 rounded-xl focus:border-amber-400 outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-800/60">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">إجمالي ثمن الكمية (ل.ل):</label>
+                        <input type="number" step="any" min="0" name="total_cost_lbp" id="totalCostLbpInput" value="{{ summary.stock_info.total_cost_lbp if summary.stock_info else '' }}" oninput="syncUpdateStock('tot_lbp')" placeholder="مثال: 11,635,000" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm font-mono font-bold px-3.5 py-2.5 rounded-xl focus:border-amber-400 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">إجمالي ثمن الكمية ($):</label>
+                        <input type="number" step="any" min="0" name="total_cost_usd" id="totalCostUsdInput" value="{{ summary.stock_info.total_cost_usd if summary.stock_info else '' }}" oninput="syncUpdateStock('tot_usd')" placeholder="مثال: 130.00" class="w-full bg-slate-900 border border-slate-700 text-emerald-400 text-sm font-mono font-bold px-3.5 py-2.5 rounded-xl focus:border-amber-400 outline-none">
+                    </div>
                 </div>
             </div>
 
@@ -697,32 +721,66 @@ function closeUpdateStockModal() {
     if (m) m.classList.add('hidden');
 }
 
-// Live calculation sync for unified kilo price & total batch cost
-document.addEventListener('DOMContentLoaded', function() {
-    const stockInp = document.getElementById('stockKgInput');
-    const unitCostInp = document.getElementById('costPerKgLbpInput');
-    const totalCostInp = document.getElementById('totalCostLbpInput');
+const COFFEE_EXCHANGE_RATE = parseFloat('{{ settings.exchange_rate or 89500 }}') || 89500;
 
-    if (stockInp && unitCostInp && totalCostInp) {
-        function syncFromUnit() {
-            const kg = parseFloat(stockInp.value) || 0;
-            const unit = parseFloat(unitCostInp.value) || 0;
-            if (kg > 0 && unit > 0) {
-                totalCostInp.value = Math.round(kg * unit);
-            }
-        }
-        function syncFromTotal() {
-            const kg = parseFloat(stockInp.value) || 0;
-            const tot = parseFloat(totalCostInp.value) || 0;
-            if (kg > 0 && tot > 0) {
-                unitCostInp.value = Math.round(tot / kg);
-            }
-        }
-        stockInp.addEventListener('input', syncFromUnit);
-        unitCostInp.addEventListener('input', syncFromUnit);
-        totalCostInp.addEventListener('input', syncFromTotal);
+function syncOpenBagCost(source) {
+    const lbp = document.getElementById('openBagCostLbp');
+    const usd = document.getElementById('openBagCostUsd');
+    if (!lbp || !usd || COFFEE_EXCHANGE_RATE <= 0) return;
+    if (source === 'usd') {
+        const u = parseFloat(usd.value) || 0;
+        lbp.value = u > 0 ? Math.round(u * COFFEE_EXCHANGE_RATE) : '';
+    } else if (source === 'lbp') {
+        const l = parseFloat(lbp.value) || 0;
+        usd.value = l > 0 ? (l / COFFEE_EXCHANGE_RATE).toFixed(2) : '';
     }
-});
+}
+
+function syncUpdateStock(source) {
+    const kgIn = document.getElementById('stockKgInput');
+    const kgLbp = document.getElementById('costPerKgLbpInput');
+    const kgUsd = document.getElementById('costPerKgUsdInput');
+    const totLbp = document.getElementById('totalCostLbpInput');
+    const totUsd = document.getElementById('totalCostUsdInput');
+    const kg = parseFloat(kgIn ? kgIn.value : 0) || 0;
+    const rate = COFFEE_EXCHANGE_RATE;
+
+    if (source === 'kg_usd') {
+        const u = parseFloat(kgUsd.value) || 0;
+        const l = Math.round(u * rate);
+        if (kgLbp) kgLbp.value = u > 0 ? l : '';
+        if (totUsd) totUsd.value = (u > 0 && kg > 0) ? (u * kg).toFixed(2) : '';
+        if (totLbp) totLbp.value = (l > 0 && kg > 0) ? Math.round(l * kg) : '';
+    } else if (source === 'kg_lbp') {
+        const l = parseFloat(kgLbp.value) || 0;
+        const u = (l / rate).toFixed(2);
+        if (kgUsd) kgUsd.value = l > 0 ? u : '';
+        if (totLbp) totLbp.value = (l > 0 && kg > 0) ? Math.round(l * kg) : '';
+        if (totUsd) totUsd.value = (l > 0 && kg > 0) ? ((l * kg) / rate).toFixed(2) : '';
+    } else if (source === 'tot_usd') {
+        const tu = parseFloat(totUsd.value) || 0;
+        const tl = Math.round(tu * rate);
+        if (totLbp) totLbp.value = tu > 0 ? tl : '';
+        if (kg > 0) {
+            if (kgUsd) kgUsd.value = tu > 0 ? (tu / kg).toFixed(2) : '';
+            if (kgLbp) kgLbp.value = tl > 0 ? Math.round(tl / kg) : '';
+        }
+    } else if (source === 'tot_lbp') {
+        const tl = parseFloat(totLbp.value) || 0;
+        const tu = (tl / rate).toFixed(2);
+        if (totUsd) totUsd.value = tl > 0 ? tu : '';
+        if (kg > 0) {
+            if (kgLbp) kgLbp.value = tl > 0 ? Math.round(tl / kg) : '';
+            if (kgUsd) kgUsd.value = tl > 0 ? ((tl / kg) / rate).toFixed(2) : '';
+        }
+    } else if (source === 'qty') {
+        const l = parseFloat(kgLbp ? kgLbp.value : 0) || 0;
+        if (l > 0 && kg > 0) {
+            if (totLbp) totLbp.value = Math.round(l * kg);
+            if (totUsd) totUsd.value = ((l * kg) / rate).toFixed(2);
+        }
+    }
+}
 </script>
 
 {% endblock %}

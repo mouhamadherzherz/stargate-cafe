@@ -1190,13 +1190,33 @@ def coffee_log_waste():
 @app.route('/coffee/update-stock', methods=['POST'])
 @login_required
 def coffee_update_stock():
-    """تعديل رصيد حبوب القهوة (كم كيلو بن متوفر بالمخزن مع السعر الموحد)."""
-    stock_kg = float(request.form.get('stock_kg') or 0.0)
-    cost_lbp = float(request.form.get('cost_per_kg_lbp') or 0.0)
-    cost_usd = float(request.form.get('cost_per_kg_usd') or 0.0)
-    tot_cost = float(request.form.get('total_cost_lbp') or 0.0)
+    """تعديل رصيد حبوب القهوة (كم كيلو بن متوفر بالمخزن مع السعر الموحد بالدولار واللبناني)."""
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        stock_kg = float(data.get('stock_kg') or 0.0)
+        cost_lbp = float(data.get('cost_per_kg_lbp') or 0.0)
+        cost_usd = float(data.get('cost_per_kg_usd') or 0.0)
+        tot_cost_lbp = float(data.get('total_cost_lbp') or 0.0)
+        tot_cost_usd = float(data.get('total_cost_usd') or 0.0)
+    else:
+        stock_kg = float(request.form.get('stock_kg') or 0.0)
+        cost_lbp = float(request.form.get('cost_per_kg_lbp') or 0.0)
+        cost_usd = float(request.form.get('cost_per_kg_usd') or 0.0)
+        tot_cost_lbp = float(request.form.get('total_cost_lbp') or 0.0)
+        tot_cost_usd = float(request.form.get('total_cost_usd') or 0.0)
 
-    ok, msg = accounting.update_coffee_beans_stock(stock_kg=stock_kg, cost_per_kg_lbp=cost_lbp, cost_per_kg_usd=cost_usd, total_cost_lbp=tot_cost)
+    ok, msg = accounting.update_coffee_beans_stock(
+        stock_kg=stock_kg,
+        cost_per_kg_lbp=cost_lbp,
+        cost_per_kg_usd=cost_usd,
+        total_cost_lbp=tot_cost_lbp,
+        total_cost_usd=tot_cost_usd
+    )
+    if request.is_json:
+        if ok:
+            return jsonify({'success': True, 'message': msg})
+        return jsonify({'success': False, 'message': msg}), 400
+
     if ok:
         flash(f"✅ {msg}", "success")
     else:

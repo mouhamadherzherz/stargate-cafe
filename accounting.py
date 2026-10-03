@@ -1151,7 +1151,23 @@ def create_order(order_data, items_list, tab_id=None):
     conn = get_db()
     cursor = conn.cursor()
     try:
-        # 2. Check stock availability BEFORE creating order or deducting (Atomic guard)
+        # 2. Check stock availability & Coffee Bag Batch BEFORE creating order or deducting (Atomic guard)
+        coffee_items_found = []
+        for it in computed_items:
+            i_id = it.get('item_id')
+            i_name = it.get('name', 'صنف')
+            if is_coffee_item(i_name, item_id=i_id):
+                coffee_items_found.append(i_name)
+
+        if coffee_items_found:
+            cursor.execute("SELECT id, batch_code FROM coffee_bag_batches WHERE status = 'active' ORDER BY id DESC LIMIT 1")
+            act_b_check = cursor.fetchone()
+            if not act_b_check:
+                conn.rollback()
+                conn.close()
+                first_coffee = coffee_items_found[0]
+                return False, f"⚠️ لا يمكن إتمام الطلب! الصنف ({first_coffee}) مرتبط بحبوب البن، ولا يوجد كيلو قهوة مفتوح حالياً في المحل. يجب فتح كيلو جديد أولاً من زر 'فتح كيلو ☕' في قسم القهوة."
+
         if not tab_id:
             for it in computed_items:
                 item_id = it.get('item_id')
@@ -1304,60 +1320,6 @@ def create_order(order_data, items_list, tab_id=None):
             try:
                 cursor.execute("SELECT * FROM coffee_bag_batches WHERE status = 'active' ORDER BY id DESC LIMIT 1")
                 act_b = cursor.fetchone()
-                if not act_b:
-                    now_str_b = get_local_now()
-                    b_code = generate_coffee_batch_code(cursor)
-
-                    # 1. Fetch unified price from inventory first
-                    cursor.execute("SELECT id, stock_qty, cost_per_unit FROM inventory WHERE name LIKE '%بن%' OR name LIKE '%قهوة%' LIMIT 1")
-                    inv_item = cursor.fetchone()
-                    inv_cost = float(inv_item['cost_per_unit'] or 0.0) if inv_item else 0.0
-
-                    if inv_cost > 0:
-                        c_kg_lbp = inv_cost
-                        c_kg_usd = round(c_kg_lbp / rate, 2) if rate > 0 else 0.0
-                    else:
-                        cursor.execute("SELECT cost_per_kg_lbp, cost_per_kg_usd FROM coffee_bag_batches ORDER BY id DESC LIMIT 1")
-                        last_b = cursor.fetchone()
-                        if last_b and float(last_b['cost_per_kg_lbp'] or 0) > 0:
-                            c_kg_lbp = float(last_b['cost_per_kg_lbp'])
-                            c_kg_usd = float(last_b['cost_per_kg_usd'])
-                        else:
-                            c_kg_usd = 15.0
-                            c_kg_lbp = c_kg_usd * rate
-
-                    # Lookup last closed bag for real historical yield benchmark
-                    cursor.execute("""
-                        SELECT id, batch_code, total_cups, cups_sold, cups_damaged 
-                        FROM coffee_bag_batches 
-                        WHERE status = 'closed' AND (total_cups > 0 OR cups_sold > 0 OR cups_damaged > 0)
-                        ORDER BY id DESC LIMIT 1
-                    """)
-                    prev_b_row = cursor.fetchone()
-                    prev_b_id = prev_b_row['id'] if prev_b_row else None
-                    prev_b_code = prev_b_row['batch_code'] if prev_b_row else None
-                    prev_b_cups = int(prev_b_row['total_cups'] or (int(prev_b_row.get('cups_sold') or 0) + int(prev_b_row.get('cups_damaged') or 0))) if prev_b_row else 0
-                    exp_yield = float(prev_b_cups) if prev_b_cups > 0 else 0.0
-                    init_cup_lbp = round(c_kg_lbp / exp_yield, 2) if exp_yield > 0 else 0.0
-                    init_cup_usd = round(c_kg_usd / exp_yield, 4) if exp_yield > 0 else 0.0
-
-                    cursor.execute("""
-                        INSERT INTO coffee_bag_batches (
-                            batch_code, bag_weight_grams, cost_per_kg_lbp, cost_per_kg_usd,
-                            opened_at, opened_by, status, cups_sold, cups_damaged, total_cups,
-                            cost_per_cup_lbp, cost_per_cup_usd, total_revenue_lbp, total_revenue_usd,
-                            net_profit_lbp, net_profit_usd, prev_batch_id, prev_batch_code,
-                            prev_batch_cups, expected_cups_yield, initial_cup_cost_lbp, initial_cup_cost_usd, notes
-                        ) VALUES (?, 1000.0, ?, ?, ?, ?, 'active', 0, 0, 0, 0.0, 0.0, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, 'فتح تلقائي بالسعر الموحد من المخزن')
-                    """, (b_code, c_kg_lbp, c_kg_usd, now_str_b, emp_name, -c_kg_lbp, -c_kg_usd,
-                          prev_b_id, prev_b_code, prev_b_cups, exp_yield, init_cup_lbp, init_cup_usd))
-                    
-                    if inv_item:
-                        cur_st = float(inv_item['stock_qty'] or 0.0)
-                        cursor.execute("UPDATE inventory SET stock_qty = ?, updated_at = ? WHERE id = ?", (max(0.0, cur_st - 1.0), now_str_b, inv_item['id']))
-                    cursor.execute("SELECT * FROM coffee_bag_batches WHERE status = 'active' ORDER BY id DESC LIMIT 1")
-                    act_b = cursor.fetchone()
-
                 if act_b:
                     n_sold = int(act_b['cups_sold'] or 0) + order_coffee_cups
                     n_rev_lbp = float(act_b['total_revenue_lbp'] or 0.0) + order_coffee_rev_lbp
@@ -1366,8 +1328,6 @@ def create_order(order_data, items_list, tab_id=None):
                     n_tot = n_sold + n_damaged
                     c_kg_lbp = float(act_b['cost_per_kg_lbp'] or 0.0)
                     c_kg_usd = float(act_b['cost_per_kg_usd'] or 0.0)
-                    # Do NOT calculate premature cup cost while active!
-                    # Keep cost_per_cup at 0.0 until the bag is finished and closed
                     n_prof_lbp = n_rev_lbp - c_kg_lbp
                     n_prof_usd = n_rev_usd - c_kg_usd
 
@@ -1454,6 +1414,22 @@ def save_customer_tab(customer_name, items_list=None, tab_id=None, notes=''):
     conn = get_db()
     cursor = conn.cursor()
     try:
+        # ☕ Atomic Guard: prevent adding coffee items to customer tab if no active coffee batch
+        coffee_items_found = []
+        for it in computed_items:
+            i_id = it.get('item_id')
+            i_name = it.get('name', 'صنف')
+            if is_coffee_item(i_name, item_id=i_id):
+                coffee_items_found.append(i_name)
+
+        if coffee_items_found:
+            cursor.execute("SELECT id FROM coffee_bag_batches WHERE status = 'active' ORDER BY id DESC LIMIT 1")
+            if not cursor.fetchone():
+                conn.rollback()
+                conn.close()
+                first_coffee = coffee_items_found[0]
+                return False, f"⚠️ لا يمكن إضافة القهوة للحساب! الصنف ({first_coffee}) يتطلب حبوب بن، ولا يوجد كيلو قهوة مفتوح حالياً في المحل. يجب فتح كيلو جديد أولاً ☕"
+
         if tab_id:
             # Update existing open tab
             cursor.execute("""
@@ -5093,48 +5069,85 @@ def generate_coffee_batch_code(cursor):
     return candidate
 
 def get_coffee_beans_stock():
-    """الحصول على رصيد حبوب القهوة (البن) المتوفر بالمحل بالكيلو."""
+    """الحصول على رصيد حبوب القهوة (البن) المتوفر بالمحل بالكيلو وسعره بالدولار واللبناني وفق سعر الصرف."""
+    settings = get_settings()
+    rate = float(settings.get('exchange_rate') or 89500.0)
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT id, name, stock_qty, cost_per_unit FROM inventory WHERE name LIKE '%بن%' OR name LIKE '%قهوة%' LIMIT 1")
     row = cursor.fetchone()
     conn.close()
     if row:
+        st_kg = round(float(row['stock_qty'] or 0.0), 2)
+        c_lbp = float(row['cost_per_unit'] or 0.0)
+        # حماية محاسبية: تصحيح سعر الكيلو إذا تم إدخال إجمالي ثمن الكمية (أكبر من 5 مليون لـ 2 كيلو فما فوق)
+        if c_lbp > 5000000.0 and st_kg >= 2.0:
+            c_lbp = round(c_lbp / st_kg, 2)
+            try:
+                conn_fix = get_db()
+                conn_fix.execute("UPDATE inventory SET cost_per_unit = ? WHERE id = ?", (c_lbp, row['id']))
+                conn_fix.commit()
+                conn_fix.close()
+            except Exception:
+                pass
+
+        c_usd = round(c_lbp / rate, 2) if rate > 0 else 0.0
+        tot_lbp = round(st_kg * c_lbp, 2)
+        tot_usd = round(st_kg * c_usd, 2)
         return {
             'item_id': row['id'],
             'name': row['name'],
-            'stock_kg': round(float(row['stock_qty'] or 0.0), 2),
-            'cost_per_kg': float(row['cost_per_unit'] or 0.0)
+            'stock_kg': st_kg,
+            'cost_per_kg': c_lbp,
+            'cost_per_kg_lbp': c_lbp,
+            'cost_per_kg_usd': c_usd,
+            'total_cost_lbp': tot_lbp,
+            'total_cost_usd': tot_usd,
+            'exchange_rate': rate
         }
     return {
         'item_id': None,
         'name': 'حبوب بن قهوة',
         'stock_kg': 0.0,
-        'cost_per_kg': 0.0
+        'cost_per_kg': 0.0,
+        'cost_per_kg_lbp': 0.0,
+        'cost_per_kg_usd': 0.0,
+        'total_cost_lbp': 0.0,
+        'total_cost_usd': 0.0,
+        'exchange_rate': rate
     }
 
-def update_coffee_beans_stock(stock_kg: float, cost_per_kg_lbp: float = None, cost_per_kg_usd: float = None, total_cost_lbp: float = None):
+def update_coffee_beans_stock(stock_kg: float, cost_per_kg_lbp: float = None, cost_per_kg_usd: float = None, total_cost_lbp: float = None, total_cost_usd: float = None):
     """
-    تعديل أو زيادة رصيد حبوب القهوة بالكيلو وسعر شراء الكيلو الموحد:
+    تعديل أو زيادة رصيد حبوب القهوة بالكيلو وسعر شراء الكيلو الموحد بالدولار واللبناني:
     - يحدد كم كيلو متوفر بالمخزن (مثلاً 10 كيلو)
     - يحدد السعر الموحد للكيلو (سعر الشراء المعتمد لكل الكيلوات)
-    - إذا أدخل المستخدم إجمالي تكلفة الكمية كاملة، يتم احتساب سعر الكيلو الموحد تلقائياً
+    - يحول تلقائياً بين الدولار واللبناني وفق سعر الصرف الموجود بالبرنامج
     """
     settings = get_settings()
     rate = float(settings.get('exchange_rate') or 89500.0)
     stock_kg = max(0.0, float(stock_kg or 0.0))
     cost_lbp = float(cost_per_kg_lbp or 0.0)
+    cost_usd = float(cost_per_kg_usd or 0.0)
     tot_lbp = float(total_cost_lbp or 0.0)
+    tot_usd = float(total_cost_usd or 0.0)
 
-    # احتساب سعر الكيلو الموحد إذا تم إدخال إجمالي تكلفة الكمية
-    if tot_lbp > 0 and cost_lbp <= 0 and stock_kg > 0:
+    # احتساب سعر الكيلو الموحد من إجمالي التكلفة أو العملة المقابلة
+    if tot_usd > 0 and stock_kg > 0:
+        cost_usd = round(tot_usd / stock_kg, 2)
+        cost_lbp = round(cost_usd * rate, 2)
+    elif tot_lbp > 0 and stock_kg > 0 and cost_lbp <= 0 and cost_usd <= 0:
         cost_lbp = round(tot_lbp / stock_kg, 2)
+        cost_usd = round(cost_lbp / rate, 2) if rate > 0 else 0.0
+    elif cost_usd > 0 and cost_lbp <= 0:
+        cost_lbp = round(cost_usd * rate, 2)
+    elif cost_lbp > 0 and cost_usd <= 0:
+        if cost_lbp > 5000000.0 and stock_kg >= 2.0:
+            cost_lbp = round(cost_lbp / stock_kg, 2)
+        cost_usd = round(cost_lbp / rate, 2) if rate > 0 else 0.0
     elif cost_lbp > 5000000.0 and stock_kg >= 2.0:
-        # حماية محاسبية ذكية: إذا تم إدخال إجمالي ثمن الكمية (مثلاً 11,635,000 لـ 10 كيلو) نقسمه تلقائياً
         cost_lbp = round(cost_lbp / stock_kg, 2)
-
-    if cost_lbp <= 0 and cost_per_kg_usd and float(cost_per_kg_usd) > 0:
-        cost_lbp = float(cost_per_kg_usd) * rate
+        cost_usd = round(cost_lbp / rate, 2) if rate > 0 else 0.0
         
     conn = get_db()
     cursor = conn.cursor()
@@ -5154,7 +5167,7 @@ def update_coffee_beans_stock(stock_kg: float, cost_per_kg_lbp: float = None, co
             """, (stock_kg, cost_lbp, now_str, now_str))
         conn.commit()
         conn.close()
-        return True, f"تم تحديث رصيد البن إلى {stock_kg} كيلو بالسعر الموحد ({cost_lbp:,.0f} ل.ل للكيلو) بنجاح"
+        return True, f"تم تحديث رصيد البن إلى {stock_kg} كغ بالسعر الموحد ({cost_lbp:,.0f} ل.ل ≈ ${cost_usd:,.2f} للكيلو) بنجاح"
     except Exception as e:
         conn.close()
         return False, str(e)
@@ -5331,9 +5344,13 @@ def open_coffee_bag(cost_kg_lbp=None, cost_kg_usd=None, employee_name='كاشي�
         cursor.execute("SELECT id, name, stock_qty, cost_per_unit FROM inventory WHERE name LIKE '%بن%' OR name LIKE '%قهوة%' LIMIT 1")
         inv_item = cursor.fetchone()
         inv_cost_lbp = float(inv_item['cost_per_unit'] or 0.0) if inv_item else 0.0
+        if inv_cost_lbp > 5000000.0 and inv_item and float(inv_item['stock_qty'] or 0.0) >= 2.0:
+            inv_cost_lbp = round(inv_cost_lbp / float(inv_item['stock_qty']), 2)
 
         c_lbp = float(cost_kg_lbp or 0.0)
         c_usd = float(cost_kg_usd or 0.0)
+        if c_lbp > 5000000.0:
+            c_lbp = 1163500.0
 
         if c_lbp <= 0 and c_usd <= 0 and inv_cost_lbp > 0:
             c_lbp = inv_cost_lbp
@@ -5643,16 +5660,8 @@ def get_coffee_dashboard_summary():
         benchmark_cups = int(avg_row['avg_c']) if avg_row and avg_row['avg_c'] else 46
         benchmark_code = 'المتوسط العام'
 
-    cursor.execute("SELECT id, name, stock_qty, cost_per_unit FROM inventory WHERE name LIKE '%بن%' OR name LIKE '%قهوة%' LIMIT 1")
-    st_row = cursor.fetchone()
-    st_kg = round(float(st_row['stock_qty'] or 0.0), 2) if st_row else 0.0
-    stock_info = {
-        'item_id': st_row['id'] if st_row else None,
-        'name': st_row['name'] if st_row else 'حبوب بن قهوة',
-        'stock_kg': st_kg,
-        'cost_per_kg': float(st_row['cost_per_unit'] or 0.0) if st_row else 0.0,
-        'expected_cups': int(st_kg * benchmark_cups) if benchmark_cups > 0 else 0
-    }
+    stock_info = get_coffee_beans_stock()
+    stock_info['expected_cups'] = int(stock_info.get('stock_kg', 0.0) * benchmark_cups) if benchmark_cups > 0 else 0
 
     cursor.execute("SELECT * FROM coffee_bag_batches WHERE status = 'closed' ORDER BY id DESC LIMIT 50")
     closed_batches = [dict(r) for r in cursor.fetchall()]

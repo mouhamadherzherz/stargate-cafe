@@ -124,8 +124,11 @@
 
         <div class="flex items-center gap-4 flex-wrap">
             <div class="text-right">
-                <span class="text-[10px] text-slate-400 block font-bold">📦 رصيد البن المتوفر بالمحل:</span>
+                <span class="text-[10px] text-slate-400 block font-bold">📦 رصيد البن المتوفر بالمخزن:</span>
                 <span class="text-lg font-black font-mono text-amber-300">{{ coffee_stock.stock_kg if coffee_stock else 0 }} كغ</span>
+                <div class="text-[10px] text-emerald-400 font-mono font-bold">
+                    {{ coffee_stock.cost_per_kg_lbp|format_currency if coffee_stock else 0 }} ل.ل ≈ {{ coffee_stock.cost_per_kg_usd|to_usd if coffee_stock else '$0.00' }}/كغ
+                </div>
             </div>
 
             {% if active_coffee %}

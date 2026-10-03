@@ -1,7 +1,7 @@
 {
-    "changelog": "v5.2.1: تحديث محاسبي ومالي شامل (11 نقطة) - تصحيح تكلفة المواد، حماية الخزنة والكاش، قيود اليومية العكسية، وحماية المخزون وفهارس السرعة.",
-    "version": "5.2.1",
-    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.2.1/Stargate_Cafe_Update.zip",
+    "changelog": "v5.3.0: ميزة تسجيل فنجان تالف (تلف) على الكاشير فوراً، عرض مخزون البن بالدولار واللبناني وفق سعر الصرف، وتثبيت حظر طلب القهوة بدون فتح كيلو جديد.",
+    "version": "5.3.0",
+    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.3.0/Stargate_Cafe_Update.zip",
     "company": "STARGATE EXPERTS",
     "channel": "cafe",
     "name": "Stargate Cafe & Gaming System",

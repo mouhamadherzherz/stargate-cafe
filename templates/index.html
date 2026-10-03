@@ -118,47 +118,44 @@
             </div>
         </div>
 
-        <!-- 6. Active Coffee Bag Yield & Cashier Quick Action Card (إنتاجية كيلو القهوة الحالي والتحكم السريع) -->
+        <!-- 6. Active Coffee Bag Yield & Cashier Quick Action Card (إنتاجية كيلو القهوة ومخزون البن والتحكم السريع) -->
         {% set active_coffee = get_active_coffee_batch() if get_active_coffee_batch else None %}
         {% set coffee_stock = get_coffee_beans_stock() if get_coffee_beans_stock else None %}
-        <div class="bg-gradient-to-br from-amber-950/50 via-slate-900 to-slate-900 border-2 border-amber-500/50 p-2.5 rounded-2xl flex flex-col justify-between shadow-md relative overflow-hidden group">
+        <div class="bg-gradient-to-br from-amber-950/60 via-slate-900 to-slate-900 border-2 {% if active_coffee %}border-amber-500/60 shadow-amber-500/10{% else %}border-rose-500/60 shadow-rose-500/10{% endif %} p-2.5 rounded-2xl flex flex-col justify-between shadow-lg relative overflow-hidden group">
             <div class="flex items-start justify-between gap-2">
                 <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full {% if active_coffee %}bg-emerald-400 animate-pulse{% else %}bg-amber-500{% endif %}"></span>
-                        <span class="text-[10px] text-amber-300 font-black truncate">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="w-2.5 h-2.5 rounded-full {% if active_coffee %}bg-emerald-400 animate-pulse{% else %}bg-rose-500 animate-ping{% endif %}"></span>
+                        <span class="text-[11px] font-black {% if active_coffee %}text-amber-300{% else %}text-rose-400{% endif %} truncate">
                             {% if active_coffee %}
-                            ☕ {{ active_coffee.batch_code }}
+                            ☕ الكيلو النشط: {{ active_coffee.batch_code }}
                             {% else %}
-                            ☕ لا يوجد كيلو بن مفتوح
+                            ⚠️ لا يوجد كيلو بن مفتوح (طلب القهوة متوقف)
                             {% endif %}
                         </span>
-                        <span class="text-[9px] text-slate-400 font-mono bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-800 shrink-0">
-                            📦 رصيد: {{ coffee_stock.stock_kg if coffee_stock else 0 }} كغ
+                        <span class="text-[10px] text-amber-200 font-mono bg-slate-950/90 px-2 py-0.5 rounded-lg border border-amber-500/30 shrink-0 mr-auto">
+                            📦 مخزون البن: <strong class="text-white">{{ coffee_stock.stock_kg if coffee_stock else 0 }} كغ</strong>
+                            <span class="text-slate-400 text-[9px]">({{ coffee_stock.cost_per_kg_lbp|format_currency if coffee_stock else 0 }} ل.ل ≈ {{ coffee_stock.cost_per_kg_usd|to_usd if coffee_stock else '$0.00' }})</span>
                         </span>
                     </div>
 
                     {% if active_coffee %}
-                    <div class="flex items-baseline gap-2 mt-1">
+                    <div class="flex items-baseline gap-2 mt-1.5 flex-wrap">
                         <div class="text-base font-black font-mono text-white">
                             {{ active_coffee.cups_sold }} <span class="text-[10px] text-emerald-400 font-bold">مبيع</span>
                         </div>
                         {% if active_coffee.cups_damaged > 0 %}
-                        <div class="text-xs font-mono font-bold text-rose-400">
-                            + {{ active_coffee.cups_damaged }} تلف
+                        <div class="text-xs font-mono font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+                            {{ active_coffee.cups_damaged }} تلف
                         </div>
                         {% endif %}
-                        <div class="text-[10px] font-mono text-amber-200/90 font-bold mr-auto">
-                            {% if active_coffee.benchmark_cup_cost_lbp %}
-                            معيار: ~{{ active_coffee.benchmark_cup_cost_lbp|format_currency }} ل.ل
-                            {% else %}
-                            سعر الكيلو: {{ active_coffee.cost_per_kg_lbp|format_currency }} ل.ل
-                            {% endif %}
+                        <div class="text-[10px] font-mono text-slate-300 font-bold mr-auto">
+                            المتبقي التقديري: <strong class="text-amber-300">~{{ [0, ((active_coffee.expected_cups_yield or 46) - (active_coffee.cups_sold + active_coffee.cups_damaged))]|max|int }} فنجان</strong>
                         </div>
                     </div>
                     {% else %}
-                    <p class="text-[10px] text-slate-400 mt-1 leading-tight">
-                        انقر أدناه لفتح كيس بن جديد وبدء العداد تلقائياً
+                    <p class="text-[10px] text-rose-300/90 mt-1 leading-tight font-bold">
+                        🛑 لا يمكن بيع القهوة حتى يتم فتح كيلو جديد! اضغط أدناه لفتح كيلو وبدء البيع فوراً.
                     </p>
                     {% endif %}
                 </div>
@@ -166,17 +163,15 @@
 
             <!-- Quick Cashier Buttons Bar -->
             <div class="flex items-center gap-1.5 pt-2 border-t border-slate-800/80 mt-1.5">
-                {% if active_coffee %}
-                <button type="button" onclick="openPosWasteModal()" class="flex-1 bg-rose-600/90 hover:bg-rose-500 text-white font-black py-1.5 px-2 rounded-xl text-[11px] transition shadow flex items-center justify-center gap-1 cursor-pointer active:scale-95" title="تسجيل فنجان تالف كخسارة">
-                    <span>تلف ⚠️</span>
+                <button type="button" onclick="openPosWasteModal()" class="flex-1 bg-rose-600/90 hover:bg-rose-500 text-white font-black py-1.5 px-2 rounded-xl text-[11px] transition shadow flex items-center justify-center gap-1 cursor-pointer active:scale-95" title="تسجيل فنجان تالف كخسارة على الكيلو المفتوح">
+                    <span>☕ تسجيل تلف ⚠️</span>
                 </button>
-                {% endif %}
 
-                <button type="button" onclick="openPosOpenBagModal()" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-1 px-2 rounded-xl text-[10px] transition shadow flex items-center justify-center gap-1 cursor-pointer active:scale-95" title="فتح كيلو بن قهوة جديد للاستعمال">
+                <button type="button" onclick="openPosOpenBagModal()" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-1.5 px-2 rounded-xl text-[11px] transition shadow flex items-center justify-center gap-1 cursor-pointer active:scale-95" title="فتح كيلو بن قهوة جديد للاستعمال">
                     <span>+ فتح كيلو ☕</span>
                 </button>
 
-                <a href="{{ url_for('coffee_hub') }}" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-300 flex items-center justify-center text-[10px] transition shrink-0" title="لوحة سجلات وإحصائيات القهوة الشاملة">
+                <a href="{{ url_for('coffee_hub') }}" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-amber-300 flex items-center justify-center text-xs transition shrink-0" title="لوحة سجلات وإحصائيات القهوة الشاملة">
                     <i class="fa-solid fa-chart-pie"></i>
                 </a>
             </div>
@@ -268,6 +263,12 @@
             <button type="button" onclick="openGamingSessionModal()" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs px-3.5 py-2 rounded-2xl transition flex items-center gap-2 shadow-lg shadow-purple-600/20 active:scale-95">
                 <span class="text-sm">🎮</span>
                 <span>حاسبة وتسجيل ألعاب وبلايستيشن</span>
+            </button>
+
+            <!-- Button 4: Quick Coffee Waste Log (تسجيل فنجان تالف) -->
+            <button type="button" onclick="openPosWasteModal()" class="bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-black text-xs px-3.5 py-2 rounded-2xl transition flex items-center gap-2 shadow-lg shadow-rose-600/25 active:scale-95 cursor-pointer" title="تسجيل فنجان تالف كخسارة على الكيلو المفتوح">
+                <span class="text-sm">☕⚠️</span>
+                <span>تسجيل فنجان تالف (تلف)</span>
             </button>
         </div>
 
@@ -434,6 +435,7 @@
                          data-item-type="cafe"
                          data-is-top="{{ 1 if item.id in top_seller_ids else 0 }}"
                          data-sort-order="{{ item.sort_order|default(0) }}"
+                         data-is-coffee-bean-linked="{{ item.is_coffee_bean_linked|default(0) }}"
                          onclick="handleProductCardClick(this)"
                          role="button"
                          tabindex="0"
@@ -886,18 +888,31 @@
 
     // Handle Product Card Touch / Click
     
+    const HAS_ACTIVE_COFFEE_BATCH = {{ 'true' if active_coffee else 'false' }};
+
     function handleProductCardClick(btn) {
         if (!btn) return;
-        const id = btn.getAttribute('data-item-id');
+        const rawLinked = btn.getAttribute('data-is-coffee-bean-linked');
         const name = btn.getAttribute('data-item-name') || 'صنف';
+        const isCoffeeLinked = (rawLinked === '1' || parseInt(rawLinked || '0') === 1) || 
+                               (rawLinked === null && (name.includes('قهوة') || name.includes('بن')) && !name.includes('كيك') && !name.includes('حلو') && !name.includes('كابتشينو') && !name.includes('نسكافيه'));
+
+        // Strict guard: prevent ordering coffee if NO kilo is open
+        if (isCoffeeLinked && !HAS_ACTIVE_COFFEE_BATCH) {
+            playBeep(300, 0.2);
+            showCoffeeBlockedModal(name);
+            return;
+        }
+
+        const id = btn.getAttribute('data-item-id');
         const price = parseFloat(btn.getAttribute('data-item-price')) || 0;
         const icon = btn.getAttribute('data-item-icon') || '☕';
         const type = btn.getAttribute('data-item-type') || 'cafe';
-        addToCart(id, name, price, icon, type);
+        addToCart(id, name, price, icon, type, isCoffeeLinked);
     }
 
     // Add Item to Cart
-    function addToCart(itemId, name, priceLBP, icon, itemType = 'cafe') {
+    function addToCart(itemId, name, priceLBP, icon, itemType = 'cafe', isCoffeeLinked = false) {
         playBeep(700, 0.05);
         const p = parseFloat(priceLBP) || 0;
         const existing = cart.find(i => i.name === name && i.item_type === itemType);
@@ -911,6 +926,7 @@
                 icon: icon || '☕',
                 item_type: itemType,
                 is_wholesale: 0,
+                is_coffee_linked: isCoffeeLinked,
                 quantity: 1
             });
         }
@@ -1618,6 +1634,27 @@
             <button type="button" onclick="closePosWasteModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold">✕</button>
         </div>
 
+        {% if active_coffee %}
+        <div class="bg-rose-500/10 border border-rose-500/30 p-3 rounded-2xl text-xs text-rose-300 space-y-1">
+            <div class="flex justify-between items-center">
+                <span>الكيلو المفتوح حالياً:</span>
+                <strong class="font-mono text-white text-sm font-black">{{ active_coffee.batch_code }}</strong>
+            </div>
+            <div class="flex justify-between items-center">
+                <span>تكلفة الفنجان المحسوبة:</span>
+                <span class="font-mono text-white font-bold">{{ active_coffee.benchmark_cup_cost_lbp|format_currency if active_coffee.benchmark_cup_cost_lbp else 25293 }} ل.ل ≈ {{ active_coffee.benchmark_cup_cost_usd|to_usd if active_coffee.benchmark_cup_cost_usd else '$0.28' }}</span>
+            </div>
+        </div>
+        {% else %}
+        <div class="bg-amber-500/10 border border-amber-500/30 p-3.5 rounded-2xl text-xs text-amber-300 space-y-2 text-center">
+            <p class="font-bold">⚠️ لا يوجد كيلو قهوة مفتوح حالياً لتسجيل التالف عليه!</p>
+            <p class="text-slate-300 text-[11px]">يجب فتح كيلو جديد أولاً ليتمكن النظام من توثيق التلف وحساب خسارته المالية بدقة.</p>
+            <button type="button" onclick="closePosWasteModal(); openPosOpenBagModal();" class="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2 rounded-xl text-xs transition shadow cursor-pointer">
+                <span>+ فتح كيلو قهوة الآن ☕</span>
+            </button>
+        </div>
+        {% endif %}
+
         <form method="POST" action="{{ url_for('coffee_log_waste') }}" class="space-y-4">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -1642,7 +1679,7 @@
             </div>
 
             <div class="pt-2 flex gap-3">
-                <button type="submit" class="flex-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-black py-3 rounded-2xl text-sm transition shadow-lg shadow-rose-600/30 active:scale-95 cursor-pointer">
+                <button type="submit" {% if not active_coffee %}disabled{% endif %} class="flex-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-black py-3 rounded-2xl text-sm transition shadow-lg shadow-rose-600/30 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
                     تأكيد تسجيل التلف ⚠️
                 </button>
                 <button type="button" onclick="closePosWasteModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-5 py-3 rounded-2xl text-xs font-bold transition">
@@ -1653,16 +1690,141 @@
     </div>
 </div>
 
+<!-- ====================================================================== -->
+<!-- ☕ QUICK POS OPEN COFFEE BAG MODAL (فتح كيلو بن قهوة جديد على الكاشير)    -->
+<!-- ====================================================================== -->
+<div id="posOpenBagModal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-6 md:p-7 max-w-lg w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3.5">
+            <div class="flex items-center gap-3">
+                <span class="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-xl border border-amber-500/30">☕</span>
+                <div>
+                    <h3 class="font-black text-base text-white">فتح كيلو قهوة جديد للاستعمال</h3>
+                    <span class="text-xs text-slate-400">بدء احتساب الفناجين المبيعة والتالفة تلقائياً من 0</span>
+                </div>
+            </div>
+            <button type="button" onclick="closePosOpenBagModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold">✕</button>
+        </div>
+
+        <form method="POST" action="{{ url_for('coffee_open_bag') }}" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <!-- Stock & Current Rate Info -->
+            <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-1.5 text-xs">
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-400">📦 رصيد المخزن المتاح:</span>
+                    <strong class="text-amber-300 font-mono text-sm font-black">{{ coffee_stock.stock_kg if coffee_stock else 0 }} كغ</strong>
+                </div>
+                <div class="flex justify-between items-center text-slate-300">
+                    <span class="text-slate-400">💵 سعر الصرف المعتمد:</span>
+                    <span class="font-mono text-white font-bold">{{ exchange_rate|format_currency }} ل.ل / $</span>
+                </div>
+                <div class="flex justify-between items-center pt-1 border-t border-slate-800/80">
+                    <span class="text-slate-400">🏷️ السعر الموحد للكيلو:</span>
+                    <span class="font-mono text-emerald-400 font-bold">{{ coffee_stock.cost_per_kg_lbp|format_currency if coffee_stock else 1163500 }} ل.ل ≈ ${{ coffee_stock.cost_per_kg_usd if coffee_stock else 13.0 }}</span>
+                </div>
+            </div>
+
+            <!-- Dual Currency Cost Inputs with Live Auto-Conversion -->
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-bold text-amber-300 mb-1">سعر الكيلو (ل.ل):</label>
+                    <input type="number" step="any" name="cost_per_kg_lbp" id="posOpenBagCostLbp" value="{{ coffee_stock.cost_per_kg_lbp if coffee_stock and coffee_stock.cost_per_kg_lbp > 0 else 1163500 }}" oninput="syncPosBagCost('lbp')" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold text-sm px-3.5 py-2.5 rounded-2xl focus:border-amber-400 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-emerald-300 mb-1">أو بالدولار ($):</label>
+                    <input type="number" step="any" name="cost_per_kg_usd" id="posOpenBagCostUsd" value="{{ coffee_stock.cost_per_kg_usd if coffee_stock and coffee_stock.cost_per_kg_usd > 0 else 13.0 }}" oninput="syncPosBagCost('usd')" class="w-full bg-slate-950 border border-slate-700 text-emerald-300 font-mono font-bold text-sm px-3.5 py-2.5 rounded-2xl focus:border-amber-400 outline-none">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">ملاحظة أو نوع البن (اختياري):</label>
+                <input type="text" name="notes" placeholder="مثال: كيلو جديد، بن وسط، مع هيل..." class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3.5 py-2.5 rounded-2xl focus:border-amber-400 outline-none">
+            </div>
+
+            <div class="pt-2 flex gap-3">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-3 rounded-2xl text-sm transition shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer">
+                    تأكيد فتح الكيلو والبدء ☕
+                </button>
+                <button type="button" onclick="closePosOpenBagModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-5 py-3 rounded-2xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- 🛑 COFFEE ORDER BLOCKED MODAL (تنبيه منع طلب القهوة بدون كيلو مفتوح) -->
+<!-- ====================================================================== -->
+<div id="coffeeBlockedModal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-amber-500/70 rounded-3xl p-6 md:p-7 max-w-md w-full shadow-2xl space-y-4 text-center">
+        <div class="w-16 h-16 rounded-3xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-3xl mx-auto border border-amber-500/40 animate-bounce">
+            ☕
+        </div>
+        <h3 class="text-lg font-black text-white">لا يمكن طلب منتجات القهوة حالياً!</h3>
+        <p class="text-xs text-slate-300 leading-relaxed">
+            الصنف (<strong id="blockedCoffeeItemName" class="text-amber-300">القهوة</strong>) مرتبط بحبوب البن، ولا يوجد حالياً <strong>كيلو قهوة مفتوح</strong> للتشغيل بالمحل.
+        </p>
+        <div class="bg-amber-500/10 border border-amber-500/30 p-3 rounded-2xl text-xs text-amber-200 text-right">
+            💡 يجب على الكاشير فتح كيلو قهوة جديد أولاً لاحتساب كمية الفناجين والتكلفة والأرباح بدقة.
+        </div>
+        <div class="flex gap-2.5 pt-2">
+            <button type="button" onclick="closeCoffeeBlockedModal(); openPosOpenBagModal();" class="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-3 rounded-2xl text-xs sm:text-sm transition shadow-lg shadow-amber-500/30 active:scale-95 cursor-pointer">
+                + فتح كيلو قهوة الآن ☕
+            </button>
+            <button type="button" onclick="closeCoffeeBlockedModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-5 py-3 rounded-2xl text-xs font-bold transition">
+                إغلاق
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
 function openPosWasteModal() {
     const m = document.getElementById('posCoffeeWasteModal');
     if (m) {
         m.classList.remove('hidden');
-        document.getElementById('posWasteQtyInput').value = 1;
+        const q = document.getElementById('posWasteQtyInput');
+        if (q) q.value = 1;
     }
 }
 function closePosWasteModal() {
     const m = document.getElementById('posCoffeeWasteModal');
+    if (m) m.classList.add('hidden');
+}
+
+function openPosOpenBagModal() {
+    const m = document.getElementById('posOpenBagModal');
+    if (m) m.classList.remove('hidden');
+}
+function closePosOpenBagModal() {
+    const m = document.getElementById('posOpenBagModal');
+    if (m) m.classList.add('hidden');
+}
+
+function syncPosBagCost(source) {
+    const lbpIn = document.getElementById('posOpenBagCostLbp');
+    const usdIn = document.getElementById('posOpenBagCostUsd');
+    const rate = parseFloat('{{ exchange_rate or 89500 }}') || 89500;
+    if (!lbpIn || !usdIn || rate <= 0) return;
+    if (source === 'usd') {
+        const u = parseFloat(usdIn.value) || 0;
+        lbpIn.value = u > 0 ? Math.round(u * rate) : '';
+    } else if (source === 'lbp') {
+        const l = parseFloat(lbpIn.value) || 0;
+        usdIn.value = l > 0 ? (l / rate).toFixed(2) : '';
+    }
+}
+
+function showCoffeeBlockedModal(itemName) {
+    const txt = document.getElementById('blockedCoffeeItemName');
+    if (txt) txt.textContent = itemName || 'القهوة';
+    const m = document.getElementById('coffeeBlockedModal');
+    if (m) m.classList.remove('hidden');
+}
+function closeCoffeeBlockedModal() {
+    const m = document.getElementById('coffeeBlockedModal');
     if (m) m.classList.add('hidden');
 }
 </script>
