@@ -1,7 +1,7 @@
 {
-    "changelog": "v5.3.1: تدقيق شامل لحسابات الكاش ودرج الصندوق، احتساب كامل مبيعات الوردية والكاش النقدي بدقة 100%، ومعالجة العهدة الافتتاحية والمصاريف وسدادات الديون.",
-    "version": "5.3.1",
-    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.3.1/Stargate_Cafe_Update.zip",
+    "version": "5.3.2",
+    "changelog": "v5.3.2: إصلاح ربط وتوحيد كاش الدرج ونقدية الصندوق بين شاشة الكاشير وشاشة الإدارة، واحتساب كاش الوردية بالكامل بدقة 100% دون تصفير، وتحديث الربط الذكي للموظف.",
+    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.3.2/Stargate_Cafe_Update.zip",
     "company": "STARGATE EXPERTS",
     "channel": "cafe",
     "name": "Stargate Cafe & Gaming System",

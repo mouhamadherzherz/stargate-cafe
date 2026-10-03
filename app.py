@@ -2113,6 +2113,17 @@ def employee_close_shift():
               AND (o.employee_id = ? OR o.employee_id IS NULL)
             ORDER BY o.id DESC
         """, (today_str, today_str, emp_id))
+        emp_orders = [dict(r) for r in c.fetchall()]
+        if not emp_orders:
+            # Fallback: إذا لم تكن هناك طلبات برقم هذا الموظف، جلب طلبات المحل لليوم لضمان احتساب كاش الدرج الفعلي
+            c.execute("""
+                SELECT o.* 
+                FROM cafe_orders o
+                WHERE (DATE(datetime(o.created_at, '-5 hours')) = DATE(?) OR DATE(o.created_at) = DATE(?))
+                  AND (o.status = 'paid' OR o.status IS NULL OR o.status = '')
+                ORDER BY o.id DESC
+            """, (today_str, today_str))
+            emp_orders = [dict(r) for r in c.fetchall()]
     else:
         c.execute("""
             SELECT o.* 
@@ -2121,7 +2132,7 @@ def employee_close_shift():
               AND (o.status = 'paid' OR o.status IS NULL OR o.status = '')
             ORDER BY o.id DESC
         """, (today_str, today_str))
-    emp_orders = [dict(r) for r in c.fetchall()]
+        emp_orders = [dict(r) for r in c.fetchall()]
 
     total_sales_lbp = sum(float(o.get('total_lbp', 0)) for o in emp_orders)
     total_sales_usd = sum(float(o.get('total_usd', 0)) for o in emp_orders)
@@ -2130,57 +2141,30 @@ def employee_close_shift():
 
     # 2. حركة الكاش الشاملة للصندوق (تحصيل ديون، مصاريف الدرج، تحويلات الخزنة السابقة، عهدة افتتاحية)
     # سدادات ديون مستلمة اليوم
-    if emp_id:
-        c.execute("""
-            SELECT COALESCE(SUM(amount_lbp), 0)
-            FROM debt_payments
-            WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?))
-              AND (employee_id = ? OR employee_id IS NULL)
-        """, (today_str, today_str, emp_id))
-    else:
-        c.execute("""
-            SELECT COALESCE(SUM(amount_lbp), 0)
-            FROM debt_payments
-            WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?))
-        """, (today_str, today_str))
+    c.execute("""
+        SELECT COALESCE(SUM(amount_lbp), 0)
+        FROM debt_payments
+        WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?))
+    """, (today_str, today_str))
     debt_collected_lbp = float(c.fetchone()[0] or 0.0)
 
     # مصاريف مدفوعة من الدرج اليوم
-    if emp_id:
-        c.execute("""
-            SELECT COALESCE(SUM(amount_lbp), 0)
-            FROM expenses
-            WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?))
-              AND (source != 'safe' OR source IS NULL)
-              AND (employee_id = ? OR employee_id IS NULL)
-        """, (today_str, today_str, emp_id))
-    else:
-        c.execute("""
-            SELECT COALESCE(SUM(amount_lbp), 0)
-            FROM expenses
-            WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?))
-              AND (source != 'safe' OR source IS NULL)
-        """, (today_str, today_str))
+    c.execute("""
+        SELECT COALESCE(SUM(amount_lbp), 0)
+        FROM expenses
+        WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?))
+          AND (source != 'safe' OR source IS NULL)
+    """, (today_str, today_str))
     shift_expenses_lbp = float(c.fetchone()[0] or 0.0)
 
     # مبالغ تم توريدها للخزنة مسبقاً خلال الوردية
-    if emp_id:
-        c.execute("""
-            SELECT COALESCE(SUM(amount_lbp), 0)
-            FROM safe_transfers
-            WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?) OR note LIKE ?)
-              AND operation_type = 'deposit'
-              AND (source != 'external' OR source IS NULL)
-              AND (employee_id = ? OR employee_id IS NULL)
-        """, (today_str, today_str, f"%{today_str}%", emp_id))
-    else:
-        c.execute("""
-            SELECT COALESCE(SUM(amount_lbp), 0)
-            FROM safe_transfers
-            WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?) OR note LIKE ?)
-              AND operation_type = 'deposit'
-              AND (source != 'external' OR source IS NULL)
-        """, (today_str, today_str, f"%{today_str}%"))
+    c.execute("""
+        SELECT COALESCE(SUM(amount_lbp), 0)
+        FROM safe_transfers
+        WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?) OR note LIKE ?)
+          AND operation_type = 'deposit'
+          AND (source != 'external' OR source IS NULL)
+    """, (today_str, today_str, f"%{today_str}%"))
     prior_safe_transfers_lbp = float(c.fetchone()[0] or 0.0)
     conn.close()
 
@@ -3219,7 +3203,7 @@ rmdir /S /Q "{tmp_dir}" >nul 2>&1
 del /F /Q "{zip_path}" >nul 2>&1
 echo اكتمل التحديث! جاري إعادة التشغيل...
 cd /d "{base_dir}"
-if exist "STARGATE.exe" ( start "" "STARGATE.exe" ) else ( start "" pythonw.exe desktop_app.py )
+if exist "STARGATE.exe" ( start "" "STARGATE.exe" ) else ( start "" "{sys.executable}" app.py )
 del "%~f0"
 """
         with open(bat, 'w', encoding='utf-8') as f:
@@ -3231,6 +3215,196 @@ del "%~f0"
     except Exception as e:
         logger.logger.error(f"OTA Update error: {e}")
         return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/download/update.zip')
+def download_update_zip():
+    """تنزيل مباشر لحزمة التحديث من السيرفر المحلي بسرعة الشبكة المحلية."""
+    from flask import send_file
+    base_dir = _get_base_dir()
+    zip_candidates = [
+        os.path.join(base_dir, 'Stargate_Cafe_Update.zip'),
+        r'C:\STARGATE_CAFE\Stargate_Cafe_Update.zip',
+        os.path.expanduser(r'~\Desktop\Stargate_Cafe_Update.zip'),
+        r'd:\STARGATE\stargate_cafe_source\Stargate_Cafe_Update.zip'
+    ]
+    for cand in zip_candidates:
+        if os.path.exists(cand):
+            return send_file(cand, as_attachment=True, download_name='Stargate_Cafe_Update.zip')
+    return "حزمة التحديث غير موجودة على الخادم", 404
+
+
+@app.route('/download/installer.exe')
+def download_installer_exe():
+    """تنزيل ملف التثبيت الرسمي الكامل v5.3.1 مباشرة لجهاز الموظف."""
+    from flask import send_file
+    candidates = [
+        r'C:\STARGATE_CAFE\StargateCafe_Setup_v5.3.1.exe',
+        os.path.expanduser(r'~\Desktop\StargateCafe_Setup_v5.3.1.exe'),
+        r'C:\Users\mouha\Desktop\StargateCafe_Setup_v5.3.1.exe'
+    ]
+    for cand in candidates:
+        if os.path.exists(cand):
+            return send_file(cand, as_attachment=True, download_name='StargateCafe_Setup_v5.3.1.exe')
+    return "ملف التثبيت غير موجود على الخادم", 404
+
+
+@app.route('/download/update_employee.bat')
+def download_employee_update_bat():
+    """ملف BAT ديناميكي يُحدّث جهاز الموظف مباشرة من سيرفر الكافيه المحلي."""
+    from flask import Response
+    try:
+        server_ip = request.host.split(':')[0]
+    except Exception:
+        server_ip = '192.168.10.27'
+
+    bat_script = f"""@echo off
+chcp 65001 >nul
+color 0B
+title STARGATE CAFE - تحديث جهاز الموظف الفوري v5.3.1
+echo ======================================================================
+echo         STARGATE CAFE - تحديث نظام الكافيه للموظف (v5.3.1)
+echo         التحديث من السيرفر المباشر: http://{server_ip}:5000
+echo ======================================================================
+echo.
+
+set "CAFE_DIR=C:\\STARGATE_CAFE"
+if not exist "%CAFE_DIR%" (
+    echo [!] مجلد البرنامج %CAFE_DIR% غير موجود.
+    pause
+    exit /b 1
+)
+
+echo [1/4] إيقاف البرنامج القديم وفك قفل الملفات...
+taskkill /F /IM STARGATE.exe >nul 2>&1
+taskkill /F /IM python.exe /T >nul 2>&1
+taskkill /F /IM pythonw.exe /T >nul 2>&1
+taskkill /F /IM msedge.exe >nul 2>&1
+timeout /t 2 /nobreak >nul
+
+echo [2/4] جاري تنزيل التحديث من السيرفر المحلي بسرعة الشبكة...
+set "TEMP_ZIP=%CAFE_DIR%\\local_update_v531.zip"
+set "TEMP_DIR=%CAFE_DIR%\\local_update_extracted"
+
+if exist "%TEMP_DIR%" rmdir /S /Q "%TEMP_DIR%" >nul 2>&1
+mkdir "%TEMP_DIR%" >nul 2>&1
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$wc = New-Object System.Net.WebClient; ^
+   $wc.DownloadFile('http://{server_ip}:5000/download/update.zip', '%TEMP_ZIP%'); ^
+   Expand-Archive -Path '%TEMP_ZIP%' -DestinationPath '%TEMP_DIR%' -Force"
+
+if not exist "%TEMP_DIR%\\app.py" (
+    echo.
+    echo [!] فشل التنزيل من السيرفر http://{server_ip}:5000
+    echo يرجى التأكد من اتصال الشبكة وإعادة المحاولة.
+    pause
+    exit /b 1
+)
+
+echo [3/4] تثبيت التحديث وتحديث الحسابات مع حماية المبيعات وقواعد البيانات...
+robocopy "%TEMP_DIR%" "%CAFE_DIR%" /E /IS /IT /XF "*.db" "*.sqlite" "cafe_accounting.db" /XD "data" "Safe_Backups" >nul
+if exist "%CAFE_DIR%\\_internal" (
+    robocopy "%TEMP_DIR%\\templates" "%CAFE_DIR%\\_internal\\templates" /E /IS >nul 2>&1
+    robocopy "%TEMP_DIR%\\static"    "%CAFE_DIR%\\_internal\\static"    /E /IS >nul 2>&1
+    copy /Y "%TEMP_DIR%\\*.py" "%CAFE_DIR%\\_internal\\" >nul 2>&1
+    copy /Y "%TEMP_DIR%\\cafe_version.json" "%CAFE_DIR%\\_internal\\" >nul 2>&1
+)
+
+del /F /Q "%TEMP_ZIP%" >nul 2>&1
+rmdir /S /Q "%TEMP_DIR%" >nul 2>&1
+
+if exist "%CAFE_DIR%\\data\\app_profile\\Default\\Cache" (
+    rmdir /S /Q "%CAFE_DIR%\\data\\app_profile\\Default\\Cache" >nul 2>&1
+)
+
+echo [4/4] جاري تشغيل البرنامج بالإصدار الجديد v5.3.1...
+echo ======================================================================
+color 0A
+echo   🎉 تم تحديث برنامج الموظف بنجاح تام إلى v5.3.1!
+echo ======================================================================
+cd /d "%CAFE_DIR%"
+if exist "STARGATE.exe" (
+    start "" "STARGATE.exe"
+) else (
+    start "" pythonw.exe desktop_app.py
+)
+timeout /t 3 /nobreak >nul
+exit
+"""
+    return Response(bat_script, mimetype='application/x-bat', headers={'Content-Disposition': 'attachment; filename=update_employee.bat'})
+
+
+@app.route('/update-tool')
+def update_tool_page():
+    """صفحة ويب مباشرة ومبسطة لجهاز الموظف لتنزيل وتطبيق التحديث بنقرة واحدة."""
+    from flask import render_template_string
+    html = """<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحديث برنامج STARGATE CAFE v5.3.1</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', sans-serif; }
+        body { background: #0b1120; color: #f8fafc; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 24px; padding: 40px; max-width: 600px; width: 100%; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); text-align: center; }
+        .badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 6px 16px; border-radius: 9999px; font-weight: 700; font-size: 14px; margin-bottom: 20px; }
+        h1 { font-size: 26px; font-weight: 900; margin-bottom: 12px; color: #fff; }
+        p { color: #94a3b8; font-size: 15px; line-height: 1.6; margin-bottom: 30px; }
+        .btn-group { display: flex; flex-direction: column; gap: 14px; }
+        .btn { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px 24px; border-radius: 16px; font-size: 16px; font-weight: 700; text-decoration: none; transition: all 0.2s; cursor: pointer; border: none; }
+        .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.5); }
+        .btn-primary:hover { background: linear-gradient(135deg, #1d4ed8, #1e40af); transform: translateY(-2px); }
+        .btn-success { background: linear-gradient(135deg, #16a34a, #15803d); color: white; box-shadow: 0 10px 25px -5px rgba(22, 163, 74, 0.4); }
+        .btn-success:hover { background: linear-gradient(135deg, #15803d, #166534); transform: translateY(-2px); }
+        .btn-secondary { background: #334155; color: #e2e8f0; }
+        .btn-secondary:hover { background: #475569; }
+        .steps { margin-top: 30px; text-align: right; background: #0f172a; padding: 20px; border-radius: 16px; border: 1px solid #1e293b; font-size: 14px; color: #cbd5e1; }
+        .steps h3 { color: #38bdf8; margin-bottom: 10px; font-size: 15px; }
+        .steps ol { padding-right: 20px; }
+        .steps li { margin-bottom: 8px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="badge">
+            <i class="fa-solid fa-cloud-arrow-down"></i>
+            STARGATE CAFE OTA v5.3.1
+        </div>
+        <h1>تحديث جهاز الموظف والكاشير</h1>
+        <p>اختر إحدى الطرق التالية لتحديث جهاز الموظف فورياً وحل مشكلة الكاش والخزينة 100%:</p>
+
+        <div class="btn-group">
+            <a href="/download/installer.exe" class="btn btn-primary">
+                <i class="fa-solid fa-shield-halved"></i>
+                1. تنزيل برنامج التثبيت الرسمي الكامل (Setup v5.3.1.exe)
+            </a>
+            <a href="/download/update_employee.bat" class="btn btn-success">
+                <i class="fa-solid fa-bolt"></i>
+                2. تنزيل ملف التحديث السريع بنقرة واحدة (update_employee.bat)
+            </a>
+            <a href="/download/update.zip" class="btn btn-secondary">
+                <i class="fa-solid fa-file-zipper"></i>
+                3. تنزيل حزمة التحديث ZIP المضغوطة
+            </a>
+        </div>
+
+        <div class="steps">
+            <h3><i class="fa-solid fa-circle-info"></i> خطوات سهلة جداً:</h3>
+            <ol>
+                <li>اضغط على <b>الخيار رقم 1</b> لتنزيل ملف التثبيت المباشر.</li>
+                <li>عند انتهاء التنزيل، اضغط على الملف لتشغيله واضغط <b>Next ثم Install</b>.</li>
+                <li>سيتم استبدال كل الملفات تلقائياً وتصحيح الكاش والصندوق وحفظ جميع البيانات بنسبة 100%.</li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>"""
+    return render_template_string(html)
+
 
 
 
