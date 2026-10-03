@@ -1,7 +1,7 @@
 {
-    "changelog": "v5.2.0: إصلاح شامل لكافة الحسابات والتدقيق المالي (11 نقطة): تصحيح تكلفة المواد، إلغاء الحذف النهائي للديون واعتماد الإلغاء المحاسبي الآمن مع سجل الرقابة، حماية المخزون عند حذف التابات، قيود يومية عكسية آلية (Reverse Journal)، حماية رصيد الخزينة ودفتر الأستاذ من التضارب، إزالة كتم الأخطاء الصامتة، إغلاق المنافذ الخلفية، توليد أرقام طلبات فريدة مضادة للتصادم، تتبع استهلاك حبوب القهوة، و10 فهارس سرعة مركبة لقاعدة البيانات.",
-    "version": "5.2.0",
-    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.2.0/Stargate_Cafe_Update.zip",
+    "changelog": "v5.2.1: تحديث محاسبي ومالي شامل (11 نقطة) - تصحيح تكلفة المواد، حماية الخزنة والكاش، قيود اليومية العكسية، وحماية المخزون وفهارس السرعة.",
+    "version": "5.2.1",
+    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.2.1/Stargate_Cafe_Update.zip",
     "company": "STARGATE EXPERTS",
     "channel": "cafe",
     "name": "Stargate Cafe & Gaming System",
