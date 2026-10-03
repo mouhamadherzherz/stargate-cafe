@@ -4,7 +4,43 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0f172a">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ title or company_name }} - نظام محاسبة القهوة و GAMING</title>
+    
+    <!-- Automatic CSRF Handler -->
+    <script>
+        window.CSRF_TOKEN = "{{ csrf_token() }}";
+        document.addEventListener("DOMContentLoaded", function() {
+            // Auto inject CSRF token into all forms
+            document.querySelectorAll("form").forEach(function(f) {
+                if (!f.querySelector('input[name="csrf_token"]')) {
+                    var inp = document.createElement("input");
+                    inp.type = "hidden";
+                    inp.name = "csrf_token";
+                    inp.value = window.CSRF_TOKEN;
+                    f.appendChild(inp);
+                }
+            });
+            // Automatically add CSRF token header to fetch calls
+            var _origFetch = window.fetch;
+            window.fetch = function(resource, init) {
+                init = init || {};
+                init.headers = init.headers || {};
+                if (init.headers instanceof Headers) {
+                    if (!init.headers.has('X-CSRFToken')) {
+                        init.headers.append('X-CSRFToken', window.CSRF_TOKEN);
+                    }
+                } else if (Array.isArray(init.headers)) {
+                    init.headers.push(['X-CSRFToken', window.CSRF_TOKEN]);
+                } else {
+                    if (!init.headers['X-CSRFToken']) {
+                        init.headers['X-CSRFToken'] = window.CSRF_TOKEN;
+                    }
+                }
+                return _origFetch(resource, init);
+            };
+        });
+    </script>
     
     <!-- Local Offline Tailwind CSS Engine -->
     <script src="{{ url_for('static', filename='js/tailwindcss.js') }}"></script>
@@ -27,8 +63,8 @@
     </script>
     <!-- Local Offline Font Awesome Icons -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.min.css') }}">
-    <!-- Local Offline Chart.js -->
-    <script src="{{ url_for('static', filename='js/chart.min.js') }}"></script>
+    <!-- Local Offline Chart.js (Deferred) -->
+    <script src="{{ url_for('static', filename='js/chart.min.js') }}" defer></script>
 
     <style>
         body { font-family: 'Cairo', sans-serif; }
@@ -65,32 +101,50 @@
         </div>
 
         <!-- Center Nav Links (Protected based on Role) -->
-<div class="flex items-center gap-1.5 bg-slate-950/90 p-1 rounded-2xl border border-slate-800 text-xs font-bold shadow-inner">
-<!-- 1. Cashier / POS (Visible to all) -->
-<a href="{{ url_for('index') }}" class="px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'index' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
-<i class="fa-solid fa-cash-register"></i>
-<span>الكاشير والمبيعات</span>
-</a>
+        <div class="flex items-center gap-1.5 bg-slate-950/90 p-1 rounded-2xl border border-slate-800 text-xs font-bold shadow-inner overflow-x-auto custom-scrollbar max-w-[65vw] lg:max-w-none">
+            <!-- 0. Dashboard -->
+            <a href="{{ url_for('dashboard_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 shrink-0 {% if request.endpoint == 'dashboard_page' %}bg-indigo-600 text-white font-black shadow-md shadow-indigo-600/30{% else %}text-indigo-300 hover:text-white hover:bg-slate-900{% endif %}">
+                <i class="fa-solid fa-chart-pie"></i>
+                <span>📊 لوحة القيادة</span>
+            </a>
 
-<!-- 2. Customer Debts Ledger (Visible to all) -->
-<a href="{{ url_for('debts_page') }}" class="px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'debts_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
-<i class="fa-solid fa-book-bookmark"></i>
-<span>📒 سجل الديون</span>
-</a>
+            <!-- 1. Cashier / POS (Visible to all) -->
+            <a href="{{ url_for('index') }}" class="px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shrink-0 {% if request.endpoint == 'index' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+                <i class="fa-solid fa-cash-register"></i>
+                <span>الكاشير والـ POS</span>
+            </a>
 
-{% if is_admin or session.get('is_admin') or session.get('employee_role') == 'admin' %}
-<!-- Admin Only Pages -->
-<!-- 2.5 Inventory & Stock -->
-<a href="{{ url_for('inventory_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'inventory_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
-<i class="fa-solid fa-boxes-stacked"></i>
-<span>📦 البضاعة والمخزون</span>
-</a>
+            <!-- 1.5 Coffee Hub (قهوة وبن) -->
+            <a href="{{ url_for('coffee_hub') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 shrink-0 {% if request.endpoint == 'coffee_hub' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}" title="إدارة أكياس البن ومعدل استهلاك الفناجين">
+                <i class="fa-solid fa-mug-hot"></i>
+                <span>☕ القهوة والبن</span>
+            </a>
 
-<!-- 2.7 Employees & Shifts -->
-<a href="{{ url_for('employees_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'employees_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
-<i class="fa-solid fa-user-shield"></i>
-<span>👥 الموظفين</span>
-</a>
+            <!-- 2. Customer Debts Ledger (Visible to all) -->
+            <a href="{{ url_for('debts_page') }}" class="px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shrink-0 {% if request.endpoint == 'debts_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+                <i class="fa-solid fa-book-bookmark"></i>
+                <span>📒 سجل الديون</span>
+            </a>
+
+            {% if is_admin or session.get('is_admin') or session.get('employee_role') == 'admin' %}
+            <!-- Admin Only Pages -->
+            <!-- 2.5 Inventory & Stock -->
+            <a href="{{ url_for('inventory_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 shrink-0 {% if request.endpoint == 'inventory_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+                <i class="fa-solid fa-boxes-stacked"></i>
+                <span>📦 البضاعة والمخزون</span>
+            </a>
+
+            <!-- 2.6 Categories & Menu Sections -->
+            <a href="{{ url_for('categories_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 shrink-0 {% if request.endpoint == 'categories_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+                <i class="fa-solid fa-tags"></i>
+                <span>🏷️ الأقسام والتصنيفات</span>
+            </a>
+
+            <!-- 2.7 Employees & Shifts -->
+            <a href="{{ url_for('employees_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 shrink-0 {% if request.endpoint == 'employees_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+                <i class="fa-solid fa-user-shield"></i>
+                <span>👥 الموظفين</span>
+            </a>
 
 <!-- Reports & Daily Sales Breakdown -->
 <a href="{{ url_for('reports_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'reports_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
@@ -98,10 +152,34 @@
 <span>📊 التقارير</span>
 </a>
 
+<!-- Daily Closing & Reconciliation (إغلاق اليومية ومطابقة الصندوق) -->
+<a href="{{ url_for('employee_close_shift') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'employee_close_shift' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+<i class="fa-solid fa-cash-register"></i>
+<span>إغلاق اليومية</span>
+</a>
+
 <!-- 2.9 Safe / Vault (Admin Only) -->
 <a href="{{ url_for('safe_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'safe_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
 <i class="fa-solid fa-vault"></i>
 <span>🏦 الخزنة الخاصة</span>
+</a>
+
+<!-- 2.95 Financial Ledger (Admin Only) -->
+<a href="{{ url_for('financial_ledger_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'financial_ledger_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+<i class="fa-solid fa-book"></i>
+<span>📑 السجل المالي</span>
+</a>
+
+<!-- Suppliers & Purchases (Admin Only) -->
+<a href="{{ url_for('suppliers_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'suppliers_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+<i class="fa-solid fa-truck-ramp-box"></i>
+<span>الموردين</span>
+</a>
+
+<!-- Dining Tables -->
+<a href="{{ url_for('tables_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'tables_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
+<i class="fa-solid fa-utensils"></i>
+<span>الطاولات</span>
 </a>
 
 <!-- 3. Admin & Accounts -->
@@ -126,6 +204,12 @@
                 <i class="fa-solid fa-repeat text-[10px] text-indigo-400 mr-1"></i>
             </div>
 
+            <!-- Coffee Hub Button (حسابات البن والقهوة) -->
+            <a href="{{ url_for('coffee_hub') }}" title="متابعة حبوب القهوة، الفناجين المبيعة، والتالف" class="bg-amber-700/80 hover:bg-amber-600 text-white font-bold px-2.5 py-1.5 rounded-xl text-xs transition flex items-center gap-1 shadow-sm border border-amber-500/40">
+                <i class="fa-solid fa-mug-hot"></i>
+                <span class="hidden md:inline">إنتاجية القهوة ☕</span>
+            </a>
+
             <!-- Quick Expense Button (تسجيل مصروف من الصندوق) -->
             <button type="button" onclick="openQuickExpenseModal()" title="تسجيل مصروف سريع تم دفعه نقداً من درج الصندوق" class="bg-rose-600/90 hover:bg-rose-500 text-white font-bold px-2.5 py-1.5 rounded-xl text-xs transition flex items-center gap-1 shadow-sm border border-rose-500/40 cursor-pointer">
                 <i class="fa-solid fa-receipt"></i>
@@ -138,14 +222,23 @@
                 <span class="hidden md:inline">تسكير الحساب 📋</span>
             </a>
 
+            <!-- 🔄 Permanent Updates Button (always visible) -->
+            <button type="button" onclick="openUpdatesModal()" id="navUpdatesPageBtn" title="صفحة التحديثات - فحص يدوي وتثبيت" class="relative bg-slate-800 hover:bg-indigo-900/80 text-indigo-300 hover:text-indigo-200 font-bold px-2.5 py-1.5 rounded-xl text-xs transition flex items-center gap-1 border border-indigo-500/40">
+                <i class="fa-solid fa-cloud-arrow-down"></i>
+                <span class="hidden md:inline">التحديثات 🔄</span>
+                <!-- Pulsing dot when update available -->
+                <span id="navUpdateDot" class="hidden absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-400 border-2 border-slate-900 animate-ping"></span>
+                <span id="navUpdateDotStatic" class="hidden absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-400 border-2 border-slate-900"></span>
+            </button>
+
             <!-- Lock / Logout POS Screen -->
             <a href="{{ url_for('employee_logout') }}" title="قفل الشاشة وتسجيل خروج الموظف" class="bg-slate-800 hover:bg-rose-900 text-slate-300 hover:text-rose-200 px-2.5 py-1.5 rounded-xl text-xs transition flex items-center gap-1 border border-slate-700">
                 <i class="fa-solid fa-lock text-[11px]"></i>
                 <span class="hidden md:inline">قفل 🔒</span>
             </a>
 
-            <!-- OTA Update Available Header Badge -->
-            <button id="navUpdateBtn" onclick="triggerUpdateModal()" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 text-white font-black text-xs shadow-lg shadow-amber-500/30 animate-pulse hover:scale-105 transition cursor-pointer border border-amber-300/40" title="يوجد تحديث جديد للبرنامج!">
+            <!-- OTA Update Available Header Badge (hidden, kept for compatibility) -->
+            <button id="navUpdateBtn" onclick="openUpdatesModal()" class="hidden items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 text-white font-black text-xs shadow-lg shadow-amber-500/30 animate-pulse hover:scale-105 transition cursor-pointer border border-amber-300/40" title="يوجد تحديث جديد للبرنامج!">
                 <i class="fa-solid fa-cloud-arrow-down"></i>
                 <span>تحديث متاح!</span>
             </button>
@@ -311,8 +404,95 @@ function executeSwitchEmployee() {
 </script>
 
 <!-- ============================================================ -->
-<!-- 🔄 OTA Update Modal & Script                                  -->
+<!-- 🔄 Updates Page Modal (صفحة التحديثات الكاملة)               -->
 <!-- ============================================================ -->
+<div id="updatesPageModal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-indigo-500/40 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5">
+        <!-- Header -->
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-amber-500 flex items-center justify-center text-white text-xl shadow-lg">
+                    🔄
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-white">إدارة تحديثات النظام</h3>
+                    <p class="text-[11px] text-slate-400">تحديث تلقائي ويدوي لبرنامج STARGATE</p>
+                </div>
+            </div>
+            <button onclick="closeUpdatesModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm transition">✕</button>
+        </div>
+
+        <!-- Current Version Card -->
+        <div class="bg-slate-950 rounded-2xl p-4 border border-slate-800">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-[10px] text-slate-500 font-bold mb-1">الإصدار الحالي المثبت</div>
+                    <div class="text-xl font-black font-mono text-amber-400" id="updModalCurrentVer">جاري التحقق...</div>
+                </div>
+                <div id="updModalStatusBadge" class="px-3 py-1.5 rounded-xl text-xs font-black bg-slate-800 text-slate-400 border border-slate-700">
+                    <i class="fa-solid fa-spinner fa-spin"></i> جاري الفحص...
+                </div>
+            </div>
+        </div>
+
+        <!-- Remote Version Info (shown when update available) -->
+        <div id="updModalNewVerCard" class="hidden bg-gradient-to-r from-amber-950/60 to-indigo-950/60 rounded-2xl p-4 border border-amber-500/50 space-y-2">
+            <div class="flex items-center gap-2 text-amber-300 font-black text-sm">
+                <i class="fa-solid fa-circle-up text-amber-400"></i>
+                <span>تحديث رسمي جديد متاح!</span>
+            </div>
+            <div class="text-xs text-slate-300" id="updModalNewVer">...</div>
+            <div class="text-[11px] text-slate-400 leading-relaxed bg-slate-900/50 rounded-xl p-3 border border-slate-800" id="updModalChangelog">...</div>
+        </div>
+
+        <!-- Up to date notice -->
+        <div id="updModalOkCard" class="hidden bg-emerald-950/50 rounded-2xl p-4 border border-emerald-700/40 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-lg">✅</div>
+            <div>
+                <div class="text-sm font-black text-emerald-300">البرنامج محدّث لآخر إصدار</div>
+                <div class="text-[11px] text-slate-400">لا يوجد أي تحديث جديد في الوقت الحالي.</div>
+            </div>
+        </div>
+
+        <!-- Connection error -->
+        <div id="updModalErrCard" class="hidden bg-rose-950/50 rounded-2xl p-4 border border-rose-700/40 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-lg">⚠️</div>
+            <div>
+                <div class="text-sm font-black text-rose-300">تعذّر الاتصال بخادم التحديثات</div>
+                <div class="text-[11px] text-slate-400">تأكد من الاتصال بالإنترنت ثم اضغط فحص يدوي.</div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex flex-col gap-2">
+            <!-- Install Update -->
+            <button id="updModalInstallBtn" onclick="startOtaUpdateProcess(); closeUpdatesModal();" class="hidden w-full bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white font-black py-3 rounded-2xl text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer">
+                <i class="fa-solid fa-circle-arrow-down text-lg"></i>
+                <span>تثبيت التحديث الجديد الآن 🚀</span>
+            </button>
+
+            <!-- Force check + Manual update info -->
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="forceCheckUpdate()" id="updModalForceCheckBtn" class="bg-indigo-900/60 hover:bg-indigo-800/80 text-indigo-300 font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 border border-indigo-500/40 cursor-pointer">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>فحص يدوي 🔍</span>
+                </button>
+                <a href="https://github.com/mouhamadherzherz/stargate-cafe/releases" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 border border-slate-700">
+                    <i class="fa-brands fa-github"></i>
+                    <span>سجل الإصدارات</span>
+                </a>
+            </div>
+
+            <!-- Manual update BAT -->
+            <div class="bg-slate-950/80 rounded-xl p-3 border border-slate-800 text-[11px] text-slate-400 leading-relaxed">
+                <div class="font-black text-slate-300 mb-1">📦 التحديث اليدوي (بدون إنترنت):</div>
+                <span>شغّل ملف <span class="font-mono text-amber-300">تحديث_برنامج_الكافيه_للموظف.bat</span> الموجود في مجلد البرنامج لتثبيت التحديث بدون إنترنت عبر USB أو ملف محلي.</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🔄 OTA Progress Modal (during download/install) -->
 <div id="otaProgressModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-amber-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl text-center">
         <div class="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto text-3xl mb-4 shadow-inner">
@@ -320,16 +500,115 @@ function executeSwitchEmployee() {
         </div>
         <h3 class="text-xl font-black text-white mb-2" id="otaModalTitle">جاري تحديث برنامج الكافيه...</h3>
         <p class="text-xs text-slate-300 mb-6 leading-relaxed" id="otaModalDesc">يتم تنزيل وتطبيق حزمة التحديث الرسمية بأمان كامل 100% دون لمس أو التأثير على مبيعاتك وقواعد البيانات.</p>
-        
         <div class="w-full bg-slate-800 rounded-full h-3 mb-4 overflow-hidden border border-slate-700">
             <div id="otaProgressBar" class="bg-gradient-to-r from-amber-500 to-indigo-500 h-full rounded-full transition-all duration-500 w-1/4 animate-pulse"></div>
         </div>
-        
         <div class="text-xs text-amber-300 font-mono" id="otaModalStatus">جاري الاتصال بالسيرفر السحابي...</div>
     </div>
 </div>
 
 <script>
+// ============================================================
+// Updates Page Modal Logic
+// ============================================================
+function openUpdatesModal() {
+    document.getElementById('updatesPageModal').classList.remove('hidden');
+    // Reset all state cards
+    document.getElementById('updModalNewVerCard').classList.add('hidden');
+    document.getElementById('updModalOkCard').classList.add('hidden');
+    document.getElementById('updModalErrCard').classList.add('hidden');
+    document.getElementById('updModalInstallBtn').classList.add('hidden');
+    document.getElementById('updModalCurrentVer').innerText = 'جاري التحقق...';
+    document.getElementById('updModalStatusBadge').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الفحص...';
+    document.getElementById('updModalStatusBadge').className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-slate-800 text-slate-400 border border-slate-700';
+    // Trigger a check
+    loadUpdatesStatus();
+}
+
+function closeUpdatesModal() {
+    document.getElementById('updatesPageModal').classList.add('hidden');
+}
+
+function loadUpdatesStatus() {
+    fetch('/api/check_update')
+        .then(r => r.json())
+        .then(data => renderUpdatesModal(data))
+        .catch(() => renderUpdatesModal({checked: true, available: false, message: 'تعذّر الاتصال بخادم التحديثات', error: true}));
+}
+
+function forceCheckUpdate() {
+    const btn = document.getElementById('updModalForceCheckBtn');
+    const badge = document.getElementById('updModalStatusBadge');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الفحص...'; }
+    badge.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الفحص...';
+    badge.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-slate-800 text-slate-400 border border-slate-700';
+    document.getElementById('updModalNewVerCard').classList.add('hidden');
+    document.getElementById('updModalOkCard').classList.add('hidden');
+    document.getElementById('updModalErrCard').classList.add('hidden');
+    document.getElementById('updModalInstallBtn').classList.add('hidden');
+
+    fetch('/api/force_check_update')
+        .then(r => r.json())
+        .then(data => {
+            renderUpdatesModal(data);
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> <span>فحص يدوي 🔍</span>'; }
+            // Also refresh banner/badge
+            checkOtaUpdates();
+        })
+        .catch(() => {
+            renderUpdatesModal({checked: true, available: false, message: 'تعذّر الاتصال', error: true});
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> <span>فحص يدوي 🔍</span>'; }
+        });
+}
+
+function renderUpdatesModal(data) {
+    const curVerEl = document.getElementById('updModalCurrentVer');
+    const badgeEl = document.getElementById('updModalStatusBadge');
+    const newCard = document.getElementById('updModalNewVerCard');
+    const okCard = document.getElementById('updModalOkCard');
+    const errCard = document.getElementById('updModalErrCard');
+    const installBtn = document.getElementById('updModalInstallBtn');
+
+    // Try to get local version from page (injected by server) or fallback
+    const localVer = data.local_version || (data.available ? 'مثبّت' : (data.version || '...'));
+
+    if (data.available) {
+        // Update available!
+        curVerEl.innerText = 'v' + (data.local_version || '...');
+        badgeEl.innerHTML = '<i class="fa-solid fa-circle-up"></i> تحديث جديد!';
+        badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/50';
+        newCard.classList.remove('hidden');
+        okCard.classList.add('hidden');
+        errCard.classList.add('hidden');
+        installBtn.classList.remove('hidden');
+        document.getElementById('updModalNewVer').innerText = 'الإصدار الجديد: v' + (data.version || '?');
+        document.getElementById('updModalChangelog').innerText = data.changelog || data.message || 'تحديث رسمي جديد.';
+        // Show nav dot
+        const dot = document.getElementById('navUpdateDot');
+        const dotS = document.getElementById('navUpdateDotStatic');
+        if (dot) dot.classList.remove('hidden');
+        if (dotS) dotS.classList.remove('hidden');
+    } else if (data.checked && !data.available && !data.error) {
+        // All good, up to date
+        curVerEl.innerText = 'v' + (data.version || '...');
+        badgeEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> محدّث';
+        badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-700/50';
+        newCard.classList.add('hidden');
+        okCard.classList.remove('hidden');
+        errCard.classList.add('hidden');
+        installBtn.classList.add('hidden');
+    } else {
+        // Error / not yet checked
+        curVerEl.innerText = data.version ? 'v' + data.version : 'غير محدد';
+        badgeEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> خطأ في الاتصال';
+        badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-700/50';
+        newCard.classList.add('hidden');
+        okCard.classList.add('hidden');
+        errCard.classList.remove('hidden');
+        installBtn.classList.add('hidden');
+    }
+}
+
 function checkOtaUpdates() {
     fetch('/api/check_update')
         .then(r => r.json())
@@ -342,16 +621,17 @@ function checkOtaUpdates() {
                 const verStr = data.version || '4.6.0';
                 if (verText) verText.innerText = 'v' + verStr;
                 if (msgText && data.message) msgText.innerText = data.message;
-                
-                // Show top banner if this specific version wasn't dismissed
+                // Show top banner if not dismissed
                 if (banner && sessionStorage.getItem('dismissOtaBanner_' + verStr) !== 'true') {
                     banner.classList.remove('hidden');
                 }
-                // Always show pulsing nav badge
-                if (badge) {
-                    badge.classList.remove('hidden');
-                    badge.classList.add('inline-flex');
-                }
+                // Show pulsing nav badge
+                if (badge) { badge.classList.remove('hidden'); badge.classList.add('inline-flex'); }
+                // Show dots on updates button
+                const dot = document.getElementById('navUpdateDot');
+                const dotS = document.getElementById('navUpdateDotStatic');
+                if (dot) dot.classList.remove('hidden');
+                if (dotS) dotS.classList.remove('hidden');
             }
         })
         .catch(() => {});
@@ -366,7 +646,7 @@ function dismissOtaBanner() {
 }
 
 function triggerUpdateModal() {
-    startOtaUpdateProcess();
+    openUpdatesModal();
 }
 
 function startOtaUpdateProcess() {
@@ -374,7 +654,7 @@ function startOtaUpdateProcess() {
     const bar = document.getElementById('otaProgressBar');
     const status = document.getElementById('otaModalStatus');
     const btn = document.getElementById('btnStartOtaUpdate');
-    
+
     if (modal) modal.classList.remove('hidden');
     if (btn) btn.disabled = true;
     if (bar) bar.style.width = '40%';
@@ -390,10 +670,7 @@ function startOtaUpdateProcess() {
                 const interval = setInterval(() => {
                     if (status) status.innerText = `سيُعاد فتح البرنامج تلقائياً خلال ${counter} ثوانٍ...`;
                     counter--;
-                    if (counter < 0) {
-                        clearInterval(interval);
-                        location.reload();
-                    }
+                    if (counter < 0) { clearInterval(interval); location.reload(); }
                 }, 1000);
             } else {
                 alert('تعذر تطبيق التحديث: ' + (res.error || 'خطأ غير معروف'));
@@ -408,10 +685,10 @@ function startOtaUpdateProcess() {
         });
 }
 
-// Auto check update when page loads and every 3 minutes
+// Auto check update 15 seconds after page load and every 10 minutes (never block UI)
 document.addEventListener('DOMContentLoaded', () => {
-    checkOtaUpdates();
-    setInterval(checkOtaUpdates, 180000);
+    setTimeout(checkOtaUpdates, 15000);
+    setInterval(checkOtaUpdates, 600000);
 });
 </script>
 
@@ -436,6 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
 
         <form method="POST" action="{{ url_for('expense_quick_add') }}" class="space-y-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div>
                 <label class="block text-[11px] font-bold text-slate-300 mb-1">بيان المصروف *</label>
                 <input type="text" name="title" id="quickExpenseTitle" required placeholder="مثال: شراء ثلج، خبز، حليب، نثريات..." class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl focus:border-rose-400 outline-none">
@@ -507,7 +785,164 @@ function closeQuickExpenseModal() {
     const m = document.getElementById('quickExpenseModal');
     if (m) m.classList.add('hidden');
 }
+
+/* ============================================================ */
+/* ☕ Coffee Waste (تلف) & Open Bag (فتح كيلو) Modals for Cashier */
+/* ============================================================ */
+function openPosWasteModal() {
+    const m = document.getElementById('posCoffeeWasteModal');
+    if (m) {
+        m.classList.remove('hidden');
+        const q = document.getElementById('posWasteQty');
+        if (q) { q.value = '1'; q.focus(); }
+    }
+}
+function closePosWasteModal() {
+    const m = document.getElementById('posCoffeeWasteModal');
+    if (m) m.classList.add('hidden');
+}
+
+function openPosOpenBagModal() {
+    const m = document.getElementById('posOpenCoffeeBagModal');
+    if (m) {
+        m.classList.remove('hidden');
+    }
+}
+function closePosOpenBagModal() {
+    const m = document.getElementById('posOpenCoffeeBagModal');
+    if (m) m.classList.add('hidden');
+}
 </script>
+
+<!-- ☕ 1. Cashier Coffee Waste Modal (تسجيل فنجان تالف) -->
+<div id="posCoffeeWasteModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-rose-500/60 rounded-3xl p-6 md:p-7 max-w-lg w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3.5">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-xl border border-rose-500/30">
+                    ⚠️
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-white">تسجيل فنجان قهوة تالف (تلف)</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">تُحسب الخسارة بسعر تكلفة الفنجان المستخرجة من الكيلو السابق دون أرباح</p>
+                </div>
+            </div>
+            <button type="button" onclick="closePosWasteModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold">
+                ✕
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('coffee_log_waste') }}" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">عدد الفناجين التالفة (تلف) *</label>
+                <div class="flex items-center gap-3">
+                    <input type="number" name="qty" id="posWasteQty" value="1" min="1" max="50" required
+                           class="w-full bg-slate-950 border border-slate-700 text-rose-400 font-mono font-black text-2xl text-center py-2.5 rounded-2xl focus:border-rose-400 outline-none">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">سبب التلف:</label>
+                <select name="reason" class="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm px-3.5 py-3 rounded-2xl focus:border-rose-400 outline-none">
+                    <option value="تلف / خطأ أثناء التحضير">تلف / خطأ أثناء التحضير</option>
+                    <option value="انكب / سقط أثناء التحضير أو التقديم">انكب / سقط أثناء التحضير أو التقديم</option>
+                    <option value="خطأ في طلب الزبون أو تحضير البن">خطأ في طلب الزبون أو تحضير البن</option>
+                    <option value="خلل في ماكينة الإسبريسو أو الطحنة">خلل في ماكينة الإسبريسو أو الطحنة</option>
+                    <option value="ضيافة أو تذوق الموظف">ضيافة أو تذوق الموظف</option>
+                    <option value="سبب تلف آخر">سبب تلف آخر</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">ملاحظة (اختياري):</label>
+                <input type="text" name="notes" placeholder="ملاحظة سريعة..." class="w-full bg-slate-950 border border-slate-700 text-white text-sm px-4 py-3 rounded-2xl focus:border-rose-400 outline-none">
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-black py-3 rounded-2xl text-sm transition shadow-lg shadow-rose-600/30 active:scale-95 cursor-pointer">
+                    تأكيد خصم التالف ⚠️
+                </button>
+                <button type="button" onclick="closePosWasteModal()" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ☕ 2. Cashier Open New Kilo Bag Modal (فتح كيلو بن جديد - واسع ومريح) -->
+<div id="posOpenCoffeeBagModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-6 md:p-8 max-w-xl w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3.5">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-xl border border-amber-500/30">
+                    ☕
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-white">فتح كيلو بن قهوة جديد (1 كغ)</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">يخصم 1 كغ من المخزون وتسكير الكيلو السابق تلقائياً وبدء العداد من 0</p>
+                </div>
+            </div>
+            <button type="button" onclick="closePosOpenBagModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold">
+                ✕
+            </button>
+        </div>
+
+        {% set active_batch_modal = get_active_coffee_batch() if get_active_coffee_batch else None %}
+        {% set stock_info_modal = get_coffee_beans_stock() if get_coffee_beans_stock else None %}
+
+        <div class="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs md:text-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-slate-400">📦 رصيد أكياس البن بالمحل:</span>
+                <span class="font-mono font-black text-amber-400 text-base">{{ stock_info_modal.stock_kg if stock_info_modal else 0 }} كغ</span>
+            </div>
+            {% if stock_info_modal and stock_info_modal.cost_per_kg > 0 %}
+            <div class="bg-amber-500/10 border border-amber-500/30 p-2.5 rounded-xl flex items-center justify-between text-xs">
+                <span class="text-amber-300 font-bold">السعر الموحد للكيلو من المخزون:</span>
+                <span class="font-mono font-black text-white">{{ stock_info_modal.cost_per_kg|format_currency }} ل.ل</span>
+            </div>
+            {% endif %}
+            {% if active_batch_modal %}
+            <div class="border-t border-slate-800/80 pt-2 flex items-center justify-between text-xs">
+                <span class="text-rose-300">الكيلو المفتوح حالياً:</span>
+                <span class="font-mono font-bold text-white">{{ active_batch_modal.batch_code }} (أنتج {{ active_batch_modal.cups_sold }} فنجان مبيع + {{ active_batch_modal.cups_damaged }} تلف)</span>
+            </div>
+            <p class="text-xs text-amber-300/90 pt-1 leading-relaxed">
+                💡 سيتم تسكير الكيلو الحالي تلقائياً وتوثيق عدد فناجينه ورسماله وصافي ربحه وتوريثه، وبدء الكيلو الجديد من 0 فنجان.
+            </p>
+            {% else %}
+            <p class="text-xs text-emerald-400 pt-1">
+                🟢 لا يوجد كيلو مفتوح حالياً، سيتم بدء تشغيل أول كيلو فوراً.
+            </p>
+            {% endif %}
+        </div>
+
+        <form method="POST" action="{{ url_for('coffee_open_bag') }}" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">سعر شراء الكيلو بالليرة (ل.ل) - معتمد تلقائياً من المخزن:</label>
+                <input type="number" name="cost_per_kg_lbp" value="{{ stock_info_modal.cost_per_kg if stock_info_modal and stock_info_modal.cost_per_kg > 0 else '' }}" placeholder="{{ stock_info_modal.cost_per_kg if stock_info_modal else 'سعر الشراء الموحد...' }}" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold text-sm px-4 py-3 rounded-2xl focus:border-amber-400 outline-none text-left" dir="ltr">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">ملاحظة الكاشير (اختياري):</label>
+                <input type="text" name="notes" placeholder="مثال: فتح كيس بن غامق رقم 2..." class="w-full bg-slate-950 border border-slate-700 text-white text-sm px-4 py-3 rounded-2xl focus:border-amber-400 outline-none">
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-3 rounded-2xl text-sm transition shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer">
+                    تأكيد فتح الكيلو وبدء العداد ☕
+                </button>
+                <button type="button" onclick="closePosOpenBagModal()" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
 </body>
 </html>

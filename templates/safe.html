@@ -77,12 +77,12 @@
             </div>
         </div>
 
-        <!-- 3-Pill Breakdown of Target Date -->
+        <!-- 4-Pill Comprehensive Cash Breakdown of Target Date -->
         {% if daily_transfer_status %}
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
             <!-- 1. Total Cash In -->
             <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 flex flex-col justify-between">
-                <span class="text-[11px] font-bold text-slate-400">💵 إجمالي مبيعات الكاش (الوارد):</span>
+                <span class="text-[11px] font-bold text-slate-400">💵 كاش مبيعات اليوم (الوارد):</span>
                 <div class="mt-1 flex items-baseline justify-between">
                     <span class="text-base font-black text-amber-400 font-mono">{{ daily_transfer_status.total_sales_lbp|format_currency }} ل.ل</span>
                     <span class="text-xs font-mono font-bold text-slate-400">${{ "{:,.2f}".format(daily_transfer_status.total_sales_usd) }}</span>
@@ -92,26 +92,44 @@
 
             <!-- 2. Expenses Paid from Cash -->
             <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 flex flex-col justify-between">
-                <span class="text-[11px] font-bold text-slate-400">🧾 مصاريف اليوم المسددة (المنصرف):</span>
+                <span class="text-[11px] font-bold text-slate-400">🧾 مصاريف مسددة من الكاش:</span>
                 <div class="mt-1 flex items-baseline justify-between">
-                    <span class="text-base font-black text-rose-400 font-mono">{{ daily_transfer_status.total_expenses_lbp|format_currency }} ل.ل</span>
+                    <span class="text-base font-black text-rose-400 font-mono">-{{ daily_transfer_status.total_expenses_lbp|format_currency }} ل.ل</span>
                     <span class="text-xs font-mono font-bold text-slate-400">${{ "{:,.2f}".format(daily_transfer_status.total_expenses_usd) }}</span>
                 </div>
-                <span class="text-[10px] text-slate-500 mt-1">مصاريف مسددة من صندوق الكاشير</span>
+                <span class="text-[10px] text-slate-500 mt-1">خُصمت من كاش الدرج</span>
             </div>
 
-            <!-- 3. Net Cash Recommended for Safe -->
-            <div class="bg-amber-950/40 p-3.5 rounded-2xl border-2 border-amber-500/50 flex flex-col justify-between relative overflow-hidden">
-                <span class="text-[11px] font-bold text-amber-300">💰 صافي الكاش الموصى بنقله للخزنة:</span>
+            <!-- 3. Already Transferred to Safe -->
+            <div class="bg-slate-950/80 p-3.5 rounded-2xl border border-amber-500/40 flex flex-col justify-between">
+                <span class="text-[11px] font-bold text-amber-300">🏦 المرحّل للخزنة الخاصة:</span>
                 <div class="mt-1 flex items-baseline justify-between">
-                    <span class="text-lg font-black text-white font-mono">{{ daily_transfer_status.recommended_transfer_lbp|format_currency }} ل.ل</span>
-                    <span class="text-xs font-mono font-bold text-emerald-400">${{ "{:,.2f}".format(daily_transfer_status.recommended_transfer_usd) }}</span>
+                    <span class="text-base font-black text-amber-400 font-mono">{{ daily_transfer_status.already_transferred_lbp|format_currency }} ل.ل</span>
+                    <span class="text-xs font-mono font-bold text-amber-300">${{ "{:,.2f}".format(daily_transfer_status.already_transferred_usd) }}</span>
                 </div>
                 <span class="text-[10px] text-amber-400 font-bold mt-1">
-                    {% if daily_transfer_status.already_transferred %}
-                    تم ترحيل سابقاً: {{ daily_transfer_status.already_transferred_lbp|format_currency }} ل.ل
+                    {% if daily_transfer_status.is_fully_transferred %}
+                    ✓ تم نقل كامل كاش اليوم
                     {% else %}
-                    صافي الأرباح النقدية المتاحة للنقل
+                    تم ترحيل جزئي (خصم من الكاش)
+                    {% endif %}
+                </span>
+            </div>
+
+            <!-- 4. Remaining in Cash Drawer (صافي الكاش المتبقي في الدرج) -->
+            <div class="bg-gradient-to-tr from-slate-950 to-emerald-950/60 p-3.5 rounded-2xl border-2 {% if daily_transfer_status.recommended_transfer_lbp > 0 %}border-emerald-500/70{% else %}border-slate-800{% endif %} flex flex-col justify-between relative overflow-hidden">
+                <span class="text-[11px] font-bold text-emerald-300">💼 المتبقي في الكاش الآن:</span>
+                <div class="mt-1 flex items-baseline justify-between">
+                    <span class="text-lg font-black font-mono {% if daily_transfer_status.recommended_transfer_lbp > 0 %}text-emerald-400{% else %}text-slate-400{% endif %}">
+                        {{ daily_transfer_status.recommended_transfer_lbp|format_currency }} ل.ل
+                    </span>
+                    <span class="text-xs font-mono font-bold text-emerald-300">${{ "{:,.2f}".format(daily_transfer_status.recommended_transfer_usd) }}</span>
+                </div>
+                <span class="text-[10px] {% if daily_transfer_status.recommended_transfer_lbp > 0 %}text-amber-400 font-bold{% else %}text-emerald-400 font-bold{% endif %} mt-1">
+                    {% if daily_transfer_status.recommended_transfer_lbp > 0 %}
+                    جاهز للترحيل للخزنة
+                    {% else %}
+                    الكاش مصفّر ومرحّل بالكامل (0 ل.ل) 🔒
                     {% endif %}
                 </span>
             </div>
@@ -120,30 +138,26 @@
         <!-- Execute Transfer Action Form -->
         <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-950/60 p-4 rounded-2xl border border-amber-500/30">
             <div class="text-xs text-slate-300 flex items-center gap-2">
-                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                <span class="w-2.5 h-2.5 rounded-full {% if daily_transfer_status.is_fully_transferred %}bg-emerald-400{% else %}bg-amber-400 animate-ping{% endif %}"></span>
                 <span>تاريخ الترحيل المحاسبي: <strong class="text-amber-300 font-mono">{{ target_date }}</strong></span>
             </div>
 
             <div class="flex items-center gap-2 w-full sm:w-auto">
-                {% if daily_transfer_status and daily_transfer_status.recommended_transfer_lbp > 0 %}
+                {% if daily_transfer_status.is_fully_transferred or daily_transfer_status.recommended_transfer_lbp <= 0 %}
+                <div class="w-full sm:w-auto bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 font-black px-5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-inner">
+                    <i class="fa-solid fa-circle-check text-base text-emerald-400"></i>
+                    <span>✓ تم ترحيل كامل كاش اليوم إلى الخزنة الخاصة بنجاح (رصيد الكاش المتبقي: 0 ل.ل) 🔒</span>
+                </div>
+                {% elif daily_transfer_status and daily_transfer_status.recommended_transfer_lbp > 0 %}
                 <form action="{{ url_for('safe_transfer_daily') }}" method="POST" class="w-full sm:w-auto">
                     <input type="hidden" name="target_date" value="{{ target_date }}">
                     <input type="hidden" name="amount_lbp" value="{{ daily_transfer_status.recommended_transfer_lbp }}">
                     <input type="hidden" name="amount_usd" value="{{ daily_transfer_status.recommended_transfer_usd }}">
                     <input type="hidden" name="note" value="ترحيل صافي مبيعات يوم {{ target_date }}">
-
                     <button type="submit" 
                             class="w-full sm:w-auto bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black px-6 py-3 rounded-xl text-xs transition shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
                         <i class="fa-solid fa-arrow-down-to-bracket text-sm"></i>
-                        <span>نقل صافي مبيعات اليوم ({{ daily_transfer_status.recommended_transfer_lbp|format_currency }} ل.ل) إلى الخزنة الآن 🏦</span>
-                    </button>
-                </form>
-                {% elif drawer_status and drawer_status.total_untransferred_lbp > 0 %}
-                <form action="{{ url_for('safe_transfer_drawer_total') }}" method="POST" class="w-full sm:w-auto">
-                    <button type="submit" 
-                            class="w-full sm:w-auto bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-400 hover:to-emerald-500 text-slate-950 font-black px-6 py-3 rounded-xl text-xs transition shadow-xl shadow-amber-500/30 flex items-center justify-center gap-2 active:scale-95 cursor-pointer">
-                        <i class="fa-solid fa-vault text-base"></i>
-                        <span>ترحيل كامل كاش الدرج المتوفر ({{ drawer_status.total_untransferred_lbp|format_currency }} ل.ل) إلى الخزنة الآن 🏦</span>
+                        <span>نقل المتبقي من كاش اليوم ({{ daily_transfer_status.recommended_transfer_lbp|format_currency }} ل.ل) إلى الخزنة 🏦</span>
                     </button>
                 </form>
                 {% else %}
@@ -384,12 +398,13 @@
                                 <th class="p-3.5">المقابل ($)</th>
                                 <th class="p-3.5">البيان</th>
                                 <th class="p-3.5">المسؤول</th>
-                                <th class="p-3.5 w-10"></th>
+                                <th class="p-3.5">الحالة</th>
+                                <th class="p-3.5 w-16 text-center">إجراء</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-800/60">
                             {% for t in transfers %}
-                            <tr class="hover:bg-slate-800/40 transition">
+                            <tr class="hover:bg-slate-800/40 transition {{ 'opacity-50 line-through' if t.is_cancelled else '' }}">
                                 <td class="p-3.5">
                                     {% if t.is_withdraw %}
                                     <span class="bg-rose-950 text-rose-300 border border-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">
@@ -418,12 +433,28 @@
                                     </span>
                                 </td>
                                 <td class="p-3.5">
-                                    <form action="{{ url_for('delete_safe_transfer', transfer_id=t.id) }}" method="POST"
-                                          onsubmit="return confirm('هل أنت متأكد من حذف هذه الحركة من سجل الخزنة؟')">
-                                        <button type="submit" class="text-slate-500 hover:text-rose-400 transition text-sm" title="حذف الحركة">
-                                            🗑️
+                                    {% if t.is_cancelled %}
+                                    <span class="bg-rose-950/80 text-rose-400 border border-rose-800/60 px-2 py-0.5 rounded text-[10px] font-bold" title="ألغيت بواسطة {{ t.cancelled_by }} - السبب: {{ t.cancel_reason }}">
+                                        🚫 ملغاة
+                                    </span>
+                                    {% else %}
+                                    <span class="bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 px-2 py-0.5 rounded text-[10px] font-bold">
+                                        ✓ نشطة
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="p-3.5 text-center">
+                                    {% if not t.is_cancelled %}
+                                    <form action="{{ url_for('cancel_safe_transfer_route', transfer_id=t.id) }}" method="POST"
+                                          onsubmit="var r = prompt('يرجى كتابة سبب إلغاء هذه الحركة المالية:'); if(r===null||r.trim()===''){ alert('يجب كتابة سبب الإلغاء!'); return false; } this.querySelector('input[name=cancel_reason]').value = r; return true;">
+                                        <input type="hidden" name="cancel_reason" value="">
+                                        <button type="submit" class="text-slate-400 hover:text-rose-400 transition text-xs bg-slate-800/60 hover:bg-rose-950/40 px-2 py-1 rounded border border-slate-700/50" title="إلغاء الحركة وتعديل الرصيد">
+                                            إلغاء 🚫
                                         </button>
                                     </form>
+                                    {% else %}
+                                    <span class="text-slate-600 text-xs">—</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}

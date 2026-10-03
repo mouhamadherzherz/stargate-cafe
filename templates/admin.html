@@ -200,35 +200,87 @@
                     <h4 class="font-black text-xs text-rose-400 flex items-center gap-1.5">
                         <i class="fa-solid fa-receipt"></i> جدول مصاريف اليوم
                     </h4>
-                    <span class="text-[10px] text-slate-400 font-mono">{{ summary.expenses.total_lbp|format_currency }} ل.ل</span>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] text-slate-400 font-mono">{{ summary.expenses.total_lbp|format_currency }} ل.ل</span>
+                        <button type="button" onclick="openQuickExpenseModal()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-2.5 py-1 rounded-lg text-[10px] transition flex items-center gap-1 shadow-sm cursor-pointer">
+                            <i class="fa-solid fa-plus"></i> إضافة مصروف 💸
+                        </button>
+                    </div>
                 </div>
                 <div class="overflow-x-auto max-h-60">
                     <table class="w-full text-right text-xs">
                         <thead class="bg-slate-900 text-slate-400 font-bold border-b border-slate-800 text-[11px]">
                             <tr>
                                 <th class="py-2.5 px-3">بند المصروف</th>
+                                <th class="py-2.5 px-3">المصدر</th>
                                 <th class="py-2.5 px-3">المبلغ</th>
-                                <th class="py-2.5 px-3 text-center">حذف</th>
+                                <th class="py-2.5 px-3 text-center">إلغاء</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-800/60">
-                            {% for exp in summary.recent_expenses %}
+                            {% for exp in expenses or summary.recent_expenses %}
                             <tr class="hover:bg-slate-800/40">
-                                <td class="py-2.5 px-3 font-bold text-white">{{ exp.title }}</td>
+                                <td class="py-2.5 px-3">
+                                    <div class="font-bold text-white">{{ exp.title }}</div>
+                                    <div class="text-[10px] text-slate-500">{{ exp.category or 'عام' }} • بواسطة {{ exp.employee_name or 'كاشير' }}</div>
+                                </td>
+                                <td class="py-2.5 px-3 text-[10px] font-bold">
+                                    {% if exp.source == 'safe' %}
+                                    <span class="text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/30">الخزنة 🏦</span>
+                                    {% else %}
+                                    <span class="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30">الدرج 💵</span>
+                                    {% endif %}
+                                </td>
                                 <td class="py-2.5 px-3 font-mono font-bold text-rose-400">{{ exp.amount_lbp|format_currency }} ل.ل</td>
                                 <td class="py-2.5 px-3 text-center">
-                                    <form method="POST" action="{{ url_for('expense_delete', expense_id=exp.id) }}" onsubmit="return confirm('حذف المصروف؟');" class="inline">
-                                        <button type="submit" class="text-slate-500 hover:text-rose-400 p-1">
-                                            <i class="fa-solid fa-trash-can"></i>
+                                    <form method="POST" action="{{ url_for('expense_delete', expense_id=exp.id) }}"
+                                          onsubmit="var r=prompt('📝 سبب إلغاء المصروف ({{ exp.title }}):'); if(r===null){ return false; } if(!r.trim()){ alert('يرجى إدخال سبب الإلغاء!'); return false; } this.querySelector('[name=cancel_reason]').value=r; return true;"
+                                          class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="cancel_reason" value="">
+                                        <button type="submit" class="text-slate-500 hover:text-rose-400 p-1 transition" title="إلغاء المصروف (Non-Destructive)">
+                                            <i class="fa-solid fa-ban"></i>
                                         </button>
                                     </form>
                                 </td>
                             </tr>
                             {% else %}
-                            <tr><td colspan="3" class="text-center py-4 text-slate-500">لا توجد مصاريف مسجلة اليوم</td></tr>
+                            <tr><td colspan="4" class="text-center py-4 text-slate-500">لا توجد مصاريف مسجلة اليوم</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- ☕ Coffee & Bean Yield Management Card -->
+            {% set active_coffee = get_active_coffee_batch() if get_active_coffee_batch else None %}
+            {% set coffee_st = get_coffee_beans_stock() if get_coffee_beans_stock else None %}
+            <div class="relative bg-gradient-to-br from-amber-950/40 via-slate-900 to-slate-900 border border-amber-500/40 rounded-2xl p-5 overflow-hidden group hover:border-amber-400/60 transition-all shadow-sm">
+                <div class="absolute top-0 left-0 text-[70px] opacity-10 leading-none select-none">☕</div>
+                <div class="flex items-start justify-between mb-3">
+                    <div>
+                        <p class="text-xs font-bold text-amber-300 uppercase tracking-widest flex items-center gap-1.5">
+                            <span>☕</span> نظام حبوب القهوة والفناجين
+                        </p>
+                        <p class="text-xs text-slate-500 mt-0.5">تتبع كل كيلو، الفناجين المبيعة، والتالف</p>
+                    </div>
+                    <a href="{{ url_for('coffee_hub') }}" class="text-xs text-amber-300 hover:text-white bg-amber-700/40 hover:bg-amber-600 px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1 border border-amber-500/30">
+                        فتح لوحة القهوة ←
+                    </a>
+                </div>
+                <div class="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-800 text-xs">
+                    <div>
+                        <span class="text-[10px] text-slate-400 block">رصيد البن المتوفر:</span>
+                        <strong class="text-amber-300 font-mono text-base">{{ coffee_st.stock_kg if coffee_st else 0 }} كغ</strong>
+                    </div>
+                    <div>
+                        <span class="text-[10px] text-slate-400 block">الكيلو المفتوح حالياً:</span>
+                        {% if active_coffee %}
+                        <strong class="text-emerald-400 font-mono text-xs">{{ active_coffee.cups_sold }} فنجان مبيع ({{ active_coffee.batch_code }})</strong>
+                        {% else %}
+                        <strong class="text-slate-500 text-xs">لا يوجد كيلو مفتوح</strong>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
                 <!-- 🏦 Vault / Safe Balance Card -->
@@ -330,11 +382,17 @@
                                     <a href="{{ url_for('order_receipt', order_id=ord.id) }}" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-amber-400 p-1.5 rounded-lg text-xs" title="طباعة الإيصال">
                                         <i class="fa-solid fa-print"></i>
                                     </a>
-                                    <form method="POST" action="{{ url_for('order_delete', order_id=ord.id) }}" onsubmit="return confirm('هل تريد حذف هذه الفاتورة؟');" class="inline">
-                                        <button type="submit" class="text-slate-500 hover:text-rose-400 p-1.5" title="حذف الفاتورة">
-                                            <i class="fa-solid fa-trash-can"></i>
+                                    <form method="POST" action="{{ url_for('order_delete', order_id=ord.id) }}"
+                                          onsubmit="var r=prompt('📝 سبب إلغاء الفاتورة #{{ ord.order_number }}:'); if(r===null){ return false; } if(!r.trim()){ alert('يرجى إدخال سبب الإلغاء!'); return false; } this.querySelector('[name=cancel_reason]').value=r; return true;"
+                                          class="inline">
+                                        <input type="hidden" name="cancel_reason" value="">
+                                        <button type="submit"
+                                                class="text-slate-500 hover:text-rose-400 p-1.5 transition"
+                                                title="إلغاء الفاتورة (Non-Destructive)">
+                                            <i class="fa-solid fa-ban"></i>
                                         </button>
                                     </form>
+
                                 </td>
                             </tr>
                             {% else %}
@@ -501,6 +559,7 @@
                                         data-price="{{ it.price_lbp }}"
                                         data-icon="{{ it.icon|default('☕') }}"
                                         data-is-active="{{ it.is_active|default(1) }}"
+                                        data-is-coffee-bean-linked="{{ it.is_coffee_bean_linked|default(0) }}"
                                         onclick="triggerEditDrink(this)"
                                         class="bg-slate-800 hover:bg-slate-700 text-amber-300 px-2.5 py-1.5 rounded-lg text-xs font-bold border border-slate-700 cursor-pointer transition flex items-center gap-1">
                                     <i class="fa-solid fa-pen-to-square"></i> تعديل
@@ -530,13 +589,19 @@
                 </div>
                 <div>
                     <h3 class="font-black text-sm text-white">إدارة الأقسام والتصنيفات (Categories)</h3>
-                    <p class="text-xs text-slate-400">إضافة أقسام جديدة للمشروبات والمنتجات لتنظيم شاشة الكاشير</p>
+                    <p class="text-xs text-slate-400">إضافة أقسام جديدة للمشروبات والمنتجات لتنظيم شاشة الكاشير، ونقل وترتيب الأصناف</p>
                 </div>
             </div>
-            <button type="button" onclick="openModal('addCategoryModal')" class="bg-purple-600 hover:bg-purple-500 text-white font-black px-4 py-2 rounded-2xl text-xs flex items-center gap-1.5 shadow-md shadow-purple-600/30">
-                <i class="fa-solid fa-plus-circle"></i>
-                <span>+ إضافة تصنيف جديد</span>
-            </button>
+            <div class="flex items-center gap-2">
+                <a href="{{ url_for('categories_page') }}" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-4 py-2 rounded-2xl text-xs flex items-center gap-1.5 shadow-md shadow-indigo-600/30">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    <span>مدير الأقسام المتطور والكاشير ↗</span>
+                </a>
+                <button type="button" onclick="openModal('addCategoryModal')" class="bg-purple-600 hover:bg-purple-500 text-white font-black px-4 py-2 rounded-2xl text-xs flex items-center gap-1.5 shadow-md shadow-purple-600/30">
+                    <i class="fa-solid fa-plus-circle"></i>
+                    <span>+ إضافة تصنيف جديد</span>
+                </button>
+            </div>
         </div>
 
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -1064,6 +1129,12 @@
                 <label for="editDrinkActive" class="text-xs font-bold text-slate-300 cursor-pointer">متاح ونشط في شاشة الكاشير للطلب المباشر</label>
             </div>
 
+            <!-- Coffee Bean Link Switch -->
+            <div class="flex items-center gap-2 p-2 bg-slate-950/60 rounded-xl border border-indigo-500/30">
+                <input type="checkbox" name="is_coffee_bean_linked" id="editDrinkCoffeeBeanLinked" value="1" class="rounded text-emerald-500 w-4 h-4">
+                <label for="editDrinkCoffeeBeanLinked" class="text-xs font-bold text-emerald-400 cursor-pointer">☕ يخصم من كيلو البن (قهوة حبوب)</label>
+            </div>
+
             <!-- Live Cashier Card Preview Box -->
             <div class="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
                 <span class="text-[11px] font-black text-amber-400 flex items-center gap-1">
@@ -1115,6 +1186,7 @@
         </div>
 
         <form method="POST" action="{{ url_for('admin_factory_reset') }}" class="space-y-3 pt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="reset_type" value="transactions_only">
             <div>
                 <label class="block text-xs font-bold text-amber-300 mb-1">أدخل كلمة سر الإدارة للتأكيد: *</label>
@@ -1156,6 +1228,7 @@
         </div>
 
         <form method="POST" action="{{ url_for('admin_factory_reset') }}" class="space-y-3 pt-2">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="reset_type" value="full">
             <div>
                 <label class="block text-xs font-bold text-rose-300 mb-1">أدخل كلمة سر الإدارة للتأكيد: *</label>
@@ -1672,16 +1745,20 @@ function triggerEditDrink(btn) {
     const price = btn.getAttribute('data-price');
     const icon = btn.getAttribute('data-icon');
     const isActive = btn.getAttribute('data-is-active');
-    openEditDrinkModal(id, name, catId, price, icon, isActive);
+    const isCoffeeBeanLinked = btn.getAttribute('data-is-coffee-bean-linked') || 0;
+    openEditDrinkModal(id, name, catId, price, icon, isActive, isCoffeeBeanLinked);
 }
 
-function openEditDrinkModal(id, name, catId, price, icon, isActive) {
+function openEditDrinkModal(id, name, catId, price, icon, isActive, isCoffeeBeanLinked) {
         document.getElementById('editDrinkForm').action = `/menu/item/${id}/edit`;
         document.getElementById('editDrinkName').value = name;
         document.getElementById('editDrinkCategory').value = catId;
         document.getElementById('editDrinkPrice').value = price;
         document.getElementById('editDrinkPriceUSD').value = (price / SYSTEM_EXCHANGE_RATE).toFixed(2);
         document.getElementById('editDrinkActive').checked = (isActive == 1);
+        if (document.getElementById('editDrinkCoffeeBeanLinked')) {
+            document.getElementById('editDrinkCoffeeBeanLinked').checked = (parseInt(isCoffeeBeanLinked) === 1);
+        }
 
         const iconInput = document.getElementById('editDrinkIcon');
         const imgPreview = document.getElementById('editDrinkImgPreview');

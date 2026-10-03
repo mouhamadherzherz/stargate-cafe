@@ -1,9 +1,9 @@
 {
-    "changelog": "v4.6.0: إصلاح حسابات الخزنة والكاش بشكل كامل — تصحيح معادلة كاش الدرج (لا خصم مزدوج للمصاريف)، تتبع موظف في عمليات الخزنة، حذف سجل الخزنة عند ضبط المصنع، تصدير/استيراد سجل الخزنة بالكامل مع النسخة الاحتياطية.",
-    "version": "4.6.0",
-    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v4.6.0/Stargate_Cafe_Update.zip",
+    "changelog": "v5.2.0: إصلاح شامل لكافة الحسابات والتدقيق المالي (11 نقطة): تصحيح تكلفة المواد، إلغاء الحذف النهائي للديون واعتماد الإلغاء المحاسبي الآمن مع سجل الرقابة، حماية المخزون عند حذف التابات، قيود يومية عكسية آلية (Reverse Journal)، حماية رصيد الخزينة ودفتر الأستاذ من التضارب، إزالة كتم الأخطاء الصامتة، إغلاق المنافذ الخلفية، توليد أرقام طلبات فريدة مضادة للتصادم، تتبع استهلاك حبوب القهوة، و10 فهارس سرعة مركبة لقاعدة البيانات.",
+    "version": "5.2.0",
+    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.2.0/Stargate_Cafe_Update.zip",
     "company": "STARGATE EXPERTS",
     "channel": "cafe",
     "name": "Stargate Cafe & Gaming System",
-    "release_date": "2026-09-30"
+    "release_date": "2026-10-03"
 }

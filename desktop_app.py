@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import os
 import sys
 import time
@@ -6,6 +5,8 @@ import socket
 import threading
 import subprocess
 import traceback
+import shutil
+import logger
 
 # Determine base dir
 if getattr(sys, 'frozen', False):
@@ -41,17 +42,17 @@ except BaseException as e:
     log(f"CRITICAL IMPORT ERROR:\n{traceback.format_exc()}")
     sys.exit(1)
 
-def find_free_port(start_port=9292):
-    for port in range(start_port, start_port + 200):
+def find_free_port(start_port=5000):
+    for port in [5000] + list(range(9292, 9492)):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(('127.0.0.1', port))
+                s.bind(('0.0.0.0', port))
                 return port
         except OSError:
             continue
     return start_port
 
-APP_PORT = find_free_port(9292)
+APP_PORT = find_free_port(5000)
 log(f"Selected APP_PORT: {APP_PORT}")
 
 def run_flask(port):
@@ -59,7 +60,7 @@ def run_flask(port):
         log("Calling init_db()...")
         init_db()
         log("init_db() done. Starting app.run()...")
-        app.run(host='127.0.0.1', port=port, debug=False, use_reloader=False, threaded=True)
+        app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False, threaded=True)
     except BaseException as e:
         log(f"Flask crash error:\n{traceback.format_exc()}")
 
@@ -85,8 +86,8 @@ def launch_desktop_gui(url):
         if os.path.exists(cache_path):
             try:
                 shutil.rmtree(cache_path, ignore_errors=True)
-            except Exception:
-                pass
+            except Exception as e:
+                log(f"Failed to clean cache path {cache_path}: {e}")
 
 
     edge_paths = [

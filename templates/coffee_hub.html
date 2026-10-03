@@ -1,0 +1,728 @@
+{% extends 'base.html' %}
+
+{% block title %}☕ لوحة حسابات القهوة والبن | STARGATE POS{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-8 px-2 md:px-4 py-2">
+
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <!-- 1. Header Banner & Quick Controls                            -->
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <div class="bg-gradient-to-r from-amber-950/80 via-slate-900 to-slate-900 border-2 border-amber-500/40 rounded-3xl p-6 md:p-8 shadow-2xl flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div class="flex items-center gap-4">
+            <div class="w-16 h-16 rounded-2xl bg-amber-500/20 border-2 border-amber-500/40 text-amber-400 flex items-center justify-center text-4xl shadow-xl shadow-amber-500/10 shrink-0">
+                ☕
+            </div>
+            <div>
+                <h1 class="text-2xl md:text-3xl font-black text-white flex flex-wrap items-center gap-3">
+                    نظام حسابات القهوة وإنتاجية الكيلو
+                    <span class="text-xs font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-3 py-1 rounded-full font-mono">
+                        Coffee Yield & Waste System
+                    </span>
+                </h1>
+                <p class="text-sm text-slate-300 mt-1.5 leading-relaxed">
+                    حساب دقيق لكل كيلو قهوة على حدة بدون أرقام افتراضية: توثيق كم فنجان أنتج الكيلو، تكلفة الفنجان الحقيقية، صافي الأرباح، وتسجيل الفناجين التالفة (تلف).
+                </p>
+            </div>
+        </div>
+
+        <!-- Stock Indicator & Actions -->
+        <div class="flex flex-wrap items-center gap-4 bg-slate-950/90 border border-amber-500/40 p-4 rounded-2xl shadow-inner">
+            <div class="text-right">
+                <span class="text-xs text-slate-400 font-bold block mb-0.5">📦 رصيد حبوب القهوة بالمحل:</span>
+                <div class="text-2xl font-black font-mono text-amber-300">
+                    {{ summary.stock_info.stock_kg }} <span class="text-sm font-normal text-slate-400">كيلو (KG)</span>
+                </div>
+                <span class="text-xs text-emerald-400 font-mono font-bold block mt-0.5">
+                    {% if summary.get('benchmark_cups', 0) > 0 %}
+                    ≈ {{ summary.stock_info.expected_cups }} فنجان متوقع (وفق الكيلو السابق: {{ summary.get('benchmark_cups', 0) }} فنجان)
+                    {% else %}
+                    (يتم تحديد المعيار عند تسكير أول كيلو)
+                    {% endif %}
+                </span>
+            </div>
+            <div class="flex flex-col gap-2">
+                <button type="button" onclick="openUpdateStockModal()" class="bg-amber-600/30 hover:bg-amber-600/50 text-amber-300 border border-amber-500/40 px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                    <span>تعديل رصيد البن</span>
+                </button>
+                <button type="button" onclick="openOpenBagModal()" class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 cursor-pointer active:scale-95">
+                    <i class="fa-solid fa-plus-circle"></i>
+                    <span>فتح كيلو جديد ☕</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <!-- 2. Active Open Bag Section (الكيلو المفتوح حالياً للتشغيل)        -->
+    <!-- ───────────────────────────────────────────────────────────── -->
+    {% if summary.active_batch %}
+    {% set b = summary.active_batch %}
+    <div class="bg-slate-900/95 border-2 border-amber-500/70 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden space-y-6">
+        <!-- Glow accent -->
+        <div class="absolute -top-24 -left-24 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <!-- Top Header for Active Bag -->
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 border-b border-slate-800 pb-5">
+            <div class="flex items-center gap-3.5">
+                <span class="relative flex h-4 w-4 shrink-0">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-4 w-4 bg-emerald-500"></span>
+                </span>
+                <div>
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <span class="text-xs font-black text-amber-300 bg-amber-500/20 border border-amber-500/40 px-3 py-1 rounded-xl">
+                            الكيلو المفتوح حالياً للتشغيل ☕
+                        </span>
+                        <strong class="text-base font-mono text-white font-black tracking-wider">{{ b.batch_code }}</strong>
+                        {% if b.get('expected_cups_yield') %}
+                        <span class="inline-flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/40 px-3 py-1 rounded-full text-xs text-amber-300 font-bold">
+                            <span>🎯 إنتاجية الكيلو السابق:</span>
+                            <span class="font-mono text-white font-black">{{ b.get('expected_cups_yield', 0)|int }} فنجان</span>
+                            {% if b.get('prev_batch_code') %}<span class="text-slate-400">({{ b.get('prev_batch_code') }})</span>{% endif %}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <p class="text-xs text-slate-300 mt-2 flex flex-wrap items-center gap-3">
+                        <span>تاريخ الفتح: <strong class="text-white font-mono">{{ b.opened_at }}</strong></span>
+                        <span>• المسؤول: <strong class="text-amber-300">{{ b.opened_by }}</strong></span>
+                        {% if b.notes %}<span>• ملاحظة: <strong class="text-slate-300">{{ b.notes }}</strong></span>{% endif %}
+                    </p>
+                </div>
+            </div>
+
+            <!-- Action Buttons for the Active Bag -->
+            <div class="flex flex-wrap items-center gap-3">
+                <!-- Action: Log Damaged Cup -->
+                <button type="button" onclick="openLogWasteModal()" class="bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-black px-4 py-2.5 rounded-xl text-xs md:text-sm transition shadow-lg shadow-rose-600/30 flex items-center gap-2 cursor-pointer active:scale-95">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>تسجيل فنجان تالف ⚠️</span>
+                </button>
+
+                <!-- Action: Close / Finish Bag -->
+                <button type="button" onclick="openCloseBagModal({{ b.id }}, '{{ b.batch_code }}', {{ b.cups_sold }}, {{ b.cups_damaged }})" class="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black px-5 py-2.5 rounded-xl text-xs md:text-sm transition shadow-lg shadow-emerald-600/30 flex items-center gap-2 cursor-pointer active:scale-95">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span>تسكير هذا الكيلو وحساب النتائج ✅</span>
+                </button>
+
+                <!-- Action: Open New Bag Directly -->
+                <button type="button" onclick="openOpenBagModal()" class="bg-amber-600/40 hover:bg-amber-600/60 text-amber-200 border border-amber-500/50 font-bold px-4 py-2.5 rounded-xl text-xs md:text-sm transition flex items-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-arrow-right-arrow-left"></i>
+                    <span>فتح كيلو جديد (تسكير تلقائي) ☕</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 5 Big Metric Cards for the Active Bag (خانات واسعة وواضحة جداً) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <!-- 1. Cups Sold -->
+            <div class="bg-slate-950/90 p-5 rounded-3xl border-2 border-emerald-500/40 shadow-lg relative overflow-hidden flex flex-col justify-between">
+                <div>
+                    <span class="text-xs font-bold text-slate-300 block mb-1">☕ الفناجين المبيعة:</span>
+                    <div class="text-3xl md:text-4xl font-black font-mono text-emerald-400">
+                        {{ b.cups_sold }} <span class="text-xs font-normal text-slate-400">فنجان</span>
+                    </div>
+                </div>
+                <div class="text-xs text-emerald-300 font-mono mt-3 font-bold pt-2 border-t border-slate-800">
+                    الإيرادات: {{ b.total_revenue_lbp|format_currency }} ل.ل
+                </div>
+            </div>
+
+            <!-- 2. Cups Damaged -->
+            <div class="bg-slate-950/90 p-5 rounded-3xl border-2 border-rose-500/40 shadow-lg relative overflow-hidden flex flex-col justify-between">
+                <div>
+                    <span class="text-xs font-bold text-slate-300 block mb-1">⚠️ الفناجين التالفة (تلف):</span>
+                    <div class="text-3xl md:text-4xl font-black font-mono text-rose-400">
+                        {{ b.cups_damaged }} <span class="text-xs font-normal text-slate-400">فنجان</span>
+                    </div>
+                </div>
+                <div class="text-xs text-rose-300 font-mono mt-3 font-bold pt-2 border-t border-slate-800">
+                    خسارة التلف: -{{ b.loss_from_damage_lbp|format_currency }} ل.ل
+                </div>
+            </div>
+
+            <!-- 3. Total Cups Produced So Far -->
+            <div class="bg-slate-950/90 p-5 rounded-3xl border-2 border-cyan-500/40 shadow-lg relative overflow-hidden flex flex-col justify-between">
+                <div>
+                    <span class="text-xs font-bold text-slate-300 block mb-1">📊 إجمالي إنتاج الكيلو حتى الآن:</span>
+                    <div class="text-3xl md:text-4xl font-black font-mono text-cyan-300">
+                        {{ b.total_cups_now }} <span class="text-xs font-normal text-slate-400">فنجان</span>
+                    </div>
+                </div>
+                <div class="text-xs text-slate-300 font-mono mt-3 pt-2 border-t border-slate-800">
+                    (مبيع: {{ b.cups_sold }} + تلف: {{ b.cups_damaged }})
+                </div>
+            </div>
+
+            <!-- 4. Unit Cost & Profit per Cup (معادلة ربح الفنجان الواحد) -->
+            <div class="bg-gradient-to-br from-amber-950/60 to-slate-950 p-5 rounded-3xl border-2 border-amber-500/60 shadow-lg relative overflow-hidden flex flex-col justify-between">
+                <div>
+                    <span class="text-xs font-bold text-amber-300 block mb-1">💰 ربح الفنجان الواحد (سعر وتكلفة):</span>
+                    <div class="text-2xl md:text-3xl font-black font-mono text-emerald-400">
+                        +{{ b.profit_per_cup_lbp|format_currency }} <span class="text-xs font-normal text-slate-300">ل.ل ربح صافي</span>
+                    </div>
+                </div>
+                <div class="text-xs text-amber-200/90 font-mono mt-3 font-bold pt-2 border-t border-slate-800 flex justify-between items-center">
+                    <span>بيع: {{ b.avg_cup_price_lbp|format_currency }} | تكلفة: {{ b.benchmark_cup_cost_lbp|format_currency }}</span>
+                    <span class="text-emerald-300 font-bold bg-emerald-500/20 px-2 py-0.5 rounded-lg border border-emerald-500/30">{{ b.cup_margin_pct }}% ربح</span>
+                </div>
+            </div>
+
+            <!-- 5. Net Profit / Kilo Performance (صافي أرباح وعائد الكيلو) -->
+            <div class="bg-slate-950/90 p-5 rounded-3xl border-2 border-purple-500/50 shadow-lg relative overflow-hidden flex flex-col justify-between">
+                <div>
+                    <span class="text-xs font-bold text-purple-300 block mb-1">💎 عائد ومبيعات هذا الكيلو:</span>
+                    <div class="text-2xl md:text-3xl font-black font-mono {% if b.total_revenue_lbp >= b.cost_per_kg_lbp %}text-emerald-400{% else %}text-white{% endif %}">
+                        {{ b.total_revenue_lbp|format_currency }} <span class="text-xs font-normal text-slate-400">ل.ل مبيعات</span>
+                    </div>
+                </div>
+                <div class="text-xs font-mono mt-3 pt-2 border-t border-slate-800 space-y-1">
+                    {% if b.total_revenue_lbp >= b.cost_per_kg_lbp %}
+                    <div class="text-emerald-300 font-bold">
+                        ✓ تم تغطية ثمن الكيلو ({{ b.cost_per_kg_lbp|format_currency }} ل.ل) والأرباح الصافية الحالية: +{{ b.net_profit_lbp|format_currency }} ل.ل
+                    </div>
+                    {% else %}
+                    <div class="text-slate-300 flex justify-between">
+                        <span>نقطة التعادل: بيع {{ b.breakeven_cups }} فنجان لتغطية الكيلو</span>
+                        <span class="text-amber-400 font-bold">(تم بيع {{ b.cups_sold }})</span>
+                    </div>
+                    <div class="text-purple-300 font-bold text-[11px]">
+                        صافي الربح المتوقع عند اكتمال الكيلو: +{{ b.expected_net_profit_lbp|format_currency }} ل.ل
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Spacious Dynamic Flow Notice (لا أرقام افتراضية) -->
+        <div class="bg-gradient-to-r from-slate-950 via-amber-950/20 to-slate-950 p-4 md:p-5 rounded-2xl border border-amber-500/40 text-xs md:text-sm text-slate-300 leading-relaxed flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl text-amber-400">💡</span>
+                <div>
+                    <strong class="text-amber-300">ملاحظة محاسبية هامة:</strong>
+                    <span>لا يتم وضع أي رقم افتراضي مسبق لعدد فناجين الكيلو، لأن كل كيلو يختلف عن الآخر. عند تسكير هذا الكيلو، سيتم احتساب إنتاجيته الكلية بدقة، وتحديد صافي الأرباح وقيمة التالف، وتوريث النتائج للكيلو التالي.</span>
+                </div>
+            </div>
+            <div class="shrink-0 flex items-center gap-2">
+                <span class="text-xs text-slate-400">الحالة:</span>
+                <span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-3 py-1 rounded-full text-xs font-black font-mono">
+                    نشط وقيد السحب 🟢
+                </span>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- Empty State: No active bag currently open -->
+    <div class="bg-slate-900/95 border-2 border-slate-800 rounded-3xl p-10 md:p-14 text-center shadow-2xl space-y-5">
+        <div class="w-20 h-20 rounded-full bg-amber-500/10 border-2 border-amber-500/30 text-amber-400 flex items-center justify-center text-4xl mx-auto shadow-inner">
+            ☕
+        </div>
+        <div class="max-w-xl mx-auto space-y-2">
+            <h3 class="text-xl md:text-2xl font-black text-white">لا يوجد كيلو قهوة مفتوح حالياً للتشغيل</h3>
+            <p class="text-sm text-slate-400 leading-relaxed">
+                عند فتح كيلو قهوة جديد، اضغط على الزر أدناه. سيبدأ النظام فوراً باحتساب كل فنجان مبيع وتالف دون فرض أي عدد افتراضي مسبق، وسيقوم بخصم 1 كغ من المخزن تلقائياً.
+            </p>
+        </div>
+        <button type="button" onclick="openOpenBagModal()" class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black px-8 py-3.5 rounded-2xl text-sm md:text-base transition shadow-xl shadow-amber-500/20 active:scale-95 cursor-pointer">
+            ☕ فتح كيلو قهوة جديد للاستعمال الآن
+        </button>
+    </div>
+    {% endif %}
+
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <!-- 3. Closed Bags History (أرشيف كل كيلو قهوة لوحده كم أنتج)        -->
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <div class="bg-slate-900 border-2 border-slate-800 rounded-3xl overflow-hidden shadow-2xl space-y-0">
+        <div class="p-5 md:p-6 border-b border-slate-800 bg-slate-950/70 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">📜</span>
+                <div>
+                    <h3 class="font-black text-white text-base md:text-lg">أرشيف الكيلوات السابقة (إنتاجية كل كيلو لوحده بدقة)</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">سجل كامل وموثق لكل كيلو تم إغلاقه: كم فنجان أنتج، الفناجين المبيعة، التالف، تكلفة الفنجان، وصافي الأرباح</p>
+                </div>
+            </div>
+            <span class="text-xs bg-slate-800 text-amber-300 border border-amber-500/30 px-3.5 py-1.5 rounded-xl font-mono font-bold">
+                {{ summary.closed_batches|length }} كيلو مغلق ومؤرشف
+            </span>
+        </div>
+
+        {% if summary.closed_batches %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-right text-sm">
+                <thead class="bg-slate-950 text-slate-300 font-bold border-b border-slate-800 text-xs">
+                    <tr>
+                        <th class="p-4">رقم الكيلو</th>
+                        <th class="p-4">تاريخ الفتح والإغلاق</th>
+                        <th class="p-4">سعر شراء الكيلو</th>
+                        <th class="p-4">الفناجين المبيعة</th>
+                        <th class="p-4">الفناجين التالفة (تلف)</th>
+                        <th class="p-4">إجمالي إنتاج الكيلو</th>
+                        <th class="p-4">تكلفة الفنجان الدقيقة</th>
+                        <th class="p-4">خسارة التالف (تلف)</th>
+                        <th class="p-4">صافي الأرباح الإجمالية</th>
+                        <th class="p-4 text-center">صافي أرباح الكيلو والتقييم</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/80 font-mono">
+                    {% for cb in summary.closed_batches %}
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="p-4 font-bold text-white text-sm">{{ cb.batch_code }}</td>
+                        <td class="p-4 text-slate-400 text-xs">
+                            <div>{{ cb.opened_at[0:16] if cb.opened_at else '' }}</div>
+                            <div class="text-slate-500">إلى {{ cb.closed_at[11:16] if cb.closed_at else '' }} ({{ cb.closed_by or cb.opened_by }})</div>
+                        </td>
+                        <td class="p-4 text-amber-300 font-bold">
+                            {{ cb.cost_per_kg_lbp|format_currency }} ل.ل
+                            <div class="text-[10px] text-slate-500">${{ "{:,.2f}".format(cb.cost_per_kg_usd) }}</div>
+                        </td>
+                        <td class="p-4 text-emerald-400 font-black text-base">{{ cb.cups_sold }}</td>
+                        <td class="p-4 text-rose-400 font-bold text-base">{{ cb.cups_damaged }}</td>
+                        <td class="p-4 text-white font-black text-base">{{ cb.total_cups }} <span class="text-xs font-normal text-slate-400">فنجان</span></td>
+                        <td class="p-4 text-amber-400 font-black">
+                            {{ cb.cost_per_cup_lbp|format_currency }} ل.ل
+                            <div class="text-[10px] text-slate-500">${{ "{:,.4f}".format(cb.cost_per_cup_usd) }} ({{ cb.grams_per_cup }}g/فنجان)</div>
+                        </td>
+                        <td class="p-4 text-rose-400 font-bold">
+                            -{{ cb.loss_from_damage_lbp|format_currency }} ل.ل
+                        </td>
+                        <td class="p-4 {% if cb.net_profit_lbp >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %} font-black text-base">
+                            {{ cb.net_profit_lbp|format_currency }} ل.ل
+                        </td>
+                        <td class="p-4 text-center">
+                            <div class="flex flex-col items-center gap-1">
+                                <span class="text-xs px-3 py-1 rounded-xl font-bold font-sans bg-{{ cb.rating_color }}-500/15 text-{{ cb.rating_color }}-400 border border-{{ cb.rating_color }}-500/40">
+                                    {{ cb.rating_badge or cb.rating_text }}
+                                </span>
+                                {% if cb.rating_desc %}
+                                <span class="text-[10px] text-slate-400 font-sans font-normal">{{ cb.rating_desc }}</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-10 text-center text-slate-400 text-sm">
+            لا توجد كيلوات مغلقة ومؤرشفة بعد. عند تسكير أول كيلو ستظهر كافة تفاصيله وإنتاجيته وأرباحه هنا.
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <!-- 4. Damaged Cups Log (سجل هدر وتوالف فناجين القهوة - تلف)       -->
+    <!-- ───────────────────────────────────────────────────────────── -->
+    <div class="bg-slate-900 border-2 border-slate-800 rounded-3xl overflow-hidden shadow-2xl space-y-0">
+        <div class="p-5 md:p-6 border-b border-slate-800 bg-slate-950/70 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">⚠️</span>
+                <div>
+                    <h3 class="font-black text-white text-base md:text-lg">سجل الفناجين التالفة والمسكوبة (تلف)</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">يُسجل كخسارة مالية مباشرة بسعر تكلفة الفنجان المستخرجة من الكيلو دون احتساب أي أرباح</p>
+                </div>
+            </div>
+            <span class="text-xs bg-rose-950 text-rose-300 px-3.5 py-1.5 rounded-xl font-mono font-bold border border-rose-800/40">
+                {{ summary.waste_logs|length }} عملية تلف مسجلة
+            </span>
+        </div>
+
+        {% if summary.waste_logs %}
+        <div class="overflow-x-auto max-h-72">
+            <table class="w-full text-right text-sm">
+                <thead class="bg-slate-950 text-slate-300 font-bold border-b border-slate-800 sticky top-0 text-xs">
+                    <tr>
+                        <th class="p-4">الوقت والتاريخ</th>
+                        <th class="p-4">رقم الكيلو</th>
+                        <th class="p-4">عدد الفناجين التالفة</th>
+                        <th class="p-4">سبب التلف</th>
+                        <th class="p-4">قيمة الخسارة المالية</th>
+                        <th class="p-4">الموظف المسجل</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/80 font-mono">
+                    {% for w in summary.waste_logs %}
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="p-4 text-slate-400 text-xs">{{ w.created_at[0:16] if w.created_at else '' }}</td>
+                        <td class="p-4 text-amber-300 font-bold">{{ w.batch_code or '-' }}</td>
+                        <td class="p-4 text-rose-400 font-black text-base">{{ w.qty }} فنجان</td>
+                        <td class="p-4 text-white font-sans text-xs md:text-sm">{{ w.reason }}</td>
+                        <td class="p-4 text-rose-400 font-black text-base">-{{ w.loss_cost_lbp|format_currency }} ل.ل</td>
+                        <td class="p-4 text-slate-300 font-sans text-xs">{{ w.employee_name }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-8 text-center text-slate-400 text-sm">
+            لا توجد فناجين تالفة مسجلة. (سجل التوالف نظيف 100% ✨)
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<!-- MODAL 1: Open New Coffee Bag (فتح كيلو جديد - واسع وواضح)     -->
+<!-- ───────────────────────────────────────────────────────────── -->
+<div id="openBagModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-6 md:p-8 max-w-xl w-full shadow-2xl space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-2xl border border-amber-500/30">
+                    ☕
+                </div>
+                <div>
+                    <h3 class="text-base md:text-lg font-black text-white">فتح كيلو قهوة جديد للاستعمال</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">سيتم خصم 1 كغ من المخزن وتسكير الكيلو السابق تلقائياً وحساب نتائجه</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeOpenBagModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold">
+                ✕
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('coffee_open_bag') }}" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <!-- Unified Price Banner from Inventory -->
+            <div class="bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-slate-950 p-4 rounded-2xl border-2 border-amber-500/50 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <span class="text-xs text-amber-300 font-bold block mb-0.5">السعر الموحد للكيلو المعتمد من المخزن:</span>
+                    <div class="text-2xl font-black font-mono text-white">
+                        {{ summary.stock_info.cost_per_kg|format_currency }} <span class="text-xs font-normal text-slate-400">ل.ل</span>
+                    </div>
+                </div>
+                <div class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                    <i class="fa-solid fa-check-circle"></i>
+                    <span>سعر موحد وتلقائي</span>
+                </div>
+            </div>
+
+            <div class="text-xs text-slate-300 bg-slate-950/70 p-3 rounded-2xl border border-slate-800 leading-relaxed">
+                ℹ️ <strong>لا داعي لكتابة سعر الكيلو في كل مرة!</strong> النظام يعتمد السعر الموحد المحدد في المخزن تلقائياً. يمكنك تعديل السعر أدناه فقط إذا كان هذا الكيس بسعر مختلف استثنائياً.
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1.5">سعر هذا الكيلو (ل.ل) - معتمد تلقائياً:</label>
+                    <input type="number" step="any" min="0" name="cost_per_kg_lbp" id="openBagCostLbp" value="{{ summary.stock_info.cost_per_kg if summary.stock_info.cost_per_kg > 0 else '' }}" placeholder="{{ summary.stock_info.cost_per_kg }}" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold text-sm px-4 py-3 rounded-2xl focus:border-amber-400 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1.5">أو بالدولار ($):</label>
+                    <input type="number" step="any" min="0" name="cost_per_kg_usd" id="openBagCostUsd" placeholder="اختياري" class="w-full bg-slate-950 border border-slate-700 text-emerald-300 font-mono font-bold text-sm px-4 py-3 rounded-2xl focus:border-amber-400 outline-none">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">نوع البن / ملاحظات الكاشير (اختياري):</label>
+                <input type="text" name="notes" placeholder="مثال: بن وسط، كولومبي، خلطة سبيشال..." class="w-full bg-slate-950 border border-slate-700 text-white text-sm px-4 py-3 rounded-2xl focus:border-amber-400 outline-none">
+            </div>
+
+            <div class="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl text-xs text-amber-300 leading-relaxed space-y-1">
+                <div class="font-bold flex items-center gap-1.5">
+                    <span>💡</span>
+                    <span>النظام الآلي لتسكير وفتح الكيلو:</span>
+                </div>
+                <p>
+                    {% if summary.active_batch %}
+                    يوجد كيلو مفتوح حالياً برقم (<strong>{{ summary.active_batch.batch_code }}</strong>). عند التأكيد، سيتم <strong>تسكيره تلقائياً</strong> وحساب كم فنجان أنتج وصافي ربحه وتوثيق الفناجين التالفة، ثم بدء هذا الكيلو الجديد من 0 فنجان.
+                    {% else %}
+                    لا يوجد كيلو مفتوح حالياً. سيتم فتح هذا الكيلو وبدء العداد من 0 فنجان فوراً.
+                    {% endif %}
+                </p>
+            </div>
+
+            <div class="flex gap-3 pt-3">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-3 rounded-2xl text-sm transition shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer">
+                    تأكيد فتح الكيلو وبدء التشغيل ☕
+                </button>
+                <button type="button" onclick="closeOpenBagModal()" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<!-- MODAL 2: Log Damaged Cup (تسجيل فنجان تالف - واسع وواضح)     -->
+<!-- ───────────────────────────────────────────────────────────── -->
+<div id="logWasteModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-rose-500/60 rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-2xl border border-rose-500/30">
+                    ⚠️
+                </div>
+                <div>
+                    <h3 class="text-base md:text-lg font-black text-white">تسجيل فنجان تالف (تلف)</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">يُسجل كخسارة تكلفة الفنجان دون أي أرباح</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeLogWasteModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold">
+                ✕
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('coffee_log_waste') }}" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            {% if summary.active_batch %}
+            <div class="bg-rose-500/10 border border-rose-500/30 p-3.5 rounded-2xl text-xs text-rose-300 space-y-1">
+                <div class="flex justify-between items-center">
+                    <span>تكلفة الفنجان الواحد المستخرجة من الكيلو:</span>
+                    <strong class="font-mono text-white text-sm font-black">{{ summary.active_batch.current_cost_per_cup_lbp|format_currency }} ل.ل</strong>
+                </div>
+                <div class="flex justify-between items-center pt-1.5 border-t border-rose-500/20 text-rose-400 font-bold">
+                    <span>الخسارة المالية المحسوبة مباشرة:</span>
+                    <span class="font-mono text-base font-black text-rose-300"><span id="wasteLossPreviewTxt">-{{ summary.active_batch.current_cost_per_cup_lbp|format_currency }}</span> ل.ل</span>
+                </div>
+            </div>
+            {% endif %}
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-2">عدد الفناجين التالفة:</label>
+                <div class="flex items-center gap-3">
+                    <button type="button" onclick="adjustWasteQty(-1)" class="w-12 h-12 rounded-2xl bg-slate-800 text-white font-black text-xl hover:bg-slate-700 transition active:scale-95">-</button>
+                    <input type="number" name="qty" id="wasteQtyInput" value="1" min="1" max="50" required class="flex-1 bg-slate-950 border border-slate-700 text-center text-rose-400 font-mono font-black text-2xl py-2 rounded-2xl focus:border-rose-400 outline-none">
+                    <button type="button" onclick="adjustWasteQty(1)" class="w-12 h-12 rounded-2xl bg-slate-800 text-white font-black text-xl hover:bg-slate-700 transition active:scale-95">+</button>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">سبب التلف:</label>
+                <select name="reason" class="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm px-3.5 py-3 rounded-2xl focus:border-rose-400 outline-none">
+                    <option value="تلف / خطأ أثناء التحضير">تلف / خطأ أثناء التحضير</option>
+                    <option value="فنجان مسكوب أو وقع">فنجان مسكوب أو وقع</option>
+                    <option value="تلف بماكينة القهوة أو تسريب">تلف بماكينة القهوة أو تسريب</option>
+                    <option value="خطأ بطلب الزبون">خطأ بطلب الزبون</option>
+                    <option value="سبب تلف آخر">سبب تلف آخر</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">ملاحظة إضافية (اختياري):</label>
+                <input type="text" name="notes" placeholder="ملاحظات الموظف عن سبب التلف..." class="w-full bg-slate-950 border border-slate-700 text-white text-sm px-4 py-3 rounded-2xl focus:border-rose-400 outline-none">
+            </div>
+
+            <div class="flex gap-3 pt-3">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-black py-3 rounded-2xl text-sm transition shadow-lg shadow-rose-600/30 active:scale-95 cursor-pointer">
+                    تأكيد تسجيل التلف ⚠️
+                </button>
+                <button type="button" onclick="closeLogWasteModal()" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<!-- MODAL 3: Close Coffee Bag (إنهاء وتسكير الكيلو - واسع وواضح)   -->
+<!-- ───────────────────────────────────────────────────────────── -->
+<div id="closeBagModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-emerald-500/60 rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl border border-emerald-500/30">
+                    ✅
+                </div>
+                <div>
+                    <h3 class="text-base md:text-lg font-black text-white">إنهاء وتسكير الكيلو وحساب النتائج</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">حساب الإنتاجية الحقيقية وصافي الأرباح وأرشفة الكيلو</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeCloseBagModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold">
+                ✕
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('coffee_close_bag') }}" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="batch_id" id="closeBatchIdInput" value="">
+
+            <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs md:text-sm">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">رقم الكيلو:</span>
+                    <strong class="text-white font-mono" id="closeBatchCodeTxt">-</strong>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">الفناجين المبيعة:</span>
+                    <span class="text-emerald-400 font-mono font-bold" id="closeBatchSoldTxt">0</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">الفناجين التالفة (تلف):</span>
+                    <span class="text-rose-400 font-mono font-bold" id="closeBatchDamagedTxt">0</span>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">ملاحظات التسكير والإغلاق (اختياري):</label>
+                <input type="text" name="notes" placeholder="مثال: تم استهلاك الكيس بالكامل، عيار ممتاز..." class="w-full bg-slate-950 border border-slate-700 text-white text-sm px-4 py-3 rounded-2xl focus:border-emerald-400 outline-none">
+            </div>
+
+            <div class="flex gap-3 pt-3">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black py-3 rounded-2xl text-sm transition shadow-lg shadow-emerald-600/30 active:scale-95 cursor-pointer">
+                    تأكيد تسكير الكيلو وحساب الأرباح والإنتاجية ✅
+                </button>
+                <button type="button" onclick="closeCloseBagModal()" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ───────────────────────────────────────────────────────────── -->
+<!-- MODAL 4: Update Coffee Stock (تعديل رصيد البن - واسع وواضح)     -->
+<!-- ───────────────────────────────────────────────────────────── -->
+<div id="updateStockModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-2xl border border-amber-500/30">
+                    📦
+                </div>
+                <div>
+                    <h3 class="text-base md:text-lg font-black text-white">تعديل رصيد حبوب القهوة (البن)</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">تحديد كم كيلو بن متوفر بالمحل في المخزن</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeUpdateStockModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold">
+                ✕
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('coffee_update_stock') }}" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">الكمية الإجمالية بالمخزن بالكيلو (KG) *</label>
+                <input type="number" step="any" min="0" name="stock_kg" id="stockKgInput" value="{{ summary.stock_info.stock_kg }}" required placeholder="مثال: 10" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-black text-xl px-4 py-3 rounded-2xl focus:border-amber-400 outline-none text-center">
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                    <label class="block text-xs font-bold text-amber-300 mb-1.5">سعر الكيلو الموحد (ل.ل):</label>
+                    <input type="number" step="any" min="0" name="cost_per_kg_lbp" id="costPerKgLbpInput" value="{{ summary.stock_info.cost_per_kg }}" placeholder="مثال: 1,163,500" class="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm font-mono font-bold px-4 py-3 rounded-2xl focus:border-amber-400 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1.5">إجمالي ثمن الكمية (ل.ل):</label>
+                    <input type="number" step="any" min="0" name="total_cost_lbp" id="totalCostLbpInput" value="{{ (summary.stock_info.stock_kg * summary.stock_info.cost_per_kg)|int if summary.stock_info.cost_per_kg > 0 else '' }}" placeholder="مثال: 11,635,000" class="w-full bg-slate-950 border border-slate-700 text-emerald-400 text-sm font-mono font-bold px-4 py-3 rounded-2xl focus:border-amber-400 outline-none">
+                </div>
+            </div>
+
+            <div class="bg-amber-500/10 border border-amber-500/30 p-3.5 rounded-2xl text-xs text-amber-300 leading-relaxed">
+                💡 <strong>سعر موحد لجميع الكيلوات:</strong>
+                عند إدخال مثلاً 10 كيلو وتحديد سعرها، يُعتمد هذا السعر تلقائياً لجميع الكيلوات التي ستفتح لاحقاً من المخزن، ولا داعي لكتابة السعر عند فتح كل كيلو.
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-3 rounded-2xl text-sm transition shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer">
+                    حفظ رصيد المخزن بالسعر الموحد 📦
+                </button>
+                <button type="button" onclick="closeUpdateStockModal()" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openOpenBagModal() {
+    const m = document.getElementById('openBagModal');
+    if (m) m.classList.remove('hidden');
+}
+function closeOpenBagModal() {
+    const m = document.getElementById('openBagModal');
+    if (m) m.classList.add('hidden');
+}
+
+function openLogWasteModal() {
+    const m = document.getElementById('logWasteModal');
+    if (m) {
+        m.classList.remove('hidden');
+        const q = document.getElementById('wasteQtyInput');
+        if (q) q.value = 1;
+    }
+}
+function closeLogWasteModal() {
+    const m = document.getElementById('logWasteModal');
+    if (m) m.classList.add('hidden');
+}
+function adjustWasteQty(d) {
+    const inp = document.getElementById('wasteQtyInput');
+    if (inp) {
+        let val = parseInt(inp.value) || 1;
+        val = Math.max(1, Math.min(50, val + d));
+        inp.value = val;
+        updateWasteLossPreview(val);
+    }
+}
+
+function updateWasteLossPreview(qty) {
+    const preview = document.getElementById('wasteLossPreviewTxt');
+    const unitCost = {{ summary.active_batch.current_cost_per_cup_lbp if summary.active_batch else 25293 }};
+    if (preview) {
+        const totalLoss = Math.round(unitCost * qty);
+        preview.innerText = '-' + totalLoss.toLocaleString('en-US');
+    }
+}
+
+function openCloseBagModal(id, code, sold, damaged) {
+    const m = document.getElementById('closeBagModal');
+    if (m) {
+        m.classList.remove('hidden');
+        document.getElementById('closeBatchIdInput').value = id;
+        document.getElementById('closeBatchCodeTxt').innerText = code;
+        document.getElementById('closeBatchSoldTxt').innerText = sold + ' فنجان';
+        document.getElementById('closeBatchDamagedTxt').innerText = damaged + ' فنجان';
+    }
+}
+function closeCloseBagModal() {
+    const m = document.getElementById('closeBagModal');
+    if (m) m.classList.add('hidden');
+}
+
+function openUpdateStockModal() {
+    const m = document.getElementById('updateStockModal');
+    if (m) m.classList.remove('hidden');
+}
+function closeUpdateStockModal() {
+    const m = document.getElementById('updateStockModal');
+    if (m) m.classList.add('hidden');
+}
+
+// Live calculation sync for unified kilo price & total batch cost
+document.addEventListener('DOMContentLoaded', function() {
+    const stockInp = document.getElementById('stockKgInput');
+    const unitCostInp = document.getElementById('costPerKgLbpInput');
+    const totalCostInp = document.getElementById('totalCostLbpInput');
+
+    if (stockInp && unitCostInp && totalCostInp) {
+        function syncFromUnit() {
+            const kg = parseFloat(stockInp.value) || 0;
+            const unit = parseFloat(unitCostInp.value) || 0;
+            if (kg > 0 && unit > 0) {
+                totalCostInp.value = Math.round(kg * unit);
+            }
+        }
+        function syncFromTotal() {
+            const kg = parseFloat(stockInp.value) || 0;
+            const tot = parseFloat(totalCostInp.value) || 0;
+            if (kg > 0 && tot > 0) {
+                unitCostInp.value = Math.round(tot / kg);
+            }
+        }
+        stockInp.addEventListener('input', syncFromUnit);
+        unitCostInp.addEventListener('input', syncFromUnit);
+        totalCostInp.addEventListener('input', syncFromTotal);
+    }
+});
+</script>
+
+{% endblock %}

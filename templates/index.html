@@ -80,17 +80,22 @@
         <!-- 4. Available Cash In Drawer (صافي كاش الدرج الفعلي المتاح حالياً) -->
         <div class="bg-slate-900/90 border {% if (drawer_status.total_untransferred_lbp or 0) > 0 %}border-emerald-500/40{% else %}border-slate-800{% endif %} p-2.5 rounded-2xl flex items-center justify-between shadow-sm" title="صافي الكاش الفعلي المتوفر في درج الكاشير الآن بعد خصم مبالغ الخزنة والمصاريف">
             <div>
-                <span class="text-[10px] text-emerald-400 font-bold block">💼 كاش الدرج المتوفر الآن:</span>
-                <div class="text-base font-black font-mono {% if (drawer_status.total_untransferred_lbp or 0) > 0 %}text-emerald-400{% else %}text-slate-400{% endif %}">
+                <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] text-emerald-400 font-bold block">💼 كاش الدرج:</span>
+                    <button type="button" onclick="openQuickExpenseModal()" class="text-[9px] bg-rose-600/80 hover:bg-rose-500 text-white font-bold px-1.5 py-0.5 rounded border border-rose-500/40 transition cursor-pointer" title="تسجيل مصروف سريع من الدرج">
+                        صرف 💸
+                    </button>
+                </div>
+                <div class="text-base font-black font-mono {% if (drawer_status.total_untransferred_lbp or 0) > 0 %}text-emerald-400{% else %}text-slate-400{% endif %} mt-0.5">
                     {{ (drawer_status.total_untransferred_lbp or 0)|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span>
                 </div>
                 <div class="text-[9px] font-mono font-bold flex items-center gap-1 mt-0.5">
                     {% if (drawer_status.total_untransferred_lbp or 0) > 0 %}
                     <span class="text-emerald-300">{{ (drawer_status.total_untransferred_usd or 0)|to_usd }}</span>
                     <span class="text-slate-500">•</span>
-                    <span class="text-emerald-400 font-sans">متاح بالصندوق</span>
+                    <span class="text-emerald-400 font-sans">متاح</span>
                     {% else %}
-                    <span class="text-amber-400 font-sans font-bold">تم ترحيل الكاش كاملاً للخزنة 🔒</span>
+                    <span class="text-amber-400 font-sans font-bold">مرحل للخزنة 🔒</span>
                     {% endif %}
                 </div>
             </div>
@@ -110,6 +115,70 @@
             </div>
             <div class="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-base">
                 📦
+            </div>
+        </div>
+
+        <!-- 6. Active Coffee Bag Yield & Cashier Quick Action Card (إنتاجية كيلو القهوة الحالي والتحكم السريع) -->
+        {% set active_coffee = get_active_coffee_batch() if get_active_coffee_batch else None %}
+        {% set coffee_stock = get_coffee_beans_stock() if get_coffee_beans_stock else None %}
+        <div class="bg-gradient-to-br from-amber-950/50 via-slate-900 to-slate-900 border-2 border-amber-500/50 p-2.5 rounded-2xl flex flex-col justify-between shadow-md relative overflow-hidden group">
+            <div class="flex items-start justify-between gap-2">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full {% if active_coffee %}bg-emerald-400 animate-pulse{% else %}bg-amber-500{% endif %}"></span>
+                        <span class="text-[10px] text-amber-300 font-black truncate">
+                            {% if active_coffee %}
+                            ☕ {{ active_coffee.batch_code }}
+                            {% else %}
+                            ☕ لا يوجد كيلو بن مفتوح
+                            {% endif %}
+                        </span>
+                        <span class="text-[9px] text-slate-400 font-mono bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-800 shrink-0">
+                            📦 رصيد: {{ coffee_stock.stock_kg if coffee_stock else 0 }} كغ
+                        </span>
+                    </div>
+
+                    {% if active_coffee %}
+                    <div class="flex items-baseline gap-2 mt-1">
+                        <div class="text-base font-black font-mono text-white">
+                            {{ active_coffee.cups_sold }} <span class="text-[10px] text-emerald-400 font-bold">مبيع</span>
+                        </div>
+                        {% if active_coffee.cups_damaged > 0 %}
+                        <div class="text-xs font-mono font-bold text-rose-400">
+                            + {{ active_coffee.cups_damaged }} تلف
+                        </div>
+                        {% endif %}
+                        <div class="text-[10px] font-mono text-amber-200/90 font-bold mr-auto">
+                            {% if active_coffee.benchmark_cup_cost_lbp %}
+                            معيار: ~{{ active_coffee.benchmark_cup_cost_lbp|format_currency }} ل.ل
+                            {% else %}
+                            سعر الكيلو: {{ active_coffee.cost_per_kg_lbp|format_currency }} ل.ل
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="text-[10px] text-slate-400 mt-1 leading-tight">
+                        انقر أدناه لفتح كيس بن جديد وبدء العداد تلقائياً
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Quick Cashier Buttons Bar -->
+            <div class="flex items-center gap-1.5 pt-2 border-t border-slate-800/80 mt-1.5">
+                {% if active_coffee %}
+                <button type="button" onclick="openPosWasteModal()" class="flex-1 bg-rose-600/90 hover:bg-rose-500 text-white font-black py-1.5 px-2 rounded-xl text-[11px] transition shadow flex items-center justify-center gap-1 cursor-pointer active:scale-95" title="تسجيل فنجان تالف كخسارة">
+                    <span>تلف ⚠️</span>
+                </button>
+                {% endif %}
+
+                <button type="button" onclick="openPosOpenBagModal()" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-1 px-2 rounded-xl text-[10px] transition shadow flex items-center justify-center gap-1 cursor-pointer active:scale-95" title="فتح كيلو بن قهوة جديد للاستعمال">
+                    <span>+ فتح كيلو ☕</span>
+                </button>
+
+                <a href="{{ url_for('coffee_hub') }}" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-300 flex items-center justify-center text-[10px] transition shrink-0" title="لوحة سجلات وإحصائيات القهوة الشاملة">
+                    <i class="fa-solid fa-chart-pie"></i>
+                </a>
             </div>
         </div>
 
@@ -186,8 +255,13 @@
             <!-- Button 2: Edit & Manage Products (Admin Only) -->
             <button type="button" onclick="openManageProductsModal()" class="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black text-xs px-3.5 py-2 rounded-2xl transition flex items-center gap-2 shadow-lg shadow-cyan-600/20 active:scale-95">
                 <span class="text-sm">⚙️</span>
-                <span>تعديل وإضافة الأصناف والأسعار</span>
+                <span>تعديل وإضافة الأصناف</span>
             </button>
+            <!-- Button 2.5: Manage Categories & Coffee Links -->
+            <a href="{{ url_for('categories_page') }}" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs px-3.5 py-2 rounded-2xl transition flex items-center gap-2 shadow-lg shadow-purple-600/20 active:scale-95" title="إدارة الأقسام وتصنيفات الكاشير وربط كيلو البن">
+                <span class="text-sm">🏷️</span>
+                <span>الأقسام وتصنيفات الكاشير ↗</span>
+            </a>
             {% endif %}
 
             <!-- Button 3: Gaming & PlayStation Calculator Hub -->
@@ -212,13 +286,15 @@
                 <span>📒 سجل الديون</span>
             </a>
 
-            {% if is_admin or session.get('is_admin') or session.get('employee_role') == 'admin' %}
-            <!-- Safe Direct Page (Admin Only) -->
-            <a href="{{ url_for('safe_page') }}" class="bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-white font-bold text-xs px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 border border-amber-500/30">
-                <i class="fa-solid fa-vault"></i>
-                <span>🏦 الخزنة الخاصة</span>
-            </a>
-            {% endif %}
+            <!-- Direct Touch & Hotkeys Helper Pill -->
+            <div class="hidden xl:flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-xl border border-slate-800 text-[10px] text-slate-400 font-mono">
+                <span class="text-amber-400 font-bold">⌨️ اختصارات:</span>
+                <span class="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded border border-slate-700 font-bold">F2 بحث</span>
+                <span class="bg-slate-800 text-emerald-400 px-1.5 py-0.5 rounded border border-slate-700 font-bold">F4 كاش فوري</span>
+                <span class="bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded border border-slate-700 font-bold">F8 يدوي</span>
+                <span class="text-slate-500">|</span>
+                <span class="text-purple-300">📷 باركود نشط</span>
+            </div>
         </div>
     </div>
 
@@ -236,6 +312,9 @@
                     <button type="button" onclick="filterCategory('all', this)" class="cat-pill active px-3.5 py-1.5 rounded-xl text-xs font-black transition bg-amber-500 text-slate-950 shadow-md whitespace-nowrap">
                         🌟 جميع المنتجات (الكل)
                     </button>
+                    <button type="button" onclick="filterCategory('top-sellers', this)" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-black transition bg-gradient-to-r from-amber-600/30 to-yellow-500/20 text-amber-300 hover:text-white border border-amber-500/50 whitespace-nowrap shadow-sm" title="عرض الأصناف الأكثر طلباً ومبيعاً لسهولة وسرعة الوصول">
+                        ⭐ الأكثر مبيعاً
+                    </button>
                     <button type="button" onclick="filterCategory('computer', this)" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700 whitespace-nowrap">
                         💻 كمبيوتر
                     </button>
@@ -248,6 +327,11 @@
                     {% endfor %}
                     <button type="button" onclick="filterCategory('others-box', this)" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-cyan-300 hover:bg-slate-700 hover:text-white border border-cyan-500/30 whitespace-nowrap">
                         ✍️ Others (يدوي)
+                    </button>
+                    <!-- Reorder Products Modal Trigger (ترتيب وتنظيم شاشة الكاشير) -->
+                    <button type="button" id="reorderPosItemsBtn" onclick="openItemReorderModal()" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 bg-slate-800 text-amber-300 hover:text-white hover:bg-amber-600/80 border border-amber-500/50 whitespace-nowrap shadow-sm cursor-pointer" title="ترتيب وتنظيم أماكن الأصناف على شاشة الكاشير">
+                        <i class="fa-solid fa-arrow-down-up-across-line"></i>
+                        <span>🔃 ترتيب الأصناف</span>
                     </button>
                 </div>
 
@@ -337,34 +421,7 @@
                         </div>
                     </button>
 
-                    <!-- 2. REGULAR OTHERS CARD IN GRID -->
-                    <button type="button" 
-                            data-category="others-box"
-                            data-name="Others"
-                            data-type="others"
-                            onclick="document.getElementById('othersPrice').focus(); document.getElementById('othersBoxSection').scrollIntoView({behavior:'smooth'});" 
-                            class="item-card group relative p-4 rounded-3xl bg-gradient-to-br from-slate-900 via-slate-950 to-cyan-950/40 hover:from-slate-850 hover:to-cyan-900/60 border-2 border-cyan-500/30 hover:border-cyan-400 hover:scale-[1.03] active:scale-95 transition flex flex-col justify-between text-right shadow-md min-h-[135px]">
-                        <!-- Quantity Badge in Cart -->
-                        <span class="card-qty-badge hidden absolute -top-2.5 -left-2.5 bg-cyan-400 text-slate-950 font-mono font-black text-sm px-2.5 py-0.5 rounded-full shadow-xl border-2 border-slate-950">
-                            x1
-                        </span>
-                        
-                        <div class="flex items-start justify-between w-full">
-                            <span class="text-4xl group-hover:scale-110 transition drop-shadow-md">✍️</span>
-                            <span class="text-xs font-black text-cyan-300 bg-cyan-950/80 px-2.5 py-1 rounded-xl border border-cyan-800">
-                                يدوي
-                            </span>
-                        </div>
-                        <div class="mt-2 w-full">
-                            <h4 class="font-black text-sm sm:text-base text-white group-hover:text-cyan-300 leading-tight">Others (مبيعات أخرى)</h4>
-                            <div class="mt-1.5 flex items-baseline justify-between">
-                                <span class="font-mono font-black text-sm text-cyan-300">حدد السعر</span>
-                                <span class="font-mono text-xs font-bold text-slate-400">حر ✍️</span>
-                            </div>
-                        </div>
-                    </button>
-
-                    <!-- 3. ALL CAFÉ PRODUCTS (PREMIUM POS KIOSK CARDS - PURE DIV NO PARSER CONFLICT) -->
+                    <!-- 2. ALL CAFÉ PRODUCTS (PREMIUM POS KIOSK CARDS) -->
                     {% for item in items %}
                     {% if item.item_type != 'gaming' and item.item_type != 'computer' and 'gaming' not in item.name.lower() and 'ألعاب' not in item.name and 'كمبيوتر' not in item.name %}
                     <div id="card-{{ item.id }}"
@@ -375,6 +432,8 @@
                          data-item-price="{{ item.price_lbp }}"
                          data-item-icon="{{ item.icon or '☕' }}"
                          data-item-type="cafe"
+                         data-is-top="{{ 1 if item.id in top_seller_ids else 0 }}"
+                         data-sort-order="{{ item.sort_order|default(0) }}"
                          onclick="handleProductCardClick(this)"
                          role="button"
                          tabindex="0"
@@ -396,8 +455,23 @@
                             <i class="fa-solid fa-pen-to-square"></i>
                         </button>
 
+                        <!-- Pin Item to Top Button (تثبيت في مقدمة الكاشير) -->
+                        <button type="button" 
+                                onclick="event.stopPropagation(); pinItemFromCard({{ item.id }})" 
+                                title="تثبيت هذا الصنف في أول شاشة الكاشير" 
+                                class="absolute top-2.5 left-11 z-30 w-8 h-8 rounded-full bg-slate-950/85 hover:bg-amber-400 text-amber-400/80 hover:text-slate-950 border border-slate-700/80 hover:border-amber-300 flex items-center justify-center text-xs shadow-xl transition-all duration-200 hover:scale-115 cursor-pointer">
+                            <i class="fa-solid fa-thumbtack text-[11px]"></i>
+                        </button>
+
+                        {% if item.id in top_seller_ids %}
+                        <!-- Best Seller Badge -->
+                        <span class="absolute top-2.5 right-2.5 z-30 bg-amber-500/95 text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-full shadow-lg border border-amber-300 flex items-center gap-1">
+                            <span>⭐</span> الأكثر طلباً
+                        </span>
+                        {% endif %}
+
                         <!-- Quantity Badge in Cart -->
-                        <span class="card-qty-badge hidden absolute top-2.5 left-12 z-30 bg-amber-400 text-slate-950 font-mono font-black text-xs px-2.5 py-1 rounded-full shadow-2xl border-2 border-slate-950 animate-bounce">
+                        <span class="card-qty-badge hidden absolute top-2.5 left-20 z-30 bg-amber-400 text-slate-950 font-mono font-black text-xs px-2.5 py-1 rounded-full shadow-2xl border-2 border-slate-950 animate-bounce">
                             x1
                         </span>
 
@@ -430,6 +504,11 @@
                             <h4 class="font-black text-sm text-white group-hover:text-amber-300 line-clamp-2 leading-snug transition-colors drop-shadow-xs">
                                 {{ item.name }}
                             </h4>
+                            {% if ('قهوة' in item.name or 'بن' in item.name or 'اسبريسو' in item.name or 'لاتيه' in item.name or 'كابتشينو' in item.name) and not ('3 in 1' in item.name or '3in1' in item.name) %}
+                            <div class="mt-1 flex items-center gap-1 text-[9px] text-amber-300 font-bold bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded-md w-fit">
+                                <span>☕</span> يخصم من كيلو البن
+                            </div>
+                            {% endif %}
 
                             <!-- Price Bar with High Contrast Amber & Emerald -->
                             <div class="mt-2.5 flex items-baseline justify-between pt-2 border-t border-slate-800/80">
@@ -753,12 +832,42 @@
         const cards = document.querySelectorAll('.item-card');
         cards.forEach(card => {
             const cardCat = card.getAttribute('data-category');
-            if (catId === 'all' || cardCat === catId) {
+            const isTop = card.getAttribute('data-is-top');
+            if (catId === 'all') {
+                card.classList.remove('hidden');
+            } else if (catId === 'top-sellers') {
+                if (isTop === '1') {
+                    card.classList.remove('hidden');
+                } else {
+                    card.classList.add('hidden');
+                }
+            } else if (cardCat === catId) {
                 card.classList.remove('hidden');
             } else {
                 card.classList.add('hidden');
             }
         });
+    }
+
+    // Pin item to the very top of POS
+    async function pinItemFromCard(itemId) {
+        try {
+            const resp = await fetch(`/item/${itemId}/pin-top`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const res = await resp.json();
+            if (res.success) {
+                playBeep(900, 0.1);
+                showToast('✅ تم تثبيت الصنف في مقدمة شاشة الكاشير بنجاح ⭐', 'success');
+                setTimeout(() => window.location.reload(), 500);
+            } else {
+                alert(res.message || 'حدث خطأ أثناء تثبيت الصنف');
+            }
+        } catch (e) {
+            console.error(e);
+            window.location.reload();
+        }
     }
 
     // Search items
@@ -776,6 +885,7 @@
     }
 
     // Handle Product Card Touch / Click
+    
     function handleProductCardClick(btn) {
         if (!btn) return;
         const id = btn.getAttribute('data-item-id');
@@ -800,6 +910,7 @@
                 price_lbp: p,
                 icon: icon || '☕',
                 item_type: itemType,
+                is_wholesale: 0,
                 quantity: 1
             });
         }
@@ -1267,7 +1378,7 @@
         try {
             const resp = await fetch('/order/create', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
                 body: JSON.stringify(payload)
             });
 
@@ -1326,54 +1437,54 @@
 <!-- ====================================================================== -->
 <!-- 1. SAFE TRANSFER MODAL (نقل المال من الصندوق إلى الخزنة الخاصة) -->
 <!-- ====================================================================== -->
-<div id="safeTransferModal" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-amber-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 relative">
+<div id="safeTransferModal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 relative">
         <div class="flex items-center justify-between border-b border-slate-800 pb-3">
             <div class="flex items-center gap-2">
-                <span class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg font-black">🏦</span>
+                <span class="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-xl font-black">🏦</span>
                 <div>
-                    <h3 class="font-black text-sm text-white">نقل مبالغ نقدية إلى الخزنة الخاصة</h3>
-                    <span class="text-[10px] text-slate-400">حفظ وإيداع الأموال اليومية في صندوق المالك</span>
+                    <h3 class="font-black text-sm sm:text-base text-white">نقل كاش الدرج إلى الخزنة الخاصة</h3>
+                    <span class="text-[10px] text-slate-400">إيداع وحفظ الأموال النقدية في صندوق المالك</span>
                 </div>
             </div>
-            <button type="button" onclick="closeSafeTransferModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+            <button type="button" onclick="closeSafeTransferModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm transition">✕</button>
         </div>
 
-        <div class="bg-slate-950 p-3.5 rounded-2xl border border-amber-500/30 space-y-2 text-xs">
+        <!-- Real-Time Cash Status Card -->
+        <div class="bg-slate-950 p-4 rounded-2xl border border-amber-500/30 space-y-2 text-xs">
             <div class="flex items-center justify-between font-bold">
-                <span class="text-slate-400">كاش الأمس (المبيعات السابقة غير المرحلة):</span>
-                <span class="text-amber-400 font-mono font-black text-sm">{{ (drawer_status.past_untransferred_lbp or 0)|format_currency }} ل.ل</span>
+                <span class="text-slate-400">💼 رصيد كاش الدرج الحالي (غير المرحل):</span>
+                <span class="text-emerald-400 font-mono font-black text-base">{{ (drawer_status.total_untransferred_lbp or 0)|format_currency }} ل.ل</span>
             </div>
-            <div class="flex items-center justify-between font-bold">
-                <span class="text-slate-400">كاش اليوم المباشر:</span>
-                <span class="text-emerald-400 font-mono font-black text-sm">{{ (summary.total_revenue_lbp or 0)|format_currency }} ل.ل</span>
+            <div class="flex items-center justify-between text-[11px] text-slate-400">
+                <span>🏦 رصيد الخزنة الخاصة الحالي:</span>
+                <span class="text-amber-300 font-mono font-bold">{{ (safe_balance.total_lbp or 0)|format_currency }} ل.ل</span>
             </div>
-            <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between font-black text-white">
-                <span class="text-amber-300">إجمالي الكاش المتوفر للترحيل الآن:</span>
-                <span class="text-emerald-400 font-mono text-base">{{ (drawer_status.total_untransferred_lbp or summary.total_revenue_lbp or 0)|format_currency }} ل.ل</span>
-            </div>
-        </div>
-
-        <!-- Quick 1-Click Fill Buttons -->
-        <div class="flex gap-2 flex-wrap">
             {% if drawer_status and drawer_status.past_untransferred_lbp > 0 %}
-            <button type="button" onclick="fillSafeAmount({{ drawer_status.past_untransferred_lbp }}, 'ترحيل كاش الأمس بالكامل')"
-                    class="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-3 py-1.5 rounded-xl text-[11px] font-black transition flex items-center gap-1">
-                <span>⚡ ترحيل كاش الأمس ({{ drawer_status.past_untransferred_lbp|format_currency }} ل.ل)</span>
-            </button>
+            <div class="pt-1 text-[10px] text-amber-400/90 font-medium">
+                ⚡ منها مبيعات سابقة غير مرحلة: <strong class="text-white">{{ drawer_status.past_untransferred_lbp|format_currency }} ل.ل</strong>
+            </div>
             {% endif %}
-            <button type="button" onclick="fillSafeAmount({{ drawer_status.total_untransferred_lbp if drawer_status else summary.total_revenue_lbp }}, 'ترحيل كامل الكاش المتاح')"
-                    class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl text-[11px] font-black transition flex items-center gap-1">
-                <span>💰 ترحيل كامل الكاش المتوفر</span>
-            </button>
+        </div>
+
+        <!-- 🚀 1-CLICK MASTER ZEROING BUTTON -->
+        <button type="button" onclick="transferAllDrawerCashNow()" class="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black py-3 rounded-2xl transition shadow-xl shadow-emerald-600/30 flex items-center justify-center gap-2 border border-emerald-400 text-xs sm:text-sm active:scale-95 cursor-pointer">
+            <i class="fa-solid fa-vault text-base"></i>
+            <span>🚀 ترحيل كامل كاش الدرج وتصفيره إلى (0 ل.ل) الآن</span>
+        </button>
+
+        <div class="relative flex py-1 items-center">
+            <div class="flex-grow border-t border-slate-800"></div>
+            <span class="flex-shrink mx-2 text-[10px] text-slate-500 font-bold">أو إدخال مبلغ مخصص يدوياً</span>
+            <div class="flex-grow border-t border-slate-800"></div>
         </div>
 
         <form id="safeTransferForm" onsubmit="submitSafeTransfer(event)" class="space-y-3 text-xs">
             <div>
                 <label class="block text-slate-300 font-bold mb-1">المبلغ المراد نقله (بالليرة اللبنانية ل.ل):</label>
                 <div class="flex gap-2">
-                    <input type="number" id="safeAmountLBP" step="any" placeholder="مثال: 500000" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold rounded-xl px-3 py-2 text-sm focus:border-amber-500 focus:outline-none">
-                    <button type="button" onclick="document.getElementById('safeAmountLBP').value = '{{ drawer_status.total_untransferred_lbp if drawer_status and drawer_status.total_untransferred_lbp > 0 else (summary.total_revenue_lbp or 0) }}'" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap border border-slate-700">
+                    <input type="number" id="safeAmountLBP" step="any" value="{{ (drawer_status.total_untransferred_lbp or 0)|int }}" placeholder="مثال: 500000" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold rounded-xl px-3 py-2 text-sm focus:border-amber-500 focus:outline-none">
+                    <button type="button" onclick="document.getElementById('safeAmountLBP').value = '{{ (drawer_status.total_untransferred_lbp or 0)|int }}'" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap border border-slate-700 cursor-pointer">
                         كامل الكاش
                     </button>
                 </div>
@@ -1395,16 +1506,166 @@
             </div>
 
             <div class="pt-2 flex gap-2">
-                <button type="submit" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl transition shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2">
+                <button type="submit" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl transition shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2 cursor-pointer">
                     <span>🏦 تأكيد الإيداع في الخزنة</span>
                 </button>
-                <button type="button" onclick="closeSafeTransferModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl transition">
+                <button type="button" onclick="closeSafeTransferModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2.5 rounded-xl transition cursor-pointer">
                     إلغاء
                 </button>
             </div>
         </form>
     </div>
 </div>
+
+<!-- ====================================================================== -->
+<!-- 🔀 ITEM REORDER MODAL (تنظيم وترتيب شاشة الكاشير) -->
+<!-- ====================================================================== -->
+<div id="itemReorderModal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div class="bg-slate-900 border-2 border-amber-500/50 rounded-3xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+        <!-- Modal Header -->
+        <div class="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/70 shrink-0">
+            <div class="flex items-center gap-2.5">
+                <span class="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-xl font-black">🔃</span>
+                <div>
+                    <h3 class="font-black text-sm sm:text-base text-white">تنظيم وترتيب شاشة الكاشير</h3>
+                    <p class="text-[11px] text-slate-400">رتّب المنتجات ليضع الموظف الصنف في المكان المريح له، والأكثر مبيعاً في المقدمة</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeItemReorderModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition">✕</button>
+        </div>
+
+        <!-- Toolbar Actions -->
+        <div class="p-3 bg-slate-950/90 border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <button type="button" onclick="autoSortSalesModal()" class="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer">
+                <span>⭐ ترتيب ذكي تلقائي (الأكثر مبيعاً أولاً)</span>
+            </button>
+            <div class="text-[11px] text-slate-400 flex items-center gap-2">
+                <span>💡 استخدم الأسهم ⬆️ و ⬇️ للتحريك أو أدخل رقم الموضع مباشرة</span>
+            </div>
+        </div>
+
+        <!-- Scrollable Items List -->
+        <div id="reorderListContainer" class="p-3 sm:p-4 overflow-y-auto custom-scrollbar flex-1 space-y-2">
+            {% for item in items %}
+            {% if item.item_type != 'gaming' and item.item_type != 'computer' and 'gaming' not in item.name.lower() and 'ألعاب' not in item.name and 'كمبيوتر' not in item.name %}
+            <div class="reorder-row bg-slate-950/80 hover:bg-slate-800/60 border border-slate-800/90 hover:border-amber-500/40 p-2.5 rounded-2xl flex items-center justify-between gap-2 transition" data-id="{{ item.id }}" data-order="{{ item.sort_order|default(loop.index * 10) }}">
+                <div class="flex items-center gap-3">
+                    <span class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 font-mono font-black text-xs flex items-center justify-center border border-amber-500/30">
+                        #{{ loop.index }}
+                    </span>
+                    <span class="text-2xl">{{ item.icon or '☕' }}</span>
+                    <div>
+                        <div class="font-bold text-xs sm:text-sm text-white flex items-center gap-1.5">
+                            <span>{{ item.name }}</span>
+                            {% if item.id in top_seller_ids %}
+                            <span class="text-[9px] bg-amber-500/30 text-amber-300 px-1.5 py-0.5 rounded font-black border border-amber-500/30">الأكثر مبيعاً</span>
+                            {% endif %}
+                        </div>
+                        <div class="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+                            <span class="text-amber-400/90 font-mono font-bold">{{ item.price_lbp|format_currency }} ل.ل</span>
+                            <span>•</span>
+                            <span class="text-slate-500">{{ item.category_name }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <!-- Direct Position Input -->
+                    <div class="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-xl px-2 py-1">
+                        <span class="text-[10px] text-slate-400">موضع:</span>
+                        <input type="number" min="1" max="100" value="{{ loop.index }}" onchange="setExactItemPos({{ item.id }}, this.value)" class="w-12 bg-transparent text-amber-300 font-mono font-black text-xs text-center focus:outline-none">
+                    </div>
+                    <!-- Up Arrow -->
+                    <button type="button" onclick="moveItemRow({{ item.id }}, 'up')" title="تحريك للأمام" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-300 transition flex items-center justify-center text-xs border border-slate-700 cursor-pointer">
+                        <i class="fa-solid fa-arrow-up"></i>
+                    </button>
+                    <!-- Down Arrow -->
+                    <button type="button" onclick="moveItemRow({{ item.id }}, 'down')" title="تحريك للخلف" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-300 transition flex items-center justify-center text-xs border border-slate-700 cursor-pointer">
+                        <i class="fa-solid fa-arrow-down"></i>
+                    </button>
+                    <!-- Pin to #1 Star -->
+                    <button type="button" onclick="pinItemRow({{ item.id }})" title="تثبيت في أول الكاشير (#1)" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-amber-400 hover:text-slate-950 text-amber-400 transition flex items-center justify-center text-xs border border-slate-700 cursor-pointer">
+                        ⭐
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+
+        <!-- Footer -->
+        <div class="p-3 bg-slate-950 border-t border-slate-800 flex justify-end shrink-0">
+            <button type="button" onclick="closeItemReorderModal(); location.reload();" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-5 py-2.5 rounded-xl text-xs transition shadow-md shadow-amber-500/20 cursor-pointer">
+                ✓ إغلاق وتحديث شاشة الكاشير
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ====================================================================== -->
+<!-- ☕ QUICK POS COFFEE WASTE MODAL (تسجيل فنجان تالف سريع على الكاشير)    -->
+<!-- ====================================================================== -->
+<div id="posCoffeeWasteModal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-rose-500/60 rounded-3xl p-6 md:p-7 max-w-lg w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3.5">
+            <div class="flex items-center gap-3">
+                <span class="w-11 h-11 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-xl border border-rose-500/30">⚠️</span>
+                <div>
+                    <h3 class="font-black text-base text-white">تسجيل فنجان تالف (تلف)</h3>
+                    <span class="text-xs text-slate-400">تُحسب الخسارة بسعر تكلفة الفنجان المستخرجة من الكيلو السابق دون أرباح</span>
+                </div>
+            </div>
+            <button type="button" onclick="closePosWasteModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold">✕</button>
+        </div>
+
+        <form method="POST" action="{{ url_for('coffee_log_waste') }}" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">عدد الفناجين التالفة:</label>
+                <div class="flex items-center gap-3">
+                    <button type="button" onclick="document.getElementById('posWasteQtyInput').value = Math.max(1, (parseInt(document.getElementById('posWasteQtyInput').value)||1)-1)" class="w-11 h-11 rounded-2xl bg-slate-800 text-white font-black text-xl hover:bg-slate-700 active:scale-95 transition">-</button>
+                    <input type="number" name="qty" id="posWasteQtyInput" value="1" min="1" max="50" required class="flex-1 bg-slate-950 border border-slate-700 text-center text-rose-400 font-mono font-black text-2xl py-2 rounded-2xl focus:border-rose-400 outline-none">
+                    <button type="button" onclick="document.getElementById('posWasteQtyInput').value = Math.min(50, (parseInt(document.getElementById('posWasteQtyInput').value)||1)+1)" class="w-11 h-11 rounded-2xl bg-slate-800 text-white font-black text-xl hover:bg-slate-700 active:scale-95 transition">+</button>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">سبب التلف:</label>
+                <select name="reason" class="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm px-3.5 py-3 rounded-2xl focus:border-rose-400 outline-none">
+                    <option value="تلف / خطأ أثناء التحضير">تلف / خطأ أثناء التحضير</option>
+                    <option value="فنجان مسكوب أو وقع">فنجان مسكوب أو وقع</option>
+                    <option value="تلف بالماكينة أو تسريب">تلف بالماكينة أو تسريب</option>
+                    <option value="خطأ بطلب الزبون">خطأ بطلب الزبون</option>
+                    <option value="سبب تلف آخر">سبب تلف آخر</option>
+                </select>
+            </div>
+
+            <div class="pt-2 flex gap-3">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-black py-3 rounded-2xl text-sm transition shadow-lg shadow-rose-600/30 active:scale-95 cursor-pointer">
+                    تأكيد تسجيل التلف ⚠️
+                </button>
+                <button type="button" onclick="closePosWasteModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-5 py-3 rounded-2xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openPosWasteModal() {
+    const m = document.getElementById('posCoffeeWasteModal');
+    if (m) {
+        m.classList.remove('hidden');
+        document.getElementById('posWasteQtyInput').value = 1;
+    }
+}
+function closePosWasteModal() {
+    const m = document.getElementById('posCoffeeWasteModal');
+    if (m) m.classList.add('hidden');
+}
+</script>
 
 <!-- ====================================================================== -->
 <!-- 2. EDIT SINGLE ITEM MODAL (تعديل فوري للصنف وسعره) -->
@@ -1800,10 +2061,144 @@ async function submitSafeTransfer(event) {
             alert('✓ ' + res.message);
             location.reload();
         } else {
-            alert('خطأ: ' + (res.error || 'فشلت العملية'));
+            alert('خطأ: ' + (res.error || res.message || 'فشلت العملية'));
         }
     } catch(e) {
         alert('حدث خطأ في الاتصال: ' + e);
+    }
+}
+
+// 1.b One-Click Full Drawer Cash Zeroing Function
+async function transferAllDrawerCashNow() {
+    const totalCash = parseFloat("{{ (drawer_status.total_untransferred_lbp or 0) }}") || 0;
+    if (totalCash <= 0) {
+        alert('درج الكاشير مصفّر حالياً (0 ل.ل) ولا يوجد كاش غير مرحل.');
+        return;
+    }
+    if (!confirm(`تأكيد ترحيل كامل كاش الدرج (${totalCash.toLocaleString()} ل.ل) إلى الخزنة الخاصة وتصفير رصيد الدرج إلى 0 ل.ل؟`)) {
+        return;
+    }
+    try {
+        const resp = await fetch('/safe/transfer_drawer_total', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                note: 'ترحيل كامل كاش الدرج وتصفير رصيد الصندوق'
+            })
+        });
+        const res = await resp.json();
+        if (res.success) {
+            closeSafeTransferModal();
+            alert('✓ ' + res.message);
+            location.reload();
+        } else {
+            alert('خطأ: ' + (res.message || res.error || 'فشلت العملية'));
+        }
+    } catch(e) {
+        alert('حدث خطأ في الاتصال: ' + e);
+    }
+}
+
+// 1.c Interactive Cashier POS Items Reordering Logic
+function openItemReorderModal() {
+    const modal = document.getElementById('itemReorderModal');
+    if (modal) modal.classList.remove('hidden');
+}
+function closeItemReorderModal() {
+    const modal = document.getElementById('itemReorderModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function moveItemRow(itemId, direction) {
+    try {
+        const resp = await fetch(`/item/${itemId}/reorder/${direction}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const res = await resp.json();
+        if (res.success) {
+            playBeep(850, 0.08);
+            const container = document.getElementById('reorderListContainer');
+            const row = container.querySelector(`[data-id="${itemId}"]`);
+            if (row) {
+                if (direction === 'up' && row.previousElementSibling) {
+                    container.insertBefore(row, row.previousElementSibling);
+                } else if (direction === 'down' && row.nextElementSibling) {
+                    container.insertBefore(row.nextElementSibling, row);
+                }
+                container.querySelectorAll('.reorder-row').forEach((r, idx) => {
+                    const badge = r.querySelector('.font-mono.font-black');
+                    const posInput = r.querySelector('input[type="number"]');
+                    if (badge) badge.innerText = `#${idx + 1}`;
+                    if (posInput) posInput.value = idx + 1;
+                });
+            }
+        } else {
+            alert(res.message || 'تعذر نقل الصنف');
+        }
+    } catch(e) {
+        alert('حدث خطأ: ' + e);
+    }
+}
+
+async function pinItemRow(itemId) {
+    try {
+        const resp = await fetch(`/item/${itemId}/pin-top`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const res = await resp.json();
+        if (res.success) {
+            playBeep(900, 0.1);
+            alert('⭐ ' + res.message);
+            location.reload();
+        } else {
+            alert(res.message || 'تعذر تثبيت الصنف');
+        }
+    } catch(e) {
+        alert('حدث خطأ: ' + e);
+    }
+}
+
+async function setExactItemPos(itemId, newPosition) {
+    const pos = parseInt(newPosition);
+    if (isNaN(pos) || pos < 1) return;
+    try {
+        const resp = await fetch('/api/items/set-position', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ item_id: itemId, position: pos })
+        });
+        const res = await resp.json();
+        if (res.success) {
+            playBeep(850, 0.08);
+            location.reload();
+        } else {
+            alert(res.message || 'تعذر تغيير الموضع');
+        }
+    } catch(e) {
+        alert('حدث خطأ: ' + e);
+    }
+}
+
+async function autoSortSalesModal() {
+    if (!confirm('هل تريد ترتيب الأصناف تلقائياً بحيث تظهر الأصناف الأكثر طلباً ومبيعاً أولاً في بداية شاشة الكاشير؟')) {
+        return;
+    }
+    try {
+        const resp = await fetch('/api/items/auto-sort-sales', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const res = await resp.json();
+        if (res.success) {
+            alert('⭐ ' + res.message);
+            location.reload();
+        } else {
+            alert(res.message || 'تعذر الترتيب التلقائي');
+        }
+    } catch(e) {
+        alert('حدث خطأ: ' + e);
     }
 }
 
@@ -2228,50 +2623,74 @@ async function submitEditSingleItem(event) {
 
 
 // =========================================================================
-// CLIPBOARD PASTE (Ctrl+V) IMAGE SUPPORT
+// 🚀 TOUCH SCREEN KEYBOARD SHORTCUTS & BARCODE SCANNER INTEGRATION
 // =========================================================================
-window.addEventListener('paste', function(e) {
-    const quickModal = document.getElementById('editSingleItemModal');
-    if (!quickModal || quickModal.classList.contains('hidden')) return;
+let barcodeBuffer = '';
+let barcodeLastTime = 0;
 
-    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-    for (let item of items) {
-        if (item.type.indexOf('image') !== -1) {
-            e.preventDefault();
-            const blob = item.getAsFile();
-            const reader = new FileReader();
-            reader.onload = function(evt) {
-                const dataUrl = evt.target.result;
-                const prev = document.getElementById('quickEditImgPreview');
-                const cont = document.getElementById('quickEditPreviewContainer');
-                const place = document.getElementById('quickEditPlaceholder');
-                const liveImg = document.getElementById('quickLivePreviewImg');
-                const liveIcon = document.getElementById('quickLivePreviewIcon');
-                const backdrop = document.getElementById('quickEditImgBackdrop');
-                const liveBackdrop = document.getElementById('quickLiveBackdrop');
-                const base64Input = document.getElementById('editItemImageBase64');
+window.addEventListener('keydown', function(e) {
+    // Ignore hotkeys if user is currently typing in an input field (except Escape and Barcode Enter)
+    const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+    const isInputActive = (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select');
 
-                if (base64Input) base64Input.value = dataUrl;
-                if (prev) prev.src = dataUrl;
-                if (backdrop) backdrop.style.backgroundImage = `url('${dataUrl}')`;
-                if (cont) { cont.classList.remove('hidden'); cont.style.display = 'flex'; }
-                if (place) { place.classList.add('hidden'); place.style.display = 'none'; }
+    // F2: Fast Focus on Search Bar
+    if (e.key === 'F2') {
+        e.preventDefault();
+        const s = document.getElementById('searchInput');
+        if (s) { s.focus(); s.select(); }
+        return;
+    }
 
-                if (liveImg) {
-                    liveImg.src = dataUrl;
-                    liveImg.classList.remove('hidden');
-                    if (liveBackdrop) liveBackdrop.style.backgroundImage = `url('${dataUrl}')`;
-                    if (liveIcon) liveIcon.classList.add('hidden');
-                }
-                const iconInput = document.getElementById('editItemIcon');
-                if (iconInput) iconInput.value = '';
-            };
-            reader.readAsDataURL(blob);
-            break;
+    // F4: Instant Cash Checkout (دفع كاش فوري)
+    if (e.key === 'F4') {
+        e.preventDefault();
+        const btnCash = document.getElementById('btnSaveCash');
+        if (btnCash && !btnCash.disabled) { checkoutOrder('cash'); }
+        return;
+    }
+
+    // F8: Focus on Others manual price
+    if (e.key === 'F8') {
+        e.preventDefault();
+        const o = document.getElementById('othersPrice');
+        if (o) { o.focus(); o.select(); }
+        return;
+    }
+
+    // Escape: Clear Search or Cancel Modal
+    if (e.key === 'Escape') {
+        if (document.getElementById('searchInput') && document.activeElement === document.getElementById('searchInput')) {
+            document.getElementById('searchInput').value = '';
+            searchItems('');
+            document.getElementById('searchInput').blur();
         }
     }
-});
 
+    // Barcode Scanner Listener: Hardware scanners send rapid keystrokes (< 50ms) terminated by Enter
+    const now = Date.now();
+    if (e.key === 'Enter' && barcodeBuffer.length > 2 && (now - barcodeLastTime < 250)) {
+        e.preventDefault();
+        const code = barcodeBuffer.trim();
+        barcodeBuffer = '';
+        // Search and add item by ID / Barcode
+        const matchedCard = document.querySelector(`.item-card[data-item-id="${code}"], .item-card[data-name*="${code}"]`);
+        if (matchedCard) {
+            handleProductCardClick(matchedCard);
+            // Visual Flash feedback
+            matchedCard.classList.add('ring-4', 'ring-amber-400');
+            setTimeout(() => matchedCard.classList.remove('ring-4', 'ring-amber-400'), 500);
+        }
+        return;
+    }
+
+    if (now - barcodeLastTime > 250) {
+        barcodeBuffer = '';
+    }
+    if (e.key.length === 1) {
+        barcodeBuffer += e.key;
+        barcodeLastTime = now;
+    }
+});
 </script>
 
 {% endblock %}

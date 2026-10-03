@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex-1 flex flex-col p-3 lg:p-6 max-w-7xl mx-auto w-full space-y-6">
+
+    <!-- Header & Action -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-5 rounded-3xl shadow-xl">
+        <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-slate-950 text-2xl font-black shadow-lg shadow-amber-500/20">
+                <i class="fa-solid fa-utensils"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-black text-white flex items-center gap-2">
+                    <span>إدارة طاولات وصالات الكافيه</span>
+                    <span class="bg-amber-500/20 text-amber-400 text-xs px-2.5 py-0.5 rounded-full border border-amber-500/30">Table POS</span>
+                </h1>
+                <p class="text-xs text-slate-400">متابعة إشغال الطاولات، الحساب المفتوح لكل جلسة، والتحويل للكاشير</p>
+            </div>
+        </div>
+
+        <button onclick="document.getElementById('addTableModal').classList.remove('hidden')" class="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs transition shadow-lg shadow-amber-500/20 flex items-center gap-2 cursor-pointer active:scale-95">
+            <i class="fa-solid fa-plus"></i>
+            <span>إضافة طاولة جديدة</span>
+        </button>
+    </div>
+
+    <!-- Tables Grid -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        {% for t in tables %}
+        <div class="bg-slate-900 border {% if t.status == 'occupied' %}border-rose-500/60 bg-rose-950/20{% else %}border-slate-800 hover:border-amber-500/40{% endif %} rounded-3xl p-4 transition shadow-lg space-y-3 relative group">
+            
+            <div class="flex items-center justify-between">
+                <span class="w-10 h-10 rounded-2xl {% if t.status == 'occupied' %}bg-rose-500/20 text-rose-400{% else %}bg-slate-800 text-slate-300{% endif %} flex items-center justify-center font-black text-sm">
+                    {{ t.table_number }}
+                </span>
+                <span class="text-[10px] px-2 py-0.5 rounded-full font-bold {% if t.status == 'occupied' %}bg-rose-500/20 text-rose-300 border border-rose-500/30{% else %}bg-emerald-500/20 text-emerald-300 border border-emerald-500/30{% endif %}">
+                    {{ 'مشغولة 🔴' if t.status == 'occupied' else 'شاغرة 🟢' }}
+                </span>
+            </div>
+
+            <div>
+                <h4 class="font-black text-sm text-white">{{ t.table_name or ('طاولة ' ~ t.table_number) }}</h4>
+                <p class="text-[10px] text-slate-400">{{ t.section }} • {{ t.seats }} كراسي</p>
+            </div>
+
+            {% if t.status == 'occupied' %}
+            <div class="bg-slate-950/90 p-2.5 rounded-xl border border-rose-500/30 space-y-1">
+                <span class="text-[9px] text-slate-400 block">حساب الجلسة الحالي:</span>
+                <strong class="text-xs font-mono text-rose-300 block">{{ t.current_order_total_lbp|default(0)|format_currency }} ل.ل</strong>
+                <a href="{{ url_for('index', table=t.table_number) }}" class="block text-center bg-rose-600 hover:bg-rose-500 text-white font-bold py-1 px-2 rounded-lg text-[10px] transition mt-1">
+                    فتح الفاتورة ↗
+                </a>
+            </div>
+            {% else %}
+            <a href="{{ url_for('index', table=t.table_number) }}" class="block text-center bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-slate-300 font-bold py-1.5 px-2 rounded-xl text-[10px] transition">
+                بدء طلب جديد ☕
+            </a>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="col-span-full bg-slate-900/40 border-2 border-dashed border-slate-800 rounded-3xl p-12 text-center text-slate-400">
+            <i class="fa-solid fa-utensils text-4xl mb-3 text-slate-600"></i>
+            <p class="font-bold">لا يوجد طاولات مضافة بعد</p>
+            <p class="text-xs text-slate-500 mt-1">أضف طاولات الصالة لربط الطلبات بها وتحديد أماكن الزبائن</p>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+
+<!-- Modal: Add Table -->
+<div id="addTableModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="font-black text-white text-base">إضافة طاولة جديدة</h3>
+            <button onclick="document.getElementById('addTableModal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('table_add') }}" class="space-y-3">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">رقم الطاولة *</label>
+                <input type="text" name="table_number" required placeholder="T1, T2, 1, 2..." class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2.5 rounded-xl outline-none focus:border-amber-500">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">اسم / وصف الطاولة</label>
+                <input type="text" name="table_name" placeholder="طاولة النافذة، ركن VIP..." class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2.5 rounded-xl outline-none focus:border-amber-500">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">القسم / الصالة</label>
+                    <input type="text" name="section" value="الصالة الرئيسية" class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl outline-none focus:border-amber-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">عدد المقاعد</label>
+                    <input type="number" name="seats" value="4" class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl outline-none focus:border-amber-500">
+                </div>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition">حفظ الطاولة</button>
+                <button type="button" onclick="document.getElementById('addTableModal').classList.add('hidden')" class="px-4 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

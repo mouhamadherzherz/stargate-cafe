@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+
+{% block title %}سجل الحركة المالية المركزي | STARGATE CAFE{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-7xl mx-auto pb-16">
+
+    <!-- Header Section -->
+    <div class="bg-gradient-to-r from-slate-900 via-indigo-950/80 to-slate-900 text-white p-6 rounded-3xl shadow-xl border border-indigo-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="space-y-1">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-400/30">
+                <span>📑</span>
+                <span>النظام المالي المتقدم v5.0</span>
+            </div>
+            <h1 class="text-2xl lg:text-3xl font-black text-white flex items-center gap-3">
+                <span>سجل الحركة المالية المركزي (Audit Ledger)</span>
+            </h1>
+            <p class="text-xs text-slate-400">
+                سجل تدقيق مالي غير قابل للتلاعب (Immutable Audit Trail) يوثق كل تدفق نقدي، والرصيد اللحظي للدرج والخزنة قبل وبعد كل حركة.
+            </p>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+            <a href="{{ url_for('safe_page') }}"
+               class="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 border border-amber-500/30">
+                <span>🏦 الخزنة الخاصة</span>
+            </a>
+            <a href="{{ url_for('admin_panel') }}"
+               class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 border border-slate-700">
+                <span>← لوحة الإدارة</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Quick Balances & Metrics -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Expected Drawer Cash -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-lg relative overflow-hidden">
+            <div class="absolute -left-4 -bottom-4 text-slate-800/20 text-7xl select-none">💵</div>
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-slate-400">كاش الدرج المحسوب</span>
+                <span class="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-sm font-bold border border-emerald-500/20">📥</span>
+            </div>
+            <div class="font-mono text-xl lg:text-2xl font-black text-emerald-400">
+                {{ (drawer_status.total_untransferred_lbp or 0)|format_currency }}
+                <span class="text-xs font-normal text-slate-400">ل.ل</span>
+            </div>
+            <div class="mt-2 text-[11px] text-slate-400 flex justify-between border-t border-slate-800/80 pt-2 font-mono">
+                <span>المقابل بالدولار:</span>
+                <span class="text-emerald-300 font-bold">${{ "{:,.2f}".format(drawer_status.total_untransferred_usd or 0) }}</span>
+            </div>
+        </div>
+
+        <!-- Safe Balance LBP -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-lg relative overflow-hidden">
+            <div class="absolute -left-4 -bottom-4 text-slate-800/20 text-7xl select-none">🏦</div>
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-slate-400">رصيد الخزنة (ليرة)</span>
+                <span class="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-sm font-bold border border-amber-500/20">🏛️</span>
+            </div>
+            <div class="font-mono text-xl lg:text-2xl font-black text-amber-400">
+                {{ (safe_balance.balance_lbp or 0)|format_currency }}
+                <span class="text-xs font-normal text-slate-400">ل.ل</span>
+            </div>
+            <div class="mt-2 text-[11px] text-slate-400 flex justify-between border-t border-slate-800/80 pt-2">
+                <span>إجمالي الإيداعات:</span>
+                <span class="text-amber-300 font-mono font-bold">{{ (safe_balance.total_deposit_lbp or 0)|format_currency }}</span>
+            </div>
+        </div>
+
+        <!-- Safe Balance USD -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-lg relative overflow-hidden">
+            <div class="absolute -left-4 -bottom-4 text-slate-800/20 text-7xl select-none">💲</div>
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-slate-400">رصيد الخزنة (دولار)</span>
+                <span class="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center text-sm font-bold border border-blue-500/20">💵</span>
+            </div>
+            <div class="font-mono text-xl lg:text-2xl font-black text-blue-400">
+                ${{ "{:,.2f}".format(safe_balance.balance_usd or 0) }}
+            </div>
+            <div class="mt-2 text-[11px] text-slate-400 flex justify-between border-t border-slate-800/80 pt-2 font-mono">
+                <span>المسحوبات:</span>
+                <span class="text-rose-400 font-bold">${{ "{:,.2f}".format(safe_balance.total_withdraw_usd or 0) }}</span>
+            </div>
+        </div>
+
+        <!-- Total Ledger Records -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-lg relative overflow-hidden">
+            <div class="absolute -left-4 -bottom-4 text-slate-800/20 text-7xl select-none">📊</div>
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-slate-400">حركات السجل المالي</span>
+                <span class="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-sm font-bold border border-indigo-500/20">📜</span>
+            </div>
+            <div class="font-mono text-xl lg:text-2xl font-black text-indigo-300">
+                {{ entries|length }} <span class="text-xs font-normal text-slate-400">قيد</span>
+            </div>
+            <div class="mt-2 text-[11px] text-slate-400 flex justify-between border-t border-slate-800/80 pt-2 font-mono">
+                <span>سعر الصرف المعتمد:</span>
+                <span class="text-slate-300 font-bold">{{ settings.exchange_rate|format_currency }} ل.ل</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl">
+        <form method="GET" action="{{ url_for('financial_ledger_page') }}" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end">
+            <div>
+                <label class="block text-xs font-bold text-slate-400 mb-1.5">من تاريخ:</label>
+                <input type="date" name="start_date" value="{{ start_date or '' }}"
+                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-indigo-500 font-mono">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-400 mb-1.5">إلى تاريخ:</label>
+                <input type="date" name="end_date" value="{{ end_date or '' }}"
+                       class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-indigo-500 font-mono">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-400 mb-1.5">نوع الحركة:</label>
+                <select name="entry_type" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-indigo-500 font-bold">
+                    <option value="" {% if not entry_type %}selected{% endif %}>جميع الحركات</option>
+                    <option value="cash_sale" {% if entry_type == 'cash_sale' %}selected{% endif %}>مبيعات نقدية (Cash Sales)</option>
+                    <option value="debt_payment" {% if entry_type == 'debt_payment' %}selected{% endif %}>سداد دين زبون (Debt Repayment)</option>
+                    <option value="expense" {% if entry_type == 'expense' %}selected{% endif %}>مصاريف (Expenses)</option>
+                    <option value="drawer_to_safe" {% if entry_type == 'drawer_to_safe' %}selected{% endif %}>ترحيل كاش للخزنة (To Safe)</option>
+                    <option value="safe_to_drawer" {% if entry_type == 'safe_to_drawer' %}selected{% endif %}>تمويل الدرج من الخزنة (To Drawer)</option>
+                    <option value="safe_deposit" {% if entry_type == 'safe_deposit' %}selected{% endif %}>إيداع خارجي بالخزنة</option>
+                    <option value="safe_withdraw" {% if entry_type == 'safe_withdraw' %}selected{% endif %}>سحب خارجي من الخزنة</option>
+                    <option value="adjustment" {% if entry_type == 'adjustment' %}selected{% endif %}>تسوية فروقات الدرج (Adjustment)</option>
+                </select>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-xl text-xs transition shadow-md">
+                    🔍 تطبيق الفلتر
+                </button>
+                <a href="{{ url_for('financial_ledger_page') }}" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 px-3 rounded-xl text-xs transition">
+                    إعادة ضبط
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Ledger Table -->
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
+        <div class="p-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="text-indigo-400 text-base">📋</span>
+                <h3 class="font-black text-white text-sm">سجل التدقيق المحاسبي التفصيلي</h3>
+            </div>
+            <span class="text-xs bg-slate-800 text-slate-300 px-3 py-1 rounded-full font-bold">
+                {{ entries|length }} قيد مسجل
+            </span>
+        </div>
+
+        {% if entries %}
+        <div class="overflow-x-auto max-h-[700px]">
+            <table class="w-full text-right text-xs">
+                <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 uppercase sticky top-0 font-bold text-[11px] z-10">
+                    <tr>
+                        <th class="p-3.5"># القيد</th>
+                        <th class="p-3.5">النوع والتاريخ</th>
+                        <th class="p-3.5">المسار (من ⬅️ إلى)</th>
+                        <th class="p-3.5">المبلغ</th>
+                        <th class="p-3.5">رصيد الدرج (قبل ⬅️ بعد)</th>
+                        <th class="p-3.5">رصيد الخزنة (قبل ⬅️ بعد)</th>
+                        <th class="p-3.5">المستخدم والبيان</th>
+                        <th class="p-3.5">الحالة</th>
+                        <th class="p-3.5 text-center">إجراء</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60">
+                    {% for e in entries %}
+                    <tr class="hover:bg-slate-800/40 transition {{ 'opacity-40 line-through bg-rose-950/10' if e.status == 'cancelled' else '' }}">
+                        <td class="p-3.5 font-mono text-slate-400 font-bold">
+                            #{{ e.id }}
+                        </td>
+                        <td class="p-3.5">
+                            <div>
+                                {% if e.entry_type == 'cash_sale' %}
+                                <span class="bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                                    💰 مبيعات كاش
+                                </span>
+                                {% elif e.entry_type == 'debt_payment' %}
+                                <span class="bg-blue-950 text-blue-300 border border-blue-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                                    🤝 سداد دين
+                                </span>
+                                {% elif e.entry_type == 'expense' %}
+                                <span class="bg-rose-950 text-rose-300 border border-rose-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                                    📉 مصروف
+                                </span>
+                                {% elif e.entry_type == 'drawer_to_safe' %}
+                                <span class="bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                                    🏦 ترحيل للخزنة
+                                </span>
+                                {% elif e.entry_type == 'safe_to_drawer' %}
+                                <span class="bg-teal-950 text-teal-300 border border-teal-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                                    📥 تمويل الدرج
+                                </span>
+                                {% elif e.entry_type == 'adjustment' %}
+                                <span class="bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded text-[10px] font-bold">
+                                    ⚖️ تسوية عجز/زيادة
+                                </span>
+                                {% else %}
+                                <span class="bg-slate-800 text-slate-300 border border-slate-700 px-2 py-0.5 rounded text-[10px] font-bold">
+                                    {{ e.entry_type }}
+                                </span>
+                                {% endif %}
+                            </div>
+                            <span class="text-slate-500 font-mono text-[10px] block mt-1">
+                                {{ e.business_date }} {{ e.created_at[11:16] if e.created_at and e.created_at|length > 15 else '' }}
+                            </span>
+                        </td>
+                        <td class="p-3.5">
+                            <div class="flex items-center gap-1 font-mono text-[11px]">
+                                <span class="text-slate-400">{{ e.source }}</span>
+                                <span class="text-indigo-400">➡️</span>
+                                <span class="text-emerald-300 font-bold">{{ e.destination }}</span>
+                            </div>
+                            {% if e.reference_table %}
+                            <span class="text-slate-500 text-[10px] block">
+                                {{ e.reference_table }} #{{ e.reference_id }}
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="p-3.5 font-mono">
+                            <div class="font-black text-sm {{ 'text-rose-400' if e.entry_type == 'expense' else 'text-emerald-400' }}">
+                                {{ e.amount_lbp|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span>
+                            </div>
+                            {% if e.amount_usd and e.amount_usd > 0 %}
+                            <div class="text-[11px] text-slate-300 font-bold">
+                                ${{ "{:,.2f}".format(e.amount_usd) }}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td class="p-3.5 font-mono text-[11px]">
+                            <div class="flex items-center gap-1">
+                                <span class="text-slate-400">{{ (e.drawer_balance_before or 0)|format_currency }}</span>
+                                <span class="text-indigo-400">➔</span>
+                                <span class="text-white font-bold">{{ (e.drawer_balance_after or 0)|format_currency }}</span>
+                            </div>
+                        </td>
+                        <td class="p-3.5 font-mono text-[11px]">
+                            <div class="flex items-center gap-1">
+                                <span class="text-slate-400">{{ (e.safe_balance_lbp_before or 0)|format_currency }}</span>
+                                <span class="text-amber-400">➔</span>
+                                <span class="text-white font-bold">{{ (e.safe_balance_lbp_after or 0)|format_currency }}</span>
+                            </div>
+                        </td>
+                        <td class="p-3.5 max-w-xs">
+                            <span class="bg-slate-800 text-slate-300 px-2 py-0.5 rounded text-[10px] font-bold">
+                                👤 {{ e.user_name or 'النظام' }}
+                            </span>
+                            <p class="text-slate-300 text-xs font-medium truncate mt-1" title="{{ e.notes }}">{{ e.notes or '—' }}</p>
+                        </td>
+                        <td class="p-3.5">
+                            {% if e.status == 'cancelled' %}
+                            <span class="bg-rose-950/80 text-rose-400 border border-rose-800/60 px-2 py-0.5 rounded text-[10px] font-bold" title="ألغاه {{ e.cancelled_by }} - السبب: {{ e.cancel_reason }}">
+                                🚫 ملغى
+                            </span>
+                            {% else %}
+                            <span class="bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 px-2 py-0.5 rounded text-[10px] font-bold">
+                                ✓ نشط
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="p-3.5 text-center">
+                            {% if e.status != 'cancelled' %}
+                            <form action="{{ url_for('cancel_financial_ledger_route', ledger_id=e.id) }}" method="POST"
+                                  onsubmit="var r = prompt('يرجى إدخال سبب إلغاء هذا القيد المالي:'); if(r===null||r.trim()===''){ alert('سبب الإلغاء مطلوب!'); return false; } this.querySelector('input[name=cancel_reason]').value = r; return true;">
+                                <input type="hidden" name="cancel_reason" value="">
+                                <button type="submit" class="text-slate-400 hover:text-rose-400 transition text-xs bg-slate-800/60 hover:bg-rose-950/40 px-2 py-1 rounded border border-slate-700/50" title="إلغاء هذا القيد وتوثيق التدقيق">
+                                    إلغاء 🚫
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="text-slate-600 text-xs">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-12 text-center text-slate-500">
+            <span class="text-4xl block mb-2">📑</span>
+            <p class="font-bold text-sm">لا توجد قيود مالية مسجلة مطابقة للبحث أو الفترة المحددة.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ⚖️ DOUBLE ENTRY JOURNAL ENTRIES (دفتر اليومية العامة والقيود المزدوجة) -->
+    <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden mt-6">
+        <div class="p-4 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-sm font-black">⚖️</span>
+                <div>
+                    <h3 class="font-black text-sm text-white">دفتر اليومية العامة للقيود المزدوجة (General Journal Entries)</h3>
+                    <p class="text-[10px] text-slate-400">تدقيق كل قيد محاسبي مزدوج (الطرف المدين = الطرف الدائن Debit = Credit) مع بنود القيد الكاملة</p>
+                </div>
+            </div>
+            <span class="text-xs font-mono text-indigo-300 font-bold bg-indigo-950 px-2.5 py-1 rounded-xl border border-indigo-800">
+                {{ journal_entries|length if journal_entries else 0 }} قيد يومية
+            </span>
+        </div>
+        
+        {% if journal_entries %}
+        <div class="divide-y divide-slate-800/80 max-h-[500px] overflow-y-auto custom-scrollbar">
+            {% for je in journal_entries %}
+            <div class="p-4 hover:bg-slate-850/60 transition space-y-2.5">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <span class="font-mono text-xs font-black text-amber-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+                            {{ je.entry_number }}
+                        </span>
+                        <strong class="text-white text-xs">{{ je.description }}</strong>
+                        {% if je.reference_type %}
+                        <span class="text-[10px] text-slate-400 font-mono">({{ je.reference_type }} #{{ je.reference_id }})</span>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center gap-3 text-xs">
+                        <span class="text-slate-400 text-[11px] font-mono">{{ je.entry_date }}</span>
+                        <span class="font-bold text-slate-300 text-[11px]">المستخدم: <strong class="text-white">{{ je.user_name }}</strong></span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">✓ مُرحل (Posted)</span>
+                    </div>
+                </div>
+
+                <!-- Lines Table -->
+                <div class="bg-slate-950/70 rounded-2xl border border-slate-800/80 overflow-hidden">
+                    <table class="w-full text-right text-[11px]">
+                        <thead class="bg-slate-950 text-slate-500 font-bold border-b border-slate-800/60">
+                            <tr>
+                                <th class="p-2">رمز الحساب</th>
+                                <th class="p-2">اسم الحساب</th>
+                                <th class="p-2 font-mono">مدين Debit (ل.ل)</th>
+                                <th class="p-2 font-mono">دائن Credit (ل.ل)</th>
+                                <th class="p-2 font-mono">مدين Debit ($)</th>
+                                <th class="p-2 font-mono">دائن Credit ($)</th>
+                                <th class="p-2">البيان المالي</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/40 text-slate-300">
+                            {% for line in je.lines %}
+                            <tr class="hover:bg-slate-900/50">
+                                <td class="p-2 font-mono text-indigo-400 font-bold">#{{ line.account_code }}</td>
+                                <td class="p-2 font-bold text-white">{{ line.account_name }}</td>
+                                <td class="p-2 font-mono font-bold {{ 'text-emerald-400' if line.debit_lbp > 0 else 'text-slate-600' }}">
+                                    {{ line.debit_lbp|format_currency if line.debit_lbp > 0 else '—' }}
+                                </td>
+                                <td class="p-2 font-mono font-bold {{ 'text-rose-400' if line.credit_lbp > 0 else 'text-slate-600' }}">
+                                    {{ line.credit_lbp|format_currency if line.credit_lbp > 0 else '—' }}
+                                </td>
+                                <td class="p-2 font-mono {{ 'text-emerald-400' if line.debit_usd > 0 else 'text-slate-600' }}">
+                                    ${{ "{:,.2f}".format(line.debit_usd) if line.debit_usd > 0 else '—' }}
+                                </td>
+                                <td class="p-2 font-mono {{ 'text-rose-400' if line.credit_usd > 0 else 'text-slate-600' }}">
+                                    ${{ "{:,.2f}".format(line.credit_usd) if line.credit_usd > 0 else '—' }}
+                                </td>
+                                <td class="p-2 text-slate-400">{{ line.memo or '—' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="p-8 text-center text-slate-500 text-xs">
+            لا توجد قيود يومية مزدوجة مسجلة بعد.
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 🏛️ CHART OF ACCOUNTS (دليل وشجرة الحسابات المحاسبية) -->
+    <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden mt-6">
+        <div class="p-4 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-sm font-black">🏛️</span>
+                <div>
+                    <h3 class="font-black text-sm text-white">دليل وشجرة الحسابات المحاسبية المزدوجة (Chart of Accounts)</h3>
+                    <p class="text-[10px] text-slate-400">نواة المحاسبة المزدوجة (Assets, Liabilities, Equity, Revenues, Expenses) وأرصدتها</p>
+                </div>
+            </div>
+            <span class="text-xs font-mono text-purple-300 font-bold bg-purple-950 px-2.5 py-1 rounded-xl border border-purple-800">
+                {{ accounts|length if accounts else 0 }} حساب مالي
+            </span>
+        </div>
+        <div class="overflow-x-auto max-h-80 custom-scrollbar">
+            <table class="w-full text-right text-xs">
+                <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 text-[11px] font-bold">
+                    <tr>
+                        <th class="p-3">رمز الحساب</th>
+                        <th class="p-3">اسم الحساب (عربي)</th>
+                        <th class="p-3">Account Name (EN)</th>
+                        <th class="p-3">النوع</th>
+                        <th class="p-3 font-mono">الرصيد المحسوب (ل.ل)</th>
+                        <th class="p-3 font-mono">الرصيد ($)</th>
+                        <th class="p-3">البيان والوظيفة</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                    {% for a in accounts %}
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="p-3 font-mono font-black text-amber-400">#{{ a.code }}</td>
+                        <td class="p-3 font-bold text-white">{{ a.name_ar }}</td>
+                        <td class="p-3 font-mono text-slate-400">{{ a.name }}</td>
+                        <td class="p-3 font-bold">
+                            {% if a.account_type == 'asset' %}
+                            <span class="text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded text-[10px]">أصول (Asset)</span>
+                            {% elif a.account_type == 'liability' %}
+                            <span class="text-rose-400 bg-rose-950 px-2 py-0.5 rounded text-[10px]">خصوم (Liability)</span>
+                            {% elif a.account_type == 'revenue' %}
+                            <span class="text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded text-[10px]">إيرادات (Revenue)</span>
+                            {% elif a.account_type == 'expense' %}
+                            <span class="text-amber-400 bg-amber-950 px-2 py-0.5 rounded text-[10px]">مصروفات (Expense)</span>
+                            {% else %}
+                            <span class="text-purple-400 bg-purple-950 px-2 py-0.5 rounded text-[10px]">{{ a.account_type }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="p-3 font-mono font-bold text-white">
+                            {{ (a.balance_lbp or a.calculated_balance_lbp or 0)|format_currency }} ل.ل
+                        </td>
+                        <td class="p-3 font-mono font-bold text-emerald-400">
+                            ${{ "{:,.2f}".format(a.balance_usd or a.calculated_balance_usd or 0) }}
+                        </td>
+                        <td class="p-3 text-slate-400 text-[11px]">{{ a.description or '—' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="p-6 text-center text-slate-500">جاري تحميل شجرة الحسابات...</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

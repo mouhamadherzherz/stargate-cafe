@@ -88,6 +88,7 @@
 
         <!-- Quick PIN Form with Numpad -->
         <form method="POST" action="{{ url_for('employee_login') }}" class="space-y-4 relative z-10" id="loginForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div>
                 <label class="block text-xs font-bold text-slate-300 mb-1.5 text-center">أدخل رمز الدخول السريع (PIN)</label>
                 <div class="relative">
@@ -196,7 +197,9 @@
                 });
         }
 
-        document.addEventListener('DOMContentLoaded', checkLoginOta);
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(checkLoginOta, 15000);
+        });
     </script>
 </body>
 </html>

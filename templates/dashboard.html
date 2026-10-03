@@ -1,356 +1,387 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
+
+{% block title %}لوحة القيادة والمؤشرات الإستراتيجية | {{ company_name }}{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6 max-w-7xl mx-auto pb-16">
 
-    <!-- Top Page Title & Quick Actions Banner -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-        <div>
-            <h2 class="text-2xl font-black text-slate-800 flex items-center gap-2">
-                <span>{{ company_name }} - متابعة العمليات</span>
-                <span class="text-2xl">🇱🇧</span>
-            </h2>
-            <p class="text-sm text-slate-500 mt-1">
-                {% if is_admin %}
-                لوحة المتابعة الإدارية والمالية: الصندوق، كاش الشارع، مستحقات المحلات، والأرباح.
-                {% else %}
-                لوحة استقبال ومتابعة الأوردرات وحالة التوصيل مع شباب الدليفري.
-                {% endif %}
+    <!-- Top Master Hero Header -->
+    <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 rounded-3xl shadow-2xl border border-indigo-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden">
+        <div class="absolute -right-12 -top-12 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="space-y-1 relative z-10">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-black border border-indigo-400/30">
+                <span>⚡</span>
+                <span>لوحة التحكم الإدارية والمالية الشاملة (Executive ERP Dashboard)</span>
+            </div>
+            <h1 class="text-2xl lg:text-3xl font-black text-white flex items-center gap-3">
+                <span>مؤشرات أداء الكافيه والـ GAMING اليوم</span>
+                <span class="text-xs font-mono text-amber-400 bg-amber-950/70 px-3 py-1 rounded-xl border border-amber-500/40">
+                    {{ today_str }}
+                </span>
+            </h1>
+            <p class="text-xs text-slate-400">
+                متابعة المبيعات الآنية، صافي الأرباح المحاسبية (بعد خصم COGS)، رصيد الخزنة وفق سجل الحركة المالية (Ledger)، ومراقبة النواقص.
             </p>
         </div>
-        <div class="flex items-center gap-2 flex-wrap">
-            <a href="{{ url_for('orders_list') }}?open_new=1" class="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl shadow-md shadow-red-600/20 transition">
-                <i class="fa-solid fa-plus"></i>
-                <span>تسجيل أوردر جديد</span>
+
+        <div class="flex items-center gap-2 flex-wrap relative z-10">
+            <a href="{{ url_for('index') }}" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95">
+                <i class="fa-solid fa-cash-register"></i>
+                <span>فتح شاشة الـ POS والكاشير</span>
             </a>
-            {% if is_admin %}
-            <a href="{{ url_for('couriers_list') }}" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition">
-                <i class="fa-solid fa-motorcycle text-yellow-400"></i>
-                <span>تسكير حساب دليفري</span>
+            <a href="{{ url_for('reports_page') }}" class="bg-slate-800 hover:bg-slate-700 text-indigo-300 font-bold px-4 py-2.5 rounded-2xl text-xs transition border border-indigo-500/30">
+                <span>📊 تقرير الأرباح (P&L)</span>
             </a>
-            <a href="{{ url_for('merchants_list') }}" class="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-4 py-2.5 rounded-xl shadow-md shadow-emerald-600/20 transition">
-                <i class="fa-solid fa-hand-holding-dollar"></i>
-                <span>دفع مصاري المحلات</span>
-            </a>
-            {% else %}
-            <a href="{{ url_for('orders_list') }}" class="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-bold px-4 py-2.5 rounded-xl transition">
-                <i class="fa-solid fa-box-open text-red-400"></i>
-                <span>كل الأوردرات</span>
-            </a>
-            {% endif %}
         </div>
     </div>
 
-    {% if is_admin %}
-    <!-- 4 Main Financial KPI Cards (Admin Only) -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <!-- 1. Treasury Cash -->
-        <div class="bg-gradient-to-br from-emerald-600 to-teal-700 text-white p-6 rounded-2xl shadow-lg shadow-emerald-600/10 relative overflow-hidden">
-            <div class="flex items-center justify-between">
-                <span class="text-sm font-bold text-emerald-100">كاش الصندوق المتوفر</span>
-                <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center text-white">
-                    <i class="fa-solid fa-vault text-lg"></i>
+    <!-- 6 EXECUTIVE KPI CARDS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3.5">
+        
+        <!-- 1. Today's Sales -->
+        <div class="bg-slate-900 border border-indigo-500/40 p-4 rounded-3xl shadow-lg flex flex-col justify-between relative overflow-hidden group hover:border-indigo-400 transition">
+            <div class="flex items-center justify-between text-indigo-400">
+                <span class="text-xs font-black">📦 مبيعات اليوم</span>
+                <span class="w-8 h-8 rounded-xl bg-indigo-500/20 flex items-center justify-center text-sm font-black">💰</span>
+            </div>
+            <div class="my-2">
+                <div class="text-xl font-black font-mono text-white leading-tight">
+                    {{ (summary.grand_totals.total_production_lbp or 0)|format_currency }}
+                    <span class="text-[10px] font-normal text-slate-400">ل.ل</span>
                 </div>
+                <span class="text-xs font-mono text-indigo-300 font-bold mt-0.5 block">
+                    ≈ {{ (summary.grand_totals.total_production_usd or 0)|to_usd }}
+                </span>
             </div>
-            <div class="mt-4">
-                <div class="text-2xl font-black tracking-tight font-mono">{{ stats.total_treasury_cash|format_currency }} <span class="text-sm font-sans font-normal">{{ currency }}</span></div>
-                <div class="text-sm text-emerald-200 font-bold font-mono mt-0.5">≈ {{ stats.total_treasury_cash|to_usd(exchange_rate) }}</div>
-                <span class="text-xs text-emerald-100/80 mt-1 block font-medium">السيولة الحالية بالصندوق</span>
-            </div>
-            <div class="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs text-emerald-100">
-                <a href="{{ url_for('treasury_view') }}" class="hover:underline flex items-center gap-1 font-bold">
-                    <span>حركات الصندوق</span>
-                    <i class="fa-solid fa-arrow-left text-[10px]"></i>
-                </a>
+            <div class="text-[10px] text-slate-400 border-t border-slate-800/80 pt-1.5 flex justify-between">
+                <span>الطلبات: <strong>{{ summary.cafe.cups_count or 0 }} كوب</strong></span>
+                <span class="text-emerald-400 font-bold">نقدي + آجل</span>
             </div>
         </div>
 
-        <!-- 2. Courier Custody in the Street -->
-        <div class="bg-gradient-to-br from-amber-500 to-orange-600 text-white p-6 rounded-2xl shadow-lg shadow-amber-500/10 relative overflow-hidden">
-            <div class="flex items-center justify-between">
-                <span class="text-sm font-bold text-amber-100">مصاري الدليفري بالشارع</span>
-                <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center text-white">
-                    <i class="fa-solid fa-motorcycle text-lg"></i>
+        <!-- 2. Today's Net Profit (Real Accounting P&L) -->
+        <div class="bg-gradient-to-tr from-slate-900 to-emerald-950 border border-emerald-500/50 p-4 rounded-3xl shadow-lg flex flex-col justify-between relative overflow-hidden group hover:border-emerald-400 transition">
+            <div class="flex items-center justify-between text-emerald-400">
+                <span class="text-xs font-black">📈 صافي الأرباح الفعلية</span>
+                <span class="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-sm font-black">💎</span>
+            </div>
+            <div class="my-2">
+                <div class="text-xl font-black font-mono text-emerald-400 leading-tight">
+                    {{ (pnl.net_profit_lbp or summary.net_profit_lbp or 0)|format_currency }}
+                    <span class="text-[10px] font-normal text-emerald-200/60">ل.ل</span>
                 </div>
+                <span class="text-xs font-mono text-emerald-300 font-bold mt-0.5 block">
+                    ≈ ${{ "{:,.2f}".format(pnl.net_profit_usd or summary.net_profit_usd or 0) }}
+                </span>
             </div>
-            <div class="mt-4">
-                <div class="text-2xl font-black tracking-tight font-mono">{{ stats.total_courier_custody|format_currency }} <span class="text-sm font-sans font-normal">{{ currency }}</span></div>
-                <div class="text-sm text-amber-200 font-bold font-mono mt-0.5">≈ {{ stats.total_courier_custody|to_usd(exchange_rate) }}</div>
-                <span class="text-xs text-amber-100/80 mt-1 block font-medium">كاش مقبوض مع الشباب بعد ما تسكّر</span>
-            </div>
-            <div class="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs text-amber-100">
-                <a href="{{ url_for('couriers_list') }}" class="hover:underline flex items-center gap-1 font-bold">
-                    <span>تسكير حسابات الشباب</span>
-                    <i class="fa-solid fa-arrow-left text-[10px]"></i>
-                </a>
+            <div class="text-[10px] text-emerald-300/80 border-t border-emerald-800/40 pt-1.5 flex justify-between">
+                <span>بعد COGS والمصاريف</span>
+                <span class="font-bold">100% مدققة</span>
             </div>
         </div>
 
-        <!-- 3. Pending Merchant Debts -->
-        <div class="bg-gradient-to-br from-blue-600 to-indigo-700 text-white p-6 rounded-2xl shadow-lg shadow-blue-600/10 relative overflow-hidden">
-            <div class="flex items-center justify-between">
-                <span class="text-sm font-bold text-blue-100">مستحقات المحلات والصفحات</span>
-                <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center text-white">
-                    <i class="fa-solid fa-store text-lg"></i>
+        <!-- 3. Cash Drawer Available Now -->
+        <div class="bg-slate-900 border border-emerald-500/30 p-4 rounded-3xl shadow-lg flex flex-col justify-between relative overflow-hidden group hover:border-emerald-400 transition">
+            <div class="flex items-center justify-between text-emerald-400">
+                <span class="text-xs font-black">💼 كاش الدرج المتوفر</span>
+                <span class="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-sm font-black">💵</span>
+            </div>
+            <div class="my-2">
+                <div class="text-xl font-black font-mono text-emerald-300 leading-tight">
+                    {{ (drawer_status.total_untransferred_lbp or 0)|format_currency }}
+                    <span class="text-[10px] font-normal text-slate-400">ل.ل</span>
                 </div>
+                <span class="text-xs font-mono text-emerald-400 font-bold mt-0.5 block">
+                    ${{ "{:,.2f}".format(drawer_status.total_untransferred_usd or 0) }}
+                </span>
             </div>
-            <div class="mt-4">
-                <div class="text-2xl font-black tracking-tight font-mono">{{ stats.total_merchant_debt|format_currency }} <span class="text-sm font-sans font-normal">{{ currency }}</span></div>
-                <div class="text-sm text-blue-200 font-bold font-mono mt-0.5">≈ {{ stats.total_merchant_debt|to_usd(exchange_rate) }}</div>
-                <span class="text-xs text-blue-100/80 mt-1 block font-medium">مصاري المحلات الواجب دفعها</span>
-            </div>
-            <div class="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs text-blue-100">
-                <a href="{{ url_for('merchants_list') }}" class="hover:underline flex items-center gap-1 font-bold">
-                    <span>كشوفات المحلات</span>
-                    <i class="fa-solid fa-arrow-left text-[10px]"></i>
-                </a>
+            <div class="text-[10px] text-slate-400 border-t border-slate-800/80 pt-1.5 flex justify-between">
+                <span>الصندوق النقدي</span>
+                <span class="text-amber-400 font-bold">جاهز للترحيل</span>
             </div>
         </div>
 
-        <!-- 4. Month Net Profit -->
-        <div class="bg-gradient-to-br from-slate-800 to-slate-900 text-white p-6 rounded-2xl shadow-lg shadow-slate-900/10 relative overflow-hidden">
-            <div class="flex items-center justify-between">
-                <span class="text-sm font-bold text-slate-300">صافي ربح الدليفري (الشهر)</span>
-                <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center text-white">
-                    <i class="fa-solid fa-chart-line text-lg text-emerald-400"></i>
+        <!-- 4. Safe Vault Balance (Direct from Ledger) -->
+        <div class="bg-gradient-to-tr from-slate-900 to-amber-950 border border-amber-500/50 p-4 rounded-3xl shadow-lg flex flex-col justify-between relative overflow-hidden group hover:border-amber-400 transition">
+            <div class="flex items-center justify-between text-amber-400">
+                <span class="text-xs font-black">🏦 رصيد الخزنة (Ledger)</span>
+                <span class="w-8 h-8 rounded-xl bg-amber-500/20 flex items-center justify-center text-sm font-black">🏛️</span>
+            </div>
+            <div class="my-2">
+                <div class="text-xl font-black font-mono text-amber-300 leading-tight">
+                    {{ (safe_balance.balance_lbp or 0)|format_currency }}
+                    <span class="text-[10px] font-normal text-slate-400">ل.ل</span>
                 </div>
+                <span class="text-xs font-mono text-amber-200 font-bold mt-0.5 block">
+                    ${{ "{:,.2f}".format(safe_balance.balance_usd or 0) }}
+                </span>
             </div>
-            <div class="mt-4">
-                <div class="text-2xl font-black tracking-tight font-mono {{ 'text-emerald-400' if stats.month_net_profit >= 0 else 'text-rose-400' }}">
-                    {{ stats.month_net_profit|format_currency }} <span class="text-sm font-sans font-normal">{{ currency }}</span>
+            <div class="text-[10px] text-slate-400 border-t border-slate-800/80 pt-1.5 flex justify-between">
+                <span>حركات الخزنة: <strong>{{ safe_balance.transfers_count or 0 }}</strong></span>
+                <a href="{{ url_for('safe_page') }}" class="text-amber-400 hover:underline">السجل ←</a>
+            </div>
+        </div>
+
+        <!-- 5. Low Stock Alert -->
+        <div class="bg-slate-900 border {% if low_stock_items|length > 0 %}border-rose-500/60 bg-rose-950/10{% else %}border-slate-800{% endif %} p-4 rounded-3xl shadow-lg flex flex-col justify-between relative overflow-hidden group">
+            <div class="flex items-center justify-between text-rose-400">
+                <span class="text-xs font-black">⚠️ تنبيهات النواقص</span>
+                <span class="w-8 h-8 rounded-xl bg-rose-500/20 flex items-center justify-center text-sm font-black">📦</span>
+            </div>
+            <div class="my-2">
+                <div class="text-xl font-black font-mono text-rose-300 leading-tight">
+                    {{ low_stock_items|length }}
+                    <span class="text-xs font-normal text-slate-400">صنف منخفض</span>
                 </div>
-                <div class="text-sm text-emerald-300 font-bold font-mono mt-0.5">≈ {{ stats.month_net_profit|to_usd(exchange_rate) }}</div>
-                <span class="text-xs text-slate-400 mt-1 block font-medium">أرباح الدليفري الصافية بعد المصاريف</span>
+                <span class="text-[10px] text-slate-400 mt-0.5 block">
+                    تحتاج لإعادة طلب أو توريد
+                </span>
             </div>
-            <div class="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs text-slate-300">
-                <a href="{{ url_for('reports_view') }}" class="hover:underline flex items-center gap-1 font-bold">
-                    <span>تقرير الأرباح المفصل</span>
-                    <i class="fa-solid fa-arrow-left text-[10px]"></i>
-                </a>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Daily Operations Mini Bar -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div class="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg">
-                {{ stats.today_orders_count }}
-            </div>
-            <div>
-                <span class="text-xs text-slate-500 font-semibold block">أوردرات اليوم</span>
-                <span class="text-sm font-bold text-slate-800">مجموع الوارد</span>
+            <div class="text-[10px] text-slate-400 border-t border-slate-800/80 pt-1.5 flex justify-between">
+                <span>المخزون الإجمالي</span>
+                <a href="{{ url_for('inventory_page') }}" class="text-cyan-400 hover:underline">إدارة المستودع ←</a>
             </div>
         </div>
 
-        <div class="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg">
-                {{ stats.today_delivered_count }}
+        <!-- 6. Total Expenses Today -->
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-3xl shadow-lg flex flex-col justify-between relative overflow-hidden group hover:border-slate-700 transition">
+            <div class="flex items-center justify-between text-rose-400">
+                <span class="text-xs font-black">🧾 مصاريف اليوم</span>
+                <span class="w-8 h-8 rounded-xl bg-rose-500/10 flex items-center justify-center text-sm font-black">💸</span>
             </div>
-            <div>
-                <span class="text-xs text-slate-500 font-semibold block">تسلّمت بنجاح</span>
-                <span class="text-sm font-bold text-emerald-700">أوردرات واصلة</span>
+            <div class="my-2">
+                <div class="text-xl font-black font-mono text-rose-400 leading-tight">
+                    {{ (summary.expenses.total_lbp or 0)|format_currency }}
+                    <span class="text-[10px] font-normal text-slate-400">ل.ل</span>
+                </div>
+                <span class="text-xs font-mono text-rose-300 font-bold mt-0.5 block">
+                    ≈ {{ (summary.expenses.total_usd or 0)|to_usd }}
+                </span>
             </div>
-        </div>
-
-        <div class="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-lg">
-                {{ stats.active_in_transit_count }}
-            </div>
-            <div>
-                <span class="text-xs text-slate-500 font-semibold block">عالطريق مع الدليفري</span>
-                <span class="text-sm font-bold text-amber-700">قيد التوصيل</span>
-            </div>
-        </div>
-
-        <div class="bg-white p-4 rounded-xl border border-slate-200 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center font-bold text-lg">
-                {{ stats.today_returned_count }}
-            </div>
-            <div>
-                <span class="text-xs text-slate-500 font-semibold block">روتور اليوم</span>
-                <span class="text-sm font-bold text-rose-700">راجع كلي/جزئي</span>
+            <div class="text-[10px] text-slate-400 border-t border-slate-800/80 pt-1.5 flex justify-between">
+                <span>{{ summary.expenses.expenses_count or 0 }} سند صرف</span>
+                <span class="text-slate-500">تم الخصم</span>
             </div>
         </div>
     </div>
 
-    <!-- Charts & Summary Section -->
+    <!-- CHARTS ROW: Sales Peak Hours + Category Breakdown -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- 7 Days Delivery Trend Chart -->
-        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm lg:col-span-2">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="font-bold text-slate-800 text-base">📊 حركة التوصيل والإيرادات (آخر 7 أيام)</h3>
-                <span class="text-xs text-slate-400">تحديث فوري</span>
+        
+        <!-- Peak Hours Sales Chart (Bar) -->
+        <div class="lg:col-span-2 bg-slate-900 border border-slate-800 p-5 rounded-3xl shadow-xl flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-3">
+                <div>
+                    <h3 class="font-black text-sm text-white flex items-center gap-2">
+                        <i class="fa-solid fa-chart-column text-indigo-400"></i>
+                        <span>توزيع المبيعات وساعات الذروة لليوم</span>
+                    </h3>
+                    <p class="text-[11px] text-slate-400">حجم الطلبات والإيرادات بالساعة لمراقبة حركة الزبائن</p>
+                </div>
+                <span class="text-xs font-mono bg-indigo-950 text-indigo-300 px-2.5 py-1 rounded-xl border border-indigo-800">
+                    24 ساعة
+                </span>
             </div>
-            <div class="h-64">
-                <canvas id="weeklyChart"></canvas>
+            <div class="relative h-60 w-full">
+                <canvas id="hourlySalesChart"></canvas>
             </div>
         </div>
 
-        <!-- Profit Summary Card -->
-        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-            <div>
-                <h3 class="font-bold text-slate-800 text-base mb-4">💼 ملخص أرباح اليوم والشهر</h3>
-                <div class="space-y-4">
-                    <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50">
-                        <span class="text-sm text-slate-600 font-medium">إيراد أجور توصيل اليوم:</span>
-                        <span class="font-bold text-slate-800">{{ stats.today_delivery_revenue|format_currency }} {{ currency }}</span>
-                    </div>
-                    <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50">
-                        <span class="text-sm text-slate-600 font-medium">عمولات مناديب اليوم:</span>
-                        <span class="font-bold text-amber-700">- {{ stats.today_driver_cost|format_currency }} {{ currency }}</span>
-                    </div>
-                    <div class="flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-                        <span class="text-sm text-emerald-800 font-bold">صافي أرباح توصيل اليوم:</span>
-                        <span class="font-black text-emerald-700 text-base">{{ stats.today_net_revenue|format_currency }} {{ currency }}</span>
-                    </div>
-                    <div class="flex items-center justify-between p-3 rounded-xl bg-rose-50 border border-rose-100">
-                        <span class="text-sm text-rose-800 font-medium">مصروفات تشغيلية (الشهر):</span>
-                        <span class="font-bold text-rose-700">- {{ stats.month_expenses|format_currency }} {{ currency }}</span>
-                    </div>
+        <!-- Category Distribution Doughnut Chart -->
+        <div class="bg-slate-900 border border-slate-800 p-5 rounded-3xl shadow-xl flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-3">
+                <div>
+                    <h3 class="font-black text-sm text-white flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-amber-400"></i>
+                        <span>أقسام المبيعات الأكثر دخلاً</span>
+                    </h3>
+                    <p class="text-[11px] text-slate-400">توزيع الإيراد على تصنيفات المنيو</p>
                 </div>
             </div>
-            <a href="{{ url_for('reports_view') }}" class="w-full mt-4 bg-slate-100 hover:bg-slate-200 text-slate-800 text-center py-2.5 rounded-xl text-xs font-bold transition">
-                عرض تقرير الأرباح والخسائر الكامل
-            </a>
+            <div class="relative h-60 w-full flex items-center justify-center">
+                <canvas id="categorySalesChart"></canvas>
+            </div>
         </div>
     </div>
 
-    <!-- Recent Orders Table -->
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div class="p-6 border-b border-slate-100 flex items-center justify-between">
-            <h3 class="font-bold text-slate-800 text-base">📦 أحدث الشحنات والطلبات</h3>
-            <a href="{{ url_for('orders_list') }}" class="text-sm text-blue-600 hover:underline font-bold">عرض كافة الطلبات ({{ stats.today_orders_count }}+) &larr;</a>
+    <!-- LOWER SECTION: TOP PRODUCTS & LOW STOCK NOTIFICATIONS -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- Top Selling Products -->
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl shadow-xl overflow-hidden">
+            <div class="p-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+                <h3 class="font-black text-xs sm:text-sm text-white flex items-center gap-2">
+                    <span class="text-amber-400">🏆</span>
+                    <span>المنتجات الأكثر مبيعاً وإقبالاً (Top Products)</span>
+                </h3>
+                <span class="text-[10px] text-slate-400 font-mono">اليوم</span>
+            </div>
+            <div class="overflow-x-auto max-h-72 custom-scrollbar">
+                <table class="w-full text-right text-xs">
+                    <thead class="bg-slate-950 text-slate-400 font-bold border-b border-slate-800 text-[11px]">
+                        <tr>
+                            <th class="p-3">المنتج</th>
+                            <th class="p-3 text-center">الكمية المباعة</th>
+                            <th class="p-3 font-mono">الإيراد المحقق (ل.ل)</th>
+                            <th class="p-3 font-mono">بالدولار ($)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60">
+                        {% for prod in top_products %}
+                        <tr class="hover:bg-slate-800/40 transition">
+                            <td class="p-3 font-bold text-white flex items-center gap-2">
+                                <span class="w-7 h-7 rounded-xl bg-slate-800 flex items-center justify-center text-xs">☕</span>
+                                <span>{{ prod.item_name }}</span>
+                            </td>
+                            <td class="p-3 text-center font-mono font-black text-amber-400">{{ prod.total_qty }}</td>
+                            <td class="p-3 font-mono font-bold text-white">{{ prod.total_lbp|format_currency }} ل.ل</td>
+                            <td class="p-3 font-mono text-emerald-400 font-bold">{{ prod.total_usd|to_usd }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="p-6 text-center text-slate-500">لا توجد مبيعات مسجلة حتى الآن اليوم</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-right text-sm">
-                <thead class="bg-slate-50 text-slate-600 text-xs uppercase font-bold border-b border-slate-100">
-                    <tr>
-                        <th class="py-3 px-6">رقم التتبع</th>
-                        <th class="py-3 px-6">التاجر / المتجر</th>
-                        <th class="py-3 px-6">المستلم والوجهة</th>
-                        <th class="py-3 px-6">المندوب</th>
-                        <th class="py-3 px-6">سعر البضاعة</th>
-                        <th class="py-3 px-6">أجرة التوصيل</th>
-                        <th class="py-3 px-6">الحالة</th>
-                        <th class="py-3 px-6">إجراء</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    {% for order in stats.recent_orders %}
-                    <tr class="hover:bg-slate-50/80 transition">
-                        <td class="py-3.5 px-6 font-mono font-bold text-blue-600">{{ order.tracking_number }}</td>
-                        <td class="py-3.5 px-6 font-medium text-slate-800">
-                            <div>{{ order.merchant_name }}</div>
-                            <span class="text-xs text-slate-400">{{ order.store_name }}</span>
-                        </td>
-                        <td class="py-3.5 px-6">
-                            <div class="font-medium text-slate-800">{{ order.recipient_name }}</div>
-                            <span class="text-xs text-slate-400">{{ order.recipient_city }} - {{ order.recipient_address[:25] }}...</span>
-                        </td>
-                        <td class="py-3.5 px-6">
-                            {% if order.courier_name %}
-                                <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-full">
-                                    <i class="fa-solid fa-motorcycle text-slate-400"></i> {{ order.courier_name }}
-                                </span>
-                            {% else %}
-                                <span class="text-xs text-slate-400 italic">غير محدد</span>
-                            {% endif %}
-                        </td>
-                        <td class="py-3.5 px-6 font-bold text-slate-800">{{ order.order_price|format_currency }} {{ currency }}</td>
-                        <td class="py-3.5 px-6 font-semibold text-blue-600">{{ order.delivery_fee|format_currency }} {{ currency }}</td>
-                        <td class="py-3.5 px-6">
-                            {% if order.status == 'delivered' %}
-                                <span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">تم التسليم</span>
-                            {% elif order.status == 'assigned' %}
-                                <span class="bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-bold">مع المندوب</span>
-                            {% elif order.status == 'pending' %}
-                                <span class="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-bold">قيد الانتظار</span>
-                            {% elif order.status == 'returned' %}
-                                <span class="bg-rose-100 text-rose-800 text-xs px-2.5 py-1 rounded-full font-bold">راجع كلي</span>
-                            {% else %}
-                                <span class="bg-slate-100 text-slate-800 text-xs px-2.5 py-1 rounded-full font-bold">{{ order.status }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="py-3.5 px-6">
-                            <a href="{{ url_for('print_waybill', order_id=order.id) }}" target="_blank" class="text-slate-400 hover:text-blue-600 p-1.5 rounded-lg hover:bg-slate-100 transition" title="طباعة بوليصة الشحن">
-                                <i class="fa-solid fa-print"></i>
-                            </a>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="8" class="text-center py-8 text-slate-400">لا توجد طلبات مسجلة بعد</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+
+        <!-- Low Stock / Inventory Alerts Table -->
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl shadow-xl overflow-hidden">
+            <div class="p-4 bg-slate-950/80 border-b border-slate-800 flex items-center justify-between">
+                <h3 class="font-black text-xs sm:text-sm text-rose-400 flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>نواقص المخزون التي قاربت على النفاد</span>
+                </h3>
+                <a href="{{ url_for('inventory_page') }}" class="text-[10px] text-cyan-400 hover:underline font-bold">
+                    إدارة المخزون كاملة ←
+                </a>
+            </div>
+            <div class="overflow-x-auto max-h-72 custom-scrollbar">
+                <table class="w-full text-right text-xs">
+                    <thead class="bg-slate-950 text-slate-400 font-bold border-b border-slate-800 text-[11px]">
+                        <tr>
+                            <th class="p-3">المادة / الصنف</th>
+                            <th class="p-3 text-center">الكمية المتبقية</th>
+                            <th class="p-3 text-center">حد الإنذار</th>
+                            <th class="p-3 text-center">الحالة</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60">
+                        {% for item in low_stock_items %}
+                        <tr class="hover:bg-slate-800/40 transition">
+                            <td class="p-3 font-bold text-white flex items-center gap-2">
+                                <span class="w-7 h-7 rounded-xl bg-slate-800 flex items-center justify-center text-xs">📦</span>
+                                <span>{{ item.name }}</span>
+                            </td>
+                            <td class="p-3 text-center font-mono font-black {% if item.stock_qty <= 0 %}text-rose-400{% else %}text-amber-400{% endif %}">
+                                {{ item.stock_qty }} {{ item.unit|default('قطعة') }}
+                            </td>
+                            <td class="p-3 text-center font-mono text-slate-400">
+                                {{ item.low_stock_limit|default(5) }}
+                            </td>
+                            <td class="p-3 text-center">
+                                {% if item.stock_qty <= 0 %}
+                                <span class="text-[9px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-full">نفد تماماً ❌</span>
+                                {% else %}
+                                <span class="text-[9px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full">كمية منخفضة ⚠️</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="p-6 text-center text-emerald-400 font-bold">
+                                ✓ كافة الأصناف والمواد الخام متوفرة بكميات كافية ولا توجد نواقص حرجة!
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
+
     </div>
 
 </div>
-{% endblock %}
 
-{% block scripts %}
+<!-- CHARTS INITIALIZATION SCRIPT -->
 <script>
-    // Weekly Delivered Chart
-    const ctx = document.getElementById('weeklyChart').getContext('2d');
-    const chartDays = {{ stats.chart_days|tojson }};
-    const chartDelivered = {{ stats.chart_delivered|tojson }};
-    const chartRevenue = {{ stats.chart_revenue|tojson }};
+document.addEventListener("DOMContentLoaded", function() {
+    // 1. Hourly Sales Chart
+    var hourlyCtx = document.getElementById('hourlySalesChart');
+    if (hourlyCtx && typeof Chart !== 'undefined') {
+        var hoursLabels = [{% for h in hourly_sales %}"{{ h.hour }}:00",{% endfor %}];
+        var hoursData = [{% for h in hourly_sales %}{{ (h.total_lbp or 0) / 1000 }},{% endfor %}];
+        
+        if (hoursLabels.length === 0) {
+            hoursLabels = ["12:00", "14:00", "16:00", "18:00", "20:00", "22:00"];
+            hoursData = [0, 0, 0, 0, 0, 0];
+        }
 
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: chartDays,
-            datasets: [
-                {
-                    label: 'عدد الطلبات المسلمة',
-                    data: chartDelivered,
-                    backgroundColor: 'rgba(37, 99, 235, 0.85)',
-                    borderRadius: 8,
-                    yAxisID: 'y'
-                },
-                {
-                    label: 'إيراد التوصيل ({{ currency }})',
-                    data: chartRevenue,
-                    type: 'line',
-                    borderColor: 'rgba(16, 185, 129, 1)',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    fill: true,
-                    tension: 0.3,
-                    yAxisID: 'y1'
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false,
+        new Chart(hourlyCtx, {
+            type: 'bar',
+            data: {
+                labels: hoursLabels,
+                datasets: [{
+                    label: 'المبيعات (بآلاف ل.ل)',
+                    data: hoursData,
+                    backgroundColor: 'rgba(99, 102, 241, 0.7)',
+                    borderColor: 'rgb(99, 102, 241)',
+                    borderWidth: 1.5,
+                    borderRadius: 8
+                }]
             },
-            scales: {
-                x: {
-                    grid: { display: false }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
                 },
-                y: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    title: { display: true, text: 'عدد الطلبات' },
-                    grid: { color: '#f1f5f9' }
-                },
-                y1: {
-                    type: 'linear',
-                    display: true,
-                    position: 'left',
-                    grid: { drawOnChartArea: false },
-                    title: { display: true, text: 'الإيراد' }
+                scales: {
+                    x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8' } },
+                    y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8' } }
                 }
             }
+        });
+    }
+
+    // 2. Category Distribution Doughnut Chart
+    var catCtx = document.getElementById('categorySalesChart');
+    if (catCtx && typeof Chart !== 'undefined') {
+        var catLabels = [{% for c in category_sales %}"{{ c.category_name }}",{% endfor %}];
+        var catData = [{% for c in category_sales %}{{ c.total_lbp or 0 }},{% endfor %}];
+
+        if (catLabels.length === 0) {
+            catLabels = ["قهوة ومشروبات", "ألعاب وكمبيوتر", "سناكس"];
+            catData = [1, 1, 1];
         }
-    });
+
+        new Chart(catCtx, {
+            type: 'doughnut',
+            data: {
+                labels: catLabels,
+                datasets: [{
+                    data: catData,
+                    backgroundColor: [
+                        '#f59e0b', '#8b5cf6', '#06b6d4', '#10b981', '#f43f5e', '#6366f1'
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#0f172a'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#cbd5e1', font: { family: 'Cairo', size: 10 } }
+                    }
+                }
+            }
+        });
+    }
+});
 </script>
 {% endblock %}

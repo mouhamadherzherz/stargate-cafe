@@ -118,6 +118,7 @@
 
             <!-- Actual Counted Cash Input (الكاش الفعلي في اليد) -->
             <form id="closeShiftForm" method="POST" action="{{ url_for('employee_close_shift') }}" onsubmit="return onShiftFormSubmit(event)" class="space-y-4 no-print">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 
                 <div class="bg-slate-950 p-4 rounded-2xl border-2 border-amber-500/50 space-y-2 relative focus-within:border-amber-400 transition">
                     <div class="flex items-center justify-between">
@@ -147,6 +148,14 @@
 
                     <!-- Live Comparison Badge (نتيجة المقارنة الفورية) -->
                     <div id="diffBadge" class="hidden text-xs font-mono font-bold p-3 rounded-xl text-center transition-all duration-300 shadow-inner"></div>
+
+                    <!-- Difference Note Reason (مطلوب عند وجود عجز أو زيادة) -->
+                    <div id="diffReasonBox" class="hidden space-y-1.5 pt-2">
+                        <label class="block text-[11px] font-bold text-rose-300">
+                            📝 سبب الفارق المالي (العجز / الزيادة) في الصندوق: *
+                        </label>
+                        <input type="text" name="difference_note" id="diffReasonInput" placeholder="اكتب سبب النقص أو الزيادة بالدرج بالتفصيل..." class="w-full bg-slate-900 border border-rose-500/50 text-white text-xs px-3 py-2 rounded-xl outline-none focus:border-rose-400">
+                    </div>
                 </div>
 
                 <!-- Safe Transfer Option (إيداع بالكاش في الخزنة الخاصة) -->
@@ -291,20 +300,28 @@
             // Print slip preview
             if (printActual) printActual.innerText = val.toLocaleString() + ' ل.ل';
 
+            const diffBox = document.getElementById('diffReasonBox');
+            const diffInp = document.getElementById('diffReasonInput');
             if (Math.abs(diff) < 1) {
                 badge.className = 'text-xs font-mono font-bold p-3 rounded-xl text-center bg-emerald-950 text-emerald-400 border border-emerald-800/80 shadow-md';
                 badge.innerHTML = '<span class="text-sm">✓</span> الصندوق مطابق 100% دون أي فارق (0 ل.ل)';
                 badge.classList.remove('hidden');
+                if (diffBox) diffBox.classList.add('hidden');
+                if (diffInp) diffInp.required = false;
                 if (printDiff) printDiff.innerText = 'مطابق 100%';
             } else if (diff > 0) {
                 badge.className = 'text-xs font-mono font-bold p-3 rounded-xl text-center bg-sky-950 text-sky-300 border border-sky-800/80 shadow-md';
                 badge.innerHTML = `<span class="text-sm">ℹ️</span> زيادة نقدية في الصندوق: +${diff.toLocaleString()} ل.ل (فائض في الدرج)`;
                 badge.classList.remove('hidden');
+                if (diffBox) diffBox.classList.remove('hidden');
+                if (diffInp) diffInp.required = true;
                 if (printDiff) printDiff.innerText = '+' + diff.toLocaleString() + ' ل.ل (زيادة)';
             } else {
                 badge.className = 'text-xs font-mono font-bold p-3 rounded-xl text-center bg-rose-950 text-rose-300 border border-rose-800/80 shadow-md';
                 badge.innerHTML = `<span class="text-sm">⚠️</span> عجز نقدي في الصندوق: -${Math.abs(diff).toLocaleString()} ل.ل (نقص عن رصيد النظام)`;
                 badge.classList.remove('hidden');
+                if (diffBox) diffBox.classList.remove('hidden');
+                if (diffInp) diffInp.required = true;
                 if (printDiff) printDiff.innerText = '-' + Math.abs(diff).toLocaleString() + ' ل.ل (عجز)';
             }
         }

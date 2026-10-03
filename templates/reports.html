@@ -24,13 +24,18 @@
         </div>
 
         <div class="flex items-center gap-2 flex-wrap">
+            <button type="button" onclick="shareViaWhatsApp()"
+               class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 shadow-lg shadow-emerald-500/20 active:scale-95">
+                <i class="fa-brands fa-whatsapp text-sm"></i>
+                <span>مشاركة عبر واتساب</span>
+            </button>
             <a href="{{ url_for('print_reports_page', date=target_date, start_date=start_date, end_date=end_date) }}" target="_blank"
                class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 shadow-lg shadow-amber-500/20">
                 <i class="fa-solid fa-print"></i>
                 <span>طباعة التقرير (A4)</span>
             </a>
             <a href="{{ url_for('export_reports_csv', date=target_date, start_date=start_date, end_date=end_date) }}"
-               class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 shadow-sm">
+               class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 shadow-sm">
                 <i class="fa-solid fa-file-excel"></i>
                 <span>تصدير Excel / CSV</span>
             </a>
@@ -39,23 +44,31 @@
 
     <!-- Date Selection & Filter Toolbar -->
     <div class="bg-slate-900/90 border border-slate-800 p-4 rounded-3xl shadow-lg flex flex-col lg:flex-row items-center justify-between gap-4">
-        <!-- Quick Switch Buttons -->
+        <!-- Quick Switch Buttons: Daily, Weekly, Monthly, Yearly -->
         <div class="flex items-center gap-2 flex-wrap w-full lg:w-auto">
-            <span class="text-xs font-bold text-slate-400">📅 تنقل سريع:</span>
+            <span class="text-xs font-bold text-slate-400">📅 الفترات:</span>
             <a href="{{ url_for('reports_page', date=today_str) }}"
-               class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition {{ 'bg-indigo-600 text-white shadow-md' if target_date == today_str and not is_range else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
+               class="px-3 py-1.5 rounded-xl text-xs font-bold transition {{ 'bg-indigo-600 text-white shadow-md' if target_date == today_str and not is_range and not period else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
                 اليوم
             </a>
             <a href="{{ url_for('reports_page', date=yesterday_str) }}"
-               class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition {{ 'bg-indigo-600 text-white shadow-md' if target_date == yesterday_str and not is_range else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
+               class="px-3 py-1.5 rounded-xl text-xs font-bold transition {{ 'bg-indigo-600 text-white shadow-md' if target_date == yesterday_str and not is_range else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
                 أمس
             </a>
-            <a href="{{ url_for('reports_page', date=before_yesterday_str) }}"
-               class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition {{ 'bg-indigo-600 text-white shadow-md' if target_date == before_yesterday_str and not is_range else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
-                أول أمس
+            <a href="{{ url_for('reports_page', period='week') }}"
+               class="px-3 py-1.5 rounded-xl text-xs font-bold transition {{ 'bg-indigo-600 text-white shadow-md' if period == 'week' else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
+                هذا الأسبوع
+            </a>
+            <a href="{{ url_for('reports_page', period='month') }}"
+               class="px-3 py-1.5 rounded-xl text-xs font-bold transition {{ 'bg-indigo-600 text-white shadow-md' if period == 'month' else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
+                هذا الشهر
+            </a>
+            <a href="{{ url_for('reports_page', period='year') }}"
+               class="px-3 py-1.5 rounded-xl text-xs font-bold transition {{ 'bg-indigo-600 text-white shadow-md' if period == 'year' else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
+                هذه السنة
             </a>
             <a href="{{ url_for('reports_page', date='all') }}"
-               class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition {{ 'bg-indigo-600 text-white shadow-md' if target_date == 'all' else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
+               class="px-3 py-1.5 rounded-xl text-xs font-bold transition {{ 'bg-indigo-600 text-white shadow-md' if target_date == 'all' else 'bg-slate-800 text-slate-300 hover:bg-slate-700' }}">
                 كل التاريخ
             </a>
         </div>
@@ -130,6 +143,48 @@
 
     </div>
 
+    <!-- P&L MASTER STATEMENT (الأرباح والخسائر الشاملة) -->
+    {% if pnl %}
+    <div class="bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 border-2 border-purple-500/50 rounded-3xl p-5 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="space-y-1 text-center md:text-right">
+            <span class="text-xs font-black text-purple-300 bg-purple-500/20 px-3 py-1 rounded-full border border-purple-400/30">
+                📈 بيان الأرباح والخسائر وصافي العائد (P&L Income Statement)
+            </span>
+            <h3 class="text-xl font-black text-white pt-1">
+                صافي الربح المحاسبي للفترة: 
+                <span class="{% if pnl.net_profit_lbp >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %} font-mono">
+                    {{ pnl.net_profit_lbp|format_currency }} ل.ل (${{ pnl.net_profit_usd|default(0)|format_currency }})
+                </span>
+            </h3>
+            <p class="text-xs text-slate-400">
+                الإيرادات: {{ pnl.total_revenue_lbp|format_currency }} ل.ل • تكلفة المواد (COGS): {{ pnl.cost_of_goods_lbp|format_currency }} ل.ل • المصاريف: {{ pnl.expenses_lbp|format_currency }} ل.ل
+                {% if pnl.coffee_waste_loss_lbp and pnl.coffee_waste_loss_lbp > 0 %}
+                • <span class="text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/30">⚠️ خسارة تلف القهوة: -{{ pnl.coffee_waste_loss_lbp|format_currency }} ل.ل ({{ pnl.coffee_waste_cups }} فنجان)</span>
+                {% endif %}
+            </p>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 bg-slate-950/80 p-3 rounded-2xl border border-purple-500/30 text-center shrink-0">
+            <div class="px-3">
+                <span class="text-[10px] text-slate-400 block">إجمالي الدخل</span>
+                <strong class="text-xs font-mono text-white">{{ pnl.total_revenue_lbp|format_currency }}</strong>
+            </div>
+            <div class="px-3 border-x border-slate-800">
+                <span class="text-[10px] text-slate-400 block">المصاريف</span>
+                <strong class="text-xs font-mono text-rose-400">-{{ pnl.expenses_lbp|format_currency }}</strong>
+            </div>
+            <div class="px-3">
+                <span class="text-[10px] text-slate-400 block">هامش الربح</span>
+                <strong class="text-xs font-mono text-emerald-400 font-black">
+                    {% if pnl.total_revenue_lbp > 0 %}
+                    {{ ((pnl.net_profit_lbp / pnl.total_revenue_lbp) * 100)|round(1) }}%
+                    {% else %}0%{% endif %}
+                </strong>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- 7 MASTER FINANCIAL KPI CARDS -->
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
         
@@ -149,14 +204,14 @@
         <!-- 2. Pure Cash Sales -->
         <div class="bg-slate-900 border border-emerald-500/40 p-4 rounded-3xl shadow-sm flex flex-col justify-between">
             <div class="text-[11px] font-bold text-emerald-400 flex items-center justify-between">
-                <span>💵 مبيعات كاش</span>
+                <span>💵 كاش المبيعات (الوارد)</span>
                 <span class="text-base">🟢</span>
             </div>
             <div class="my-2">
                 <div class="text-lg font-black font-mono text-emerald-300">{{ (summary.grand_totals.cash_sales_lbp or 0)|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span></div>
                 <div class="text-[10px] font-mono text-emerald-400 font-bold">≈ {{ (summary.grand_totals.cash_sales_usd or 0)|to_usd }}</div>
             </div>
-            <div class="text-[9px] text-slate-500 border-t border-slate-800 pt-1.5">مقبوضة نقداً</div>
+            <div class="text-[9px] text-slate-500 border-t border-slate-800 pt-1.5">إجمالي المقبوض نقداً</div>
         </div>
 
         <!-- 3. Debt Sales -->
@@ -188,42 +243,182 @@
         <!-- 5. Expenses -->
         <div class="bg-slate-900 border border-rose-500/30 p-4 rounded-3xl shadow-sm flex flex-col justify-between">
             <div class="text-[11px] font-bold text-rose-400 flex items-center justify-between">
-                <span>💸 المصاريف</span>
+                <span>💸 المصاريف المسددة</span>
                 <span class="text-base">🧾</span>
             </div>
             <div class="my-2">
                 <div class="text-lg font-black font-mono text-rose-300">{{ (summary.expenses.total_lbp or 0)|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span></div>
                 <div class="text-[10px] font-mono text-rose-400 font-bold">≈ {{ (summary.expenses.total_usd or 0)|to_usd }}</div>
             </div>
-            <div class="text-[9px] text-slate-500 border-t border-slate-800 pt-1.5">{{ summary.expenses.expenses_count or 0 }} بند مصروف</div>
+            <div class="text-[9px] text-slate-500 border-t border-slate-800 pt-1.5">{{ summary.expenses.expenses_count or 0 }} بند مصروف (خُصمت من الكاش)</div>
         </div>
 
         <!-- 6. Transferred to Safe -->
         <div class="bg-slate-900 border border-amber-500/40 p-4 rounded-3xl shadow-sm flex flex-col justify-between">
             <div class="text-[11px] font-bold text-amber-400 flex items-center justify-between">
-                <span>🏦 محول للخزنة</span>
+                <span>🏦 محول للخزنة الخاصة</span>
                 <span class="text-base">🔒</span>
             </div>
             <div class="my-2">
                 <div class="text-lg font-black font-mono text-amber-300">{{ (safe_period.deposit_lbp or 0)|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span></div>
                 <div class="text-[10px] font-mono text-amber-400 font-bold">≈ {{ (safe_period.deposit_usd or 0)|to_usd }}</div>
             </div>
-            <div class="text-[9px] text-slate-500 border-t border-slate-800 pt-1.5">{{ safe_period.transfers_count or 0 }} عملية تحويل</div>
+            <div class="text-[9px] text-amber-300/80 border-t border-slate-800 pt-1.5 font-bold">خُصمت من كاش الدرج</div>
         </div>
 
         <!-- 7. Remaining Drawer Net Cash -->
         <div class="bg-gradient-to-tr from-slate-950 to-emerald-950 border-2 border-emerald-500 p-4 rounded-3xl shadow-lg flex flex-col justify-between">
             <div class="text-[11px] font-bold text-emerald-300 flex items-center justify-between">
-                <span>💰 صافي كاش الدرج</span>
+                <span>💰 المتبقي في الكاش الآن</span>
                 <span class="text-base">💼</span>
             </div>
             <div class="my-2">
                 <div class="text-xl font-black font-mono text-emerald-400">{{ (drawer_status.total_untransferred_lbp or 0)|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span></div>
                 <div class="text-[10px] font-mono text-emerald-300 font-bold">≈ {{ (drawer_status.total_untransferred_usd or 0)|to_usd }}</div>
             </div>
-            <div class="text-[9px] text-emerald-200/80 border-t border-emerald-800/80 pt-1.5 font-bold">متاح في الصندوق الآن</div>
+            <div class="text-[9px] text-emerald-200/80 border-t border-emerald-800/80 pt-1.5 font-bold">
+                {% if (drawer_status.total_untransferred_lbp or 0) > 0 %}
+                متاح في الصندوق حالياً
+                {% else %}
+                الكاش مصفّر ومرحّل بالكامل 🔒
+                {% endif %}
+            </div>
         </div>
     </div>
+
+    <!-- ========================================================================= -->
+    <!-- COFFEE INTELLIGENCE & WASTE LOSS SECTION (ذكاء القهوة وإحصائيات التلف) -->
+    <!-- ========================================================================= -->
+    {% if coffee_period_stats %}
+    <div class="bg-gradient-to-br from-slate-900 via-amber-950/20 to-slate-900 border-2 border-amber-500/40 rounded-3xl p-6 shadow-2xl space-y-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-amber-500/20">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-2xl shadow-lg shadow-amber-500/30 text-white">
+                    ☕
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-lg font-black text-white">ذكاء القهوة، التلف، واقتصاديات الفنجان</h2>
+                        <span class="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full">
+                            تحليل محاسبي دقيق للكيلو والفنجان
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400">إحصائيات مبيعات القهوة، تكلفة الفنجان، خسائر التلف المحسومة من الأرباح، وصافي العائد للفترة المحددة</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <a href="{{ url_for('coffee_hub_page') }}" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 text-xs font-bold transition">
+                    <span>إدارة حبوب القهوة (Coffee Hub)</span>
+                    <span>←</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- 5 KPI Cards for Coffee Subsystem -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            <!-- 1. Sold Cups -->
+            <div class="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl">
+                <span class="text-[11px] font-bold text-amber-400 block mb-1">☕ فناجين القهوة المباعة</span>
+                <div class="text-xl font-black font-mono text-white">{{ coffee_period_stats.sold_cups }} <span class="text-xs font-normal text-slate-400">فنجان</span></div>
+                <div class="text-[10px] text-slate-400 mt-1">إيراد المبيع: <strong class="text-amber-300 font-mono">{{ coffee_period_stats.coffee_revenue_lbp|format_currency }} ل.ل</strong></div>
+            </div>
+
+            <!-- 2. Damaged Cups & Waste Rate -->
+            <div class="bg-slate-950/80 border {% if coffee_period_stats.damaged_cups > 0 %}border-rose-500/40{% else %}border-slate-800{% endif %} p-4 rounded-2xl">
+                <span class="text-[11px] font-bold {% if coffee_period_stats.damaged_cups > 0 %}text-rose-400{% else %}text-slate-400{% endif %} block mb-1">
+                    ⚠️ فناجين تالفة / مسكوبة
+                </span>
+                <div class="text-xl font-black font-mono {% if coffee_period_stats.damaged_cups > 0 %}text-rose-400{% else %}text-slate-300{% endif %}">
+                    {{ coffee_period_stats.damaged_cups }} <span class="text-xs font-normal text-slate-400">فنجان</span>
+                </div>
+                <div class="text-[10px] text-slate-400 mt-1">معدل الهدر: <strong class="{% if coffee_period_stats.waste_rate_pct > 5 %}text-rose-400{% else %}text-slate-300{% endif %}">{{ coffee_period_stats.waste_rate_pct }}%</strong> من الإنتاج</div>
+            </div>
+
+            <!-- 3. Damage Monetary Loss -->
+            <div class="bg-slate-950/80 border {% if coffee_period_stats.damage_loss_lbp > 0 %}border-rose-500/60 bg-rose-950/10{% else %}border-slate-800{% endif %} p-4 rounded-2xl">
+                <span class="text-[11px] font-bold text-rose-400 block mb-1">📉 خسارة التلف الفعلية</span>
+                <div class="text-xl font-black font-mono text-rose-400">
+                    -{{ coffee_period_stats.damage_loss_lbp|format_currency }} <span class="text-xs font-normal text-rose-300/70">ل.ل</span>
+                </div>
+                <div class="text-[10px] text-rose-300/80 mt-1 font-mono font-bold">
+                    ≈ -{{ coffee_period_stats.damage_loss_usd|to_usd }} (خُصمت من صافي الربح)
+                </div>
+            </div>
+
+            <!-- 4. Unit Economics Per Cup -->
+            <div class="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl">
+                <span class="text-[11px] font-bold text-emerald-400 block mb-1">💰 ربح الفنجان الصافي</span>
+                <div class="text-xl font-black font-mono text-emerald-400">
+                    +{{ coffee_period_stats.profit_per_cup_lbp|format_currency }} <span class="text-xs font-normal text-slate-400">ل.ل</span>
+                </div>
+                <div class="text-[10px] text-slate-400 mt-1">
+                    تكلفة: <span class="text-slate-300 font-mono">{{ coffee_period_stats.benchmark_cost_per_cup_lbp|format_currency }}</span> | هامش: <strong class="text-emerald-400">{{ coffee_period_stats.cup_profit_margin_pct }}%</strong>
+                </div>
+            </div>
+
+            <!-- 5. Net Coffee Profit -->
+            <div class="bg-gradient-to-tr from-slate-950 to-emerald-950/50 border border-emerald-500/50 p-4 rounded-2xl">
+                <span class="text-[11px] font-bold text-emerald-300 block mb-1">🌟 صافي أرباح القهوة</span>
+                <div class="text-xl font-black font-mono text-emerald-400">
+                    {{ coffee_period_stats.net_coffee_profit_lbp|format_currency }} <span class="text-xs font-normal text-slate-400">ل.ل</span>
+                </div>
+                <div class="text-[10px] text-emerald-300 font-mono font-bold mt-1">
+                    ≈ {{ coffee_period_stats.net_coffee_profit_usd|to_usd }} (بعد التكلفة والتلف)
+                </div>
+            </div>
+        </div>
+
+        <!-- Waste Logs Table / Status -->
+        {% if coffee_period_stats.waste_logs %}
+        <div class="bg-slate-950/90 border border-rose-500/30 rounded-2xl overflow-hidden shadow-inner">
+            <div class="px-4 py-3 bg-rose-950/20 border-b border-rose-500/30 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-rose-400">📋</span>
+                    <h3 class="text-xs font-black text-rose-200">سجل حوادث التلف والضياع خلال الفترة ({{ coffee_period_stats.waste_logs|length }} عملية مسجلة)</h3>
+                </div>
+                <span class="text-[11px] font-bold text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-lg border border-rose-500/40">
+                    إجمالي الخسارة: {{ coffee_period_stats.damage_loss_lbp|format_currency }} ل.ل
+                </span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-right text-xs">
+                    <thead class="bg-slate-900/80 text-slate-400 font-bold border-b border-slate-800">
+                        <tr>
+                            <th class="py-2.5 px-4">التاريخ والوقت</th>
+                            <th class="py-2.5 px-4">دفعة الكيلو</th>
+                            <th class="py-2.5 px-4">عدد الفناجين التالفة</th>
+                            <th class="py-2.5 px-4">السبب / التوضيح</th>
+                            <th class="py-2.5 px-4">تكلفة الخسارة (ل.ل)</th>
+                            <th class="py-2.5 px-4">الموظف المسجل</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 text-slate-200">
+                        {% for w in coffee_period_stats.waste_logs %}
+                        <tr class="hover:bg-rose-500/5 transition">
+                            <td class="py-2.5 px-4 font-mono text-[11px] text-slate-400">{{ w.created_at }}</td>
+                            <td class="py-2.5 px-4 font-mono font-bold text-amber-400">{{ w.batch_code }}</td>
+                            <td class="py-2.5 px-4 font-mono font-bold text-rose-400">{{ w.qty or w.cups_wasted or 1 }} فنجان</td>
+                            <td class="py-2.5 px-4 text-slate-300">{{ w.reason or 'تلف غير محدد' }}</td>
+                            <td class="py-2.5 px-4 font-mono font-bold text-rose-300">-{{ w.loss_cost_lbp|format_currency }} ل.ل</td>
+                            <td class="py-2.5 px-4 text-slate-400">{{ w.employee_name or 'إدارة' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="bg-slate-950/60 border border-emerald-500/30 rounded-2xl p-4 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2">
+                <span class="text-base">✅</span>
+                <span class="text-emerald-300 font-bold">لا يوجد أي تلف أو هدر مسجل لفناجين القهوة خلال هذه الفترة (كفاءة تشغيلية ممتازة).</span>
+            </div>
+            <span class="text-[10px] text-slate-400 font-mono">صفر خسائر هدر</span>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
 
     <!-- ========================================================================= -->
     <!-- DETAILED PRODUCTS & ITEMS SOLD BREAKDOWN (ما المبيع وما المنتجات) -->
@@ -237,12 +432,18 @@
                     <p class="text-xs text-slate-400">بيان تفصيلي لكل المنتجات والأصناف مع الكميات المباعة، أسعارها، وإجمالي الإيراد</p>
                 </div>
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 flex-wrap">
                 <span class="text-xs bg-slate-800 text-slate-300 px-3 py-1.5 rounded-xl font-bold border border-slate-700">
-                    عدد الأصناف: <strong class="text-white">{{ products_report.unique_products_count }}</strong>
+                    الأصناف: <strong class="text-white">{{ products_report.unique_products_count }}</strong>
                 </span>
                 <span class="text-xs bg-indigo-950 text-indigo-300 px-3 py-1.5 rounded-xl font-bold border border-indigo-700/50">
-                    إجمالي القطع المباعة: <strong class="text-white">{{ products_report.grand_total_qty }}</strong>
+                    القطع: <strong class="text-white">{{ products_report.grand_total_qty }}</strong>
+                </span>
+                <span class="text-xs bg-purple-950 text-purple-300 px-3 py-1.5 rounded-xl font-bold border border-purple-700/50">
+                    مبيعات الجملة: <strong class="text-white">{{ (products_report.grand_total_wholesale_lbp or 0)|format_currency }} ل.ل</strong>
+                </span>
+                <span class="text-xs bg-emerald-950 text-emerald-300 px-3 py-1.5 rounded-xl font-bold border border-emerald-700/50">
+                    مجمل أرباح الأصناف: <strong class="text-white">{{ (products_report.grand_total_profit_lbp or 0)|format_currency }} ل.ل ({{ products_report.overall_margin_pct }}%)</strong>
                 </span>
             </div>
         </div>
@@ -269,18 +470,19 @@
                     <tr class="bg-slate-950 text-slate-400 border-b border-slate-800 uppercase font-bold text-[11px]">
                         <th class="p-3.5">#</th>
                         <th class="p-3.5">اسم الصنف والمنتج</th>
-                        <th class="p-3.5">القسم والتصنيف</th>
-                        <th class="p-3.5 text-center">الكمية المباعة</th>
+                        <th class="p-3.5">القسم</th>
+                        <th class="p-3.5 text-center">الكمية الإجمالية</th>
+                        <th class="p-3.5 text-center">تجزئة / جملة 📦</th>
                         <th class="p-3.5">سعر الوحدة</th>
-                        <th class="p-3.5">إجمالي المبيعات (ل.ل)</th>
-                        <th class="p-3.5">المقابل ($)</th>
-                        <th class="p-3.5">نسبة المساهمة</th>
+                        <th class="p-3.5">إجمالي المبيعات</th>
+                        <th class="p-3.5">إجمالي التكلفة</th>
+                        <th class="p-3.5">صافي الربح</th>
+                        <th class="p-3.5">هامش الربح %</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-800/60">
                     {% for p in products_report.products_list %}
-                    <tr data-cat="{{ p.category_name }}" class="hover:bg-slate-800/50 transition">
-                    <tr class="hover:bg-slate-800/40 transition">
+                    <tr data-cat="{{ p.category_name }}" class="hover:bg-slate-800/40 transition">
                         <td class="p-3.5 text-slate-500 font-mono">{{ loop.index }}</td>
                         <td class="p-3.5 font-bold text-white flex items-center gap-2">
                             {% if p.icon and (p.icon.startswith('/') or p.icon.startswith('http') or p.icon.startswith('data:')) %}
@@ -300,6 +502,12 @@
                                 {{ p.total_qty }}
                             </span>
                         </td>
+                        <td class="p-3.5 text-center text-[10px] font-mono">
+                            <span class="text-amber-400 font-bold">{{ p.retail_qty or 0 }} تجزئة</span>
+                            {% if p.wholesale_qty and p.wholesale_qty > 0 %}
+                            <span class="text-purple-300 font-bold block bg-purple-950/80 px-1 rounded border border-purple-800/60 mt-0.5">{{ p.wholesale_qty }} جملة 📦</span>
+                            {% endif %}
+                        </td>
                         <td class="p-3.5 text-slate-300 font-mono">
                             {{ p.avg_price_lbp|format_currency }} ل.ل
                             <span class="text-[10px] text-slate-500 block">${{ p.avg_price_usd }}</span>
@@ -307,15 +515,18 @@
                         <td class="p-3.5 font-mono font-black text-amber-400 text-sm">
                             {{ p.total_lbp|format_currency }} ل.ل
                         </td>
-                        <td class="p-3.5 font-mono font-bold text-emerald-400">
-                            ${{ "{:,.2f}".format(p.total_usd or 0) }}
+                        <td class="p-3.5 font-mono text-slate-400">
+                            {{ (p.total_cost_lbp or 0)|format_currency }} ل.ل
+                        </td>
+                        <td class="p-3.5 font-mono font-black {% if (p.net_profit_lbp or 0) >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                            {{ (p.net_profit_lbp or 0)|format_currency }} ل.ل
                         </td>
                         <td class="p-3.5">
-                            <div class="flex items-center gap-2">
-                                <div class="w-16 bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
-                                    <div class="bg-gradient-to-r from-amber-500 to-indigo-500 h-full rounded-full" style="width: {{ p.pct }}%;"></div>
+                            <div class="flex items-center gap-1.5">
+                                <div class="w-12 bg-slate-800 rounded-full h-1.5 overflow-hidden border border-slate-700">
+                                    <div class="bg-gradient-to-r from-amber-500 to-emerald-500 h-full rounded-full" style="width: {{ [p.margin_pct, 100]|min }}%;"></div>
                                 </div>
-                                <span class="font-mono text-[11px] font-bold text-slate-300">{{ p.pct }}%</span>
+                                <span class="font-mono text-[11px] font-bold text-emerald-400">{{ p.margin_pct }}%</span>
                             </div>
                         </td>
                     </tr>
@@ -323,12 +534,14 @@
                 </tbody>
                 <tfoot>
                     <tr class="bg-slate-950 border-t-2 border-slate-700 font-black text-white">
-                        <td colspan="3" class="p-3.5 text-amber-300 text-sm">المجموع الإجمالي لكافة المبيعات:</td>
-                        <td class="p-3.5 text-center text-indigo-300 font-mono text-base">{{ products_report.grand_total_qty }} قطة / كوب</td>
+                        <td colspan="3" class="p-3.5 text-amber-300 text-sm">المجموع الإجمالي:</td>
+                        <td class="p-3.5 text-center text-indigo-300 font-mono text-base">{{ products_report.grand_total_qty }}</td>
+                        <td></td>
                         <td></td>
                         <td class="p-3.5 text-amber-400 font-mono text-base">{{ products_report.grand_total_lbp|format_currency }} ل.ل</td>
-                        <td class="p-3.5 text-emerald-400 font-mono text-base">${{ "{:,.2f}".format(products_report.grand_total_lbp / exchange_rate) }}</td>
-                        <td class="p-3.5 text-slate-400 font-mono">100%</td>
+                        <td class="p-3.5 text-slate-400 font-mono text-sm">{{ (products_report.grand_total_cost_lbp or 0)|format_currency }} ل.ل</td>
+                        <td class="p-3.5 text-emerald-400 font-mono text-base">{{ (products_report.grand_total_profit_lbp or 0)|format_currency }} ل.ل</td>
+                        <td class="p-3.5 text-emerald-400 font-mono">{{ products_report.overall_margin_pct }}%</td>
                     </tr>
                 </tfoot>
             </table>
@@ -422,7 +635,7 @@
                                 <td class="p-2.5 text-slate-400 font-mono">{{ e.created_at[11:16] if e.created_at and e.created_at|length > 15 else e.created_at }}</td>
                                 <td class="p-2.5 font-bold text-white">{{ e.title or e.description }}</td>
                                 <td class="p-2.5 font-mono font-bold text-rose-400">{{ e.amount_lbp|format_currency }} ل.ل</td>
-                                <td class="p-2.5 text-slate-400 text-[10px]">{{ e.spent_by or 'المدير' }}</td>
+                                <td class="p-2.5 text-slate-400 text-[10px]">{{ e.employee_name or e.spent_by or 'كاشير' }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -605,5 +818,130 @@
         </div>
     </div>
     {% endif %}
+    <!-- ========================================================================= -->
+    <!-- 🔒 SHIFT CLOSINGS AUDIT & OWNER/MANAGER APPROVAL FLOW -->
+    <!-- ========================================================================= -->
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2.5">
+                <span class="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg font-black border border-amber-500/30">🔒</span>
+                <div>
+                    <h3 class="font-black text-sm text-white">سجل إغلاق ومطابقة الورديات واعتماد الصندوق (Shift Approvals)</h3>
+                    <p class="text-[10px] text-slate-400">تدقيق إغلاق الصندوق اليومي لكل كاشير مع اعتماد المالك/المدير الرسمي ومراقبة الفروقات</p>
+                </div>
+            </div>
+            <span class="text-xs font-mono text-amber-300 font-bold bg-amber-950 px-2.5 py-1 rounded-xl border border-amber-800">
+                {{ shift_closings|length if shift_closings else 0 }} وردية مسجلة
+            </span>
+        </div>
 
+        {% if shift_closings %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-right text-xs">
+                <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+                    <tr>
+                        <th class="p-3"># الوردية</th>
+                        <th class="p-3">الموظف</th>
+                        <th class="p-3">تاريخ ووقت الإغلاق</th>
+                        <th class="p-3 font-mono">العهدة الافتتاحية</th>
+                        <th class="p-3 font-mono">الكاش المتوقع</th>
+                        <th class="p-3 font-mono">الكاش الفعلي المعدود</th>
+                        <th class="p-3 font-mono">الفارق (عجز/زيادة)</th>
+                        <th class="p-3">مرحل للخزنة</th>
+                        <th class="p-3">حالة الاعتماد</th>
+                        <th class="p-3 text-center">إجراء الإدارة</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/60 font-mono">
+                    {% for sc in shift_closings %}
+                    <tr class="hover:bg-slate-850/50 transition">
+                        <td class="p-3 font-bold text-amber-400">#{{ sc.id }}</td>
+                        <td class="p-3 font-sans font-bold text-white flex items-center gap-1.5">
+                            <span>👤</span>
+                            <span>{{ sc.employee_name }}</span>
+                        </td>
+                        <td class="p-3 text-slate-400 text-[11px]">{{ sc.closed_at or sc.created_at }}</td>
+                        <td class="p-3 text-slate-300">{{ (sc.opening_float_lbp or 0)|format_currency }} ل.ل</td>
+                        <td class="p-3 text-emerald-400 font-bold">{{ (sc.expected_cash_lbp or 0)|format_currency }} ل.ل</td>
+                        <td class="p-3 text-white font-bold">{{ (sc.actual_cash_lbp or 0)|format_currency }} ل.ل</td>
+                        <td class="p-3">
+                            {% if sc.difference_lbp == 0 %}
+                            <span class="text-emerald-400 font-bold font-sans">✓ مطابق 100%</span>
+                            {% elif sc.difference_lbp > 0 %}
+                            <span class="text-cyan-400 font-bold">+{{ (sc.difference_lbp or 0)|format_currency }} ل.ل</span>
+                            {% else %}
+                            <span class="text-rose-400 font-bold">{{ (sc.difference_lbp or 0)|format_currency }} ل.ل</span>
+                            {% endif %}
+                            {% if sc.difference_note %}
+                            <span class="text-[10px] text-slate-400 block font-sans truncate max-w-xs">{{ sc.difference_note }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="p-3 text-amber-300 font-bold">
+                            {{ (sc.safe_transfers_lbp or 0)|format_currency }} ل.ل
+                        </td>
+                        <td class="p-3 font-sans">
+                            {% if sc.approval_status == 'approved' %}
+                            <span class="bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 w-max">
+                                ✓ معتمد من {{ sc.approved_by or 'المالك' }}
+                            </span>
+                            <span class="text-[9px] text-slate-500 font-mono block mt-0.5">{{ sc.approved_at }}</span>
+                            {% else %}
+                            <span class="bg-amber-950 text-amber-300 border border-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 w-max">
+                                ⏳ بانتظار الاعتماد
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="p-3 text-center">
+                            {% if sc.approval_status != 'approved' %}
+                            <form action="{{ url_for('approve_shift_route', shift_id=sc.id) }}" method="POST"
+                                  onsubmit="return confirm('تأكيد اعتماد إغلاق ومطابقة الوردية #{{ sc.id }}؟');">
+                                <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-3 py-1 rounded-xl transition shadow flex items-center gap-1 mx-auto active:scale-95">
+                                    <span>اعتماد الوردية</span>
+                                    <span>✓</span>
+                                </button>
+                            </form>
+                            {% else %}
+                            <span class="text-slate-600 text-xs">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="p-8 text-center text-slate-500 text-xs">
+            لا توجد إغلاقات ورديات مسجلة لهذه الفترة.
+        </div>
+        {% endif %}
+    </div>
+
+<script>
+function shareViaWhatsApp() {
+    const periodName = "{{ display_period }}";
+    const totalSalesLBP = "{{ (summary.grand_totals.total_production_lbp or summary.total_revenue_lbp or 0)|format_currency }} ل.ل";
+    const totalSalesUSD = "{{ (summary.grand_totals.total_production_usd or 0)|to_usd }}";
+    const wholesaleLBP = "{{ (products_report.grand_total_wholesale_lbp or 0)|format_currency }} ل.ل";
+    const netProfitLBP = "{{ (pnl.net_profit_lbp or summary.net_profit_lbp or 0)|format_currency }} ل.ل";
+    const marginPct = "{{ products_report.overall_margin_pct }}%";
+    const drawerCash = "{{ (drawer_status.total_untransferred_lbp or 0)|format_currency }} ل.ل";
+    const safeUSD = "${{ '{:,.2f}'.format(safe_period.safe_balance_usd or 0) }}";
+
+    const text = `📊 *تقرير أداء STARGATE ERP*
+📅 الفترة: ${periodName}
+────────────────
+💰 إجمالي المبيعات: ${totalSalesLBP} (${totalSalesUSD})
+📦 مبيعات الجملة: ${wholesaleLBP}
+📈 صافي الأرباح المحاسبية: ${netProfitLBP}
+💎 نسبة هامش الربح: ${marginPct}
+────────────────
+💵 كاش الدرج الجاهز للترحيل: ${drawerCash}
+🏦 رصيد الخزنة المركزية: ${safeUSD}
+────────────────
+✅ تقرير إداري معتمد`;
+
+    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+}
+</script>
 {% endblock %}
