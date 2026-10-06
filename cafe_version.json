@@ -1,9 +1,9 @@
 {
-    "version": "5.3.3",
-    "changelog": "v5.3.3: حرية كاملة في تحديد وتعديل الأسعار بالليرة والدولار بشكل مستقل دون إجبار أو تقريب قسري، وإتاحة إدخال أي رقم أو كسور بحرية تامة دون قيود للمخزون والكاشير.",
-    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.3.3/Stargate_Cafe_Update.zip",
+    "version": "5.5.0",
+    "changelog": "v5.5.0: إغلاق ثغرات التلاعب والسرقة (منع إلغاء الطاولات وحذف الأصناف إلا بموافقة المدير وتوثيق رقابي كامل)، تفعيل نظام الجرد الأعمى للصندوق عند تسكير الوردية، تسجيل الهدر والتوالف بخصم فوري من المخزون، نسخ احتياطي تلقائي متعدد الوجهات، وإبراز ساعات الذروة في التقارير.",
+    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.5.0/Stargate_Cafe_Update.zip",
     "company": "STARGATE EXPERTS",
     "channel": "cafe",
     "name": "Stargate Cafe & Gaming System",
-    "release_date": "2026-10-03"
+    "release_date": "2026-10-06"
 }
