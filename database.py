@@ -56,23 +56,9 @@ def get_db() -> sqlite3.Connection:
     return conn
 
 
-def create_backup_copy(backup_dir=None):
-    """Create an atomic snapshot copy of the database before critical operations."""
-    from datetime import datetime
-    try:
-        target_dir = backup_dir or os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'STARGATE_Backups')
-        os.makedirs(target_dir, exist_ok=True)
-        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        dest = os.path.join(target_dir, f'cafe_accounting_{ts}.db')
-        
-        source_conn = get_db()
-        dest_conn = sqlite3.connect(dest)
-        source_conn.backup(dest_conn)
-        dest_conn.close()
-        source_conn.close()
-        return dest
-    except Exception:
-        return None
+# ──────────────────────────────────────────────
+# Backup Helper (defined with full integrity & replication below)
+# ──────────────────────────────────────────────
 
 
 # ──────────────────────────────────────────────
@@ -742,6 +728,7 @@ def _run_migrations(cursor, conn):
         "ALTER TABLE coffee_bag_batches ADD COLUMN initial_cup_cost_usd REAL DEFAULT 0.0",
         "ALTER TABLE coffee_waste_logs ADD COLUMN unit_cost_lbp REAL DEFAULT 0.0",
         "ALTER TABLE coffee_waste_logs ADD COLUMN unit_cost_usd REAL DEFAULT 0.0",
+        "ALTER TABLE cafe_order_items ADD COLUMN coffee_batch_id INTEGER DEFAULT NULL",
     ]
     for sql in migrations:
         try:
@@ -998,12 +985,38 @@ def reset_operational_data():
     return True
 
 
-def create_backup_copy():
-    """Create a consistent sqlite backup and return (path, filename)."""
+def _prune_old_backups(directory: str, keep: int = 30):
+    """Keep the latest N backups in a directory and safely delete older ones."""
+    try:
+        if not os.path.isdir(directory):
+            return
+        files = [
+            os.path.join(directory, f) for f in os.listdir(directory)
+            if f.endswith('.db') and ('cafe_accounting' in f or 'backup' in f)
+        ]
+        if len(files) > keep:
+            files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+            for old_file in files[keep:]:
+                try:
+                    os.remove(old_file)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+def create_backup_copy(backup_dir=None):
+    """Create a consistent sqlite backup, verify integrity, replicate to safe locations, and return (path, filename)."""
     from datetime import datetime
+    import shutil
+
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     backup_filename = f"cafe_accounting_backup_{timestamp}.db"
-    backup_path = os.path.join(DB_DIR, backup_filename)
+    
+    # 1. Primary storage: data/backups
+    primary_dir = backup_dir or os.path.join(DB_DIR, 'backups')
+    os.makedirs(primary_dir, exist_ok=True)
+    backup_path = os.path.join(primary_dir, backup_filename)
 
     source_conn = get_db()
     dest_conn = sqlite3.connect(backup_path)
@@ -1012,14 +1025,34 @@ def create_backup_copy():
     dest_conn.close()
     source_conn.close()
 
-    # Integrity check
+    # 2. Integrity check
     check_conn = sqlite3.connect(backup_path)
     result = check_conn.execute("PRAGMA integrity_check").fetchone()[0]
     check_conn.close()
     if result != 'ok':
-        os.remove(backup_path)
+        try:
+            os.remove(backup_path)
+        except Exception:
+            pass
         raise RuntimeError(f"Backup integrity check failed: {result}")
 
+    # 3. Replicate to secondary safe locations (AppData and external drive F: if available)
+    secondary_targets = [
+        os.path.join(os.environ.get('LOCALAPPDATA', os.path.expanduser('~')), 'STARGATE_Backups'),
+        r"F:\STARGATE_CAFE_BACKUPS"
+    ]
+    for sec_dir in secondary_targets:
+        try:
+            if sec_dir.startswith("F:") and not os.path.exists(r"F:\\"):
+                continue
+            os.makedirs(sec_dir, exist_ok=True)
+            sec_path = os.path.join(sec_dir, backup_filename)
+            shutil.copy2(backup_path, sec_path)
+            _prune_old_backups(sec_dir, keep=30)
+        except Exception:
+            pass
+
+    _prune_old_backups(primary_dir, keep=30)
     return backup_path, backup_filename
 
 
