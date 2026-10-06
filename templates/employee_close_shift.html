@@ -66,7 +66,21 @@
         <!-- 1. CASH REGISTER COMPARISON CARD (مقارنة الكاش مع الصندوق بدقة محاسبية شاملة) -->
         <div class="space-y-3">
             
-            <!-- Expected System Cash (الصندوق) -->
+            {% if is_blind_close %}
+            <!-- Blind Close Security Mode for Cashiers -->
+            <div class="bg-gradient-to-r from-purple-950/70 via-slate-950 to-indigo-950/70 p-4 rounded-2xl border border-purple-500/40 text-center space-y-1.5 shadow-lg">
+                <div class="text-xs font-black text-purple-300 flex items-center justify-center gap-2">
+                    <span class="text-sm">🔒</span> نظام الجرد الأعمى لمطابقة الوردية (Blind Shift Audit)
+                </div>
+                <p class="text-[11px] text-slate-300">
+                    لحماية الصندوق ومنع التلاعب، رصيد النظام مخفي تلقائياً. يرجى عدّ الكاش الفعلي في الدرج بدقة وإدخال المبلغ أدناه.
+                </p>
+                <div class="text-[10px] text-amber-300/80 font-mono">
+                    سيتم احتساب ومطابقة الفروقات آلياً وتوثيقها في سجل الرقابة فور التسليم.
+                </div>
+            </div>
+            {% else %}
+            <!-- Expected System Cash (الصندوق) - يظهر للمدير والمشرفين فقط -->
             <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
                 <div class="flex items-center justify-between">
                     <span class="text-xs text-slate-400 font-bold flex items-center gap-1.5">
@@ -115,6 +129,7 @@
                     {% endif %}
                 </div>
             </div>
+            {% endif %}
 
             <!-- Actual Counted Cash Input (الكاش الفعلي في اليد) -->
             <form id="closeShiftForm" method="POST" action="{{ url_for('employee_close_shift') }}" onsubmit="return onShiftFormSubmit(event)" class="space-y-4 no-print">
@@ -137,7 +152,8 @@
                                class="w-full bg-slate-900 border border-slate-700 text-white font-mono font-black text-lg sm:text-xl px-3.5 py-2.5 rounded-xl focus:border-amber-400 outline-none text-left" dir="ltr">
                     </div>
 
-                    <!-- Quick 1-Click "Match Register" Helper -->
+                    {% if not is_blind_close %}
+                    <!-- Quick 1-Click "Match Register" Helper (للمدير فقط) -->
                     <div class="flex items-center justify-between pt-1">
                         <span class="text-[10px] text-slate-400 font-medium">إذا كان الصندوق مطابقاً بالتمام:</span>
                         <button type="button" onclick="fillExactMatch()" 
@@ -148,6 +164,7 @@
 
                     <!-- Live Comparison Badge (نتيجة المقارنة الفورية) -->
                     <div id="diffBadge" class="hidden text-xs font-mono font-bold p-3 rounded-xl text-center transition-all duration-300 shadow-inner"></div>
+                    {% endif %}
 
                     <!-- Difference Note Reason (مطلوب عند وجود عجز أو زيادة) -->
                     <div id="diffReasonBox" class="hidden space-y-1.5 pt-2">
@@ -272,7 +289,7 @@
 
             const valStr = input.value.trim();
             if (valStr === '') {
-                badge.classList.add('hidden');
+                if (badge) badge.classList.add('hidden');
                 submitBtn.disabled = true;
                 submitBtnText.innerText = 'ضع المبلغ أولاً لتأكيد تسكير الحساب';
                 if (topXBtn) {
@@ -302,27 +319,32 @@
 
             const diffBox = document.getElementById('diffReasonBox');
             const diffInp = document.getElementById('diffReasonInput');
-            if (Math.abs(diff) < 1) {
-                badge.className = 'text-xs font-mono font-bold p-3 rounded-xl text-center bg-emerald-950 text-emerald-400 border border-emerald-800/80 shadow-md';
-                badge.innerHTML = '<span class="text-sm">✓</span> الصندوق مطابق 100% دون أي فارق (0 ل.ل)';
-                badge.classList.remove('hidden');
-                if (diffBox) diffBox.classList.add('hidden');
-                if (diffInp) diffInp.required = false;
-                if (printDiff) printDiff.innerText = 'مطابق 100%';
-            } else if (diff > 0) {
-                badge.className = 'text-xs font-mono font-bold p-3 rounded-xl text-center bg-sky-950 text-sky-300 border border-sky-800/80 shadow-md';
-                badge.innerHTML = `<span class="text-sm">ℹ️</span> زيادة نقدية في الصندوق: +${diff.toLocaleString()} ل.ل (فائض في الدرج)`;
-                badge.classList.remove('hidden');
-                if (diffBox) diffBox.classList.remove('hidden');
-                if (diffInp) diffInp.required = true;
-                if (printDiff) printDiff.innerText = '+' + diff.toLocaleString() + ' ل.ل (زيادة)';
+            
+            if (badge) {
+                if (Math.abs(diff) < 1) {
+                    badge.className = 'text-xs font-mono font-bold p-3 rounded-xl text-center bg-emerald-950 text-emerald-400 border border-emerald-800/80 shadow-md';
+                    badge.innerHTML = '<span class="text-sm">✓</span> الصندوق مطابق 100% دون أي فارق (0 ل.ل)';
+                    badge.classList.remove('hidden');
+                    if (diffBox) diffBox.classList.add('hidden');
+                    if (diffInp) diffInp.required = false;
+                    if (printDiff) printDiff.innerText = 'مطابق 100%';
+                } else if (diff > 0) {
+                    badge.className = 'text-xs font-mono font-bold p-3 rounded-xl text-center bg-sky-950 text-sky-300 border border-sky-800/80 shadow-md';
+                    badge.innerHTML = `<span class="text-sm">ℹ️</span> زيادة نقدية في الصندوق: +${diff.toLocaleString()} ل.ل (فائض في الدرج)`;
+                    badge.classList.remove('hidden');
+                    if (diffBox) diffBox.classList.remove('hidden');
+                    if (diffInp) diffInp.required = true;
+                    if (printDiff) printDiff.innerText = '+' + diff.toLocaleString() + ' ل.ل (زيادة)';
+                } else {
+                    badge.className = 'text-xs font-mono font-bold p-3 rounded-xl text-center bg-rose-950 text-rose-300 border border-rose-800/80 shadow-md';
+                    badge.innerHTML = `<span class="text-sm">⚠️</span> عجز نقدي في الصندوق: -${Math.abs(diff).toLocaleString()} ل.ل (نقص عن رصيد النظام)`;
+                    badge.classList.remove('hidden');
+                    if (diffBox) diffBox.classList.remove('hidden');
+                    if (diffInp) diffInp.required = true;
+                    if (printDiff) printDiff.innerText = '-' + Math.abs(diff).toLocaleString() + ' ل.ل (عجز)';
+                }
             } else {
-                badge.className = 'text-xs font-mono font-bold p-3 rounded-xl text-center bg-rose-950 text-rose-300 border border-rose-800/80 shadow-md';
-                badge.innerHTML = `<span class="text-sm">⚠️</span> عجز نقدي في الصندوق: -${Math.abs(diff).toLocaleString()} ل.ل (نقص عن رصيد النظام)`;
-                badge.classList.remove('hidden');
-                if (diffBox) diffBox.classList.remove('hidden');
-                if (diffInp) diffInp.required = true;
-                if (printDiff) printDiff.innerText = '-' + Math.abs(diff).toLocaleString() + ' ل.ل (عجز)';
+                if (printDiff) printDiff.innerText = 'جرد أعمى (تدقيق النظام)';
             }
         }
 
