@@ -755,13 +755,21 @@
             {% if hourly_sales %}
             <div class="space-y-2.5 max-h-80 overflow-y-auto custom-scrollbar pr-1">
                 {% for h in hourly_sales %}
-                <div class="flex items-center justify-between p-2.5 bg-slate-950/60 rounded-xl border border-slate-800/70 hover:bg-slate-950 transition text-xs">
+                {% set is_peak = (peak_hour and h.hour == peak_hour.hour and (peak_hour.orders_count|default(0)|int > 0)) %}
+                <div class="flex items-center justify-between p-2.5 rounded-xl border transition text-xs {% if is_peak %}bg-gradient-to-r from-amber-950/70 via-slate-950 to-slate-950 border-amber-500/80 shadow-md ring-1 ring-amber-500/50{% else %}bg-slate-950/60 border-slate-800/70 hover:bg-slate-950{% endif %}">
                     <div class="flex items-center gap-2 font-mono">
-                        <span class="w-7 h-7 rounded-lg bg-slate-800 text-cyan-300 flex items-center justify-center font-bold text-[11px]">{{ h.hour }}:00</span>
-                        <span class="text-slate-300 font-sans">{{ h.orders_count }} طلب</span>
+                        <span class="w-7 h-7 rounded-lg {% if is_peak %}bg-amber-500 text-slate-950 font-black animate-pulse{% else %}bg-slate-800 text-cyan-300 font-bold{% endif %} flex items-center justify-center text-[11px]">
+                            {% if is_peak %}🔥{% else %}{{ h.hour }}:00{% endif %}
+                        </span>
+                        <div>
+                            <span class="{% if is_peak %}text-amber-300 font-black{% else %}text-slate-300{% endif %} font-sans">
+                                {{ h.hour }}:00 {% if is_peak %}<span class="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/40 font-bold">ساعة الذروة</span>{% endif %}
+                            </span>
+                            <span class="text-slate-400 font-sans text-[11px] block">{{ h.orders_count }} طلب</span>
+                        </div>
                     </div>
                     <div class="flex items-baseline gap-2 font-mono">
-                        <span class="font-black text-amber-400">{{ h.total_lbp|format_currency }} ل.ل</span>
+                        <span class="font-black {% if is_peak %}text-amber-300 text-sm{% else %}text-amber-400{% endif %}">{{ h.total_lbp|format_currency }} ل.ل</span>
                         <span class="text-[10px] text-emerald-400">${{ "{:,.2f}".format(h.total_usd or 0) }}</span>
                     </div>
                 </div>
@@ -914,6 +922,93 @@
             لا توجد إغلاقات ورديات مسجلة لهذه الفترة.
         </div>
         {% endif %}
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- 🛡️ SECURITY AUDIT & ANTI-FRAUD LOG (سجل الرقابة ومكافحة التلاعب والتوالف) -->
+    <!-- ========================================================================= -->
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2.5">
+                <span class="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-lg font-black border border-rose-500/30">🛡️</span>
+                <div>
+                    <h3 class="font-black text-sm text-white">سجل الرقابة ومكافحة التلاعب والتوالف (Audit & Fraud Trail)</h3>
+                    <p class="text-[10px] text-slate-400">توثيق كامل لكافة عمليات إلغاء الحسابات، حذف الطلبات، وتلف المواد والهدر المسجل</p>
+                </div>
+            </div>
+            <span class="text-xs font-mono text-rose-300 font-bold bg-rose-950 px-2.5 py-1 rounded-xl border border-rose-800">
+                {{ (recent_audit_logs|length if recent_audit_logs else 0) + (recent_waste_logs|length if recent_waste_logs else 0) }} حركة رقابية
+            </span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- 1. Audit Log (حذف وإلغاءات) -->
+            <div class="space-y-2">
+                <div class="text-xs font-bold text-slate-300 flex items-center gap-2">
+                    <span>⚠️</span> سجل إلغاء الطاولات والعمليات الحساسة:
+                </div>
+                {% if recent_audit_logs %}
+                <div class="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+                    {% for a in recent_audit_logs %}
+                    <div class="p-3 bg-slate-950 rounded-2xl border border-slate-800 text-xs space-y-1">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-amber-300">{{ a.action }}</span>
+                            <span class="font-mono text-[10px] text-slate-500">{{ a.created_at }}</span>
+                        </div>
+                        <div class="text-[11px] text-slate-300">
+                            بواسطة: <strong class="text-white">{{ a.actor }}</strong>
+                        </div>
+                        {% if a.reason %}
+                        <div class="text-[11px] text-rose-300/90 bg-rose-950/40 p-1.5 rounded-lg border border-rose-900/40">
+                            السبب: {{ a.reason }}
+                        </div>
+                        {% endif %}
+                        {% if a.old_value %}
+                        <div class="text-[10px] text-slate-400 font-mono">
+                            التفاصيل: {{ a.old_value }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="p-6 text-center text-slate-500 text-xs bg-slate-950 rounded-2xl">
+                    ✓ لا توجد عمليات إلغاء أو حذف مشبوهة مسجلة.
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- 2. Waste & Spoilage Log (الهدر والتوالف) -->
+            <div class="space-y-2">
+                <div class="text-xs font-bold text-slate-300 flex items-center gap-2">
+                    <span>☕</span> سجل الهدر والتالف من المواد والمشروبات:
+                </div>
+                {% if recent_waste_logs %}
+                <div class="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+                    {% for w in recent_waste_logs %}
+                    <div class="p-3 bg-slate-950 rounded-2xl border border-slate-800 text-xs space-y-1">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-rose-400">{{ w.item_name }} ({{ w.quantity }})</span>
+                            <span class="font-mono text-[10px] text-slate-500">{{ w.created_at }}</span>
+                        </div>
+                        <div class="text-[11px] text-slate-300">
+                            المسجل: <strong class="text-white">{{ w.user_name }}</strong>
+                        </div>
+                        {% if w.notes %}
+                        <div class="text-[11px] text-amber-300/90 bg-amber-950/40 p-1.5 rounded-lg border border-amber-900/40">
+                            {{ w.notes }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="p-6 text-center text-slate-500 text-xs bg-slate-950 rounded-2xl">
+                    ✓ لا توجد حركات تالف أو هدر مسجلة لهذه الفترة.
+                </div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
 <script>
