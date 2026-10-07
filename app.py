@@ -3516,6 +3516,8 @@ def api_do_update():
                 pass
 
             # د) الروابط المباشرة لـ GitHub Releases
+            download_urls.append('https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.7.0/Stargate_Cafe_Update.zip')
+            download_urls.append('https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.6.0/Stargate_Cafe_Update.zip')
             download_urls.append('https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.4.0/Stargate_Cafe_Update.zip')
             download_urls.append('https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.3.2/Stargate_Cafe_Update.zip')
 
@@ -3609,6 +3611,24 @@ del "%~f0"
         except Exception:
             pass
         return jsonify({'success': False, 'error': f'فشل التحديث: {err_msg}'}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 200
+
+
+@app.route('/download/update.zip')
+def download_update_zip():
+    """توفير حزمة التحديث للأجهزة الأخرى على الشبكة المحلية فوراً."""
+    base_dir = _get_base_dir()
+    for cand in [
+        os.path.join(base_dir, 'Stargate_Cafe_Update.zip'),
+        r'C:\STARGATE_CAFE\Stargate_Cafe_Update.zip',
+        r'd:\STARGATE\organized_programs\cafe\Stargate_Cafe_Update.zip',
+        r'd:\STARGATE\stargate_cafe_source\Stargate_Cafe_Update.zip',
+        os.path.expanduser('~/Desktop/Stargate_Cafe_Update.zip')
+    ]:
+        if os.path.exists(cand) and os.path.getsize(cand) > 100000:
+            return send_file(cand, as_attachment=True, download_name='Stargate_Cafe_Update.zip')
+    abort(404)
 
 
 @app.route('/api/manual_update', methods=['POST'])

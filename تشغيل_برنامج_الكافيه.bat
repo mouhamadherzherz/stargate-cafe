@@ -1,10 +1,20 @@
 @echo off
 chcp 65001 >nul
-title تشغيل ستارجيت كافيه - STARGATE CAFE
+title STARGATE CAFE v5.0 PRO - Master Server
 cd /d "%~dp0"
-if exist "%~dp0STARGATE.exe" (
-    start "" "%~dp0STARGATE.exe"
-) else (
-    start "" python desktop_app.py
+
+:: تنظيف أي عمليات سابقة عالقة على المنفذ 5000
+for /f "tokens=5" %%a in ('netstat -aon 2^>nul ^| findstr :5000 ^| findstr LISTENING') do (
+    taskkill /F /PID %%a >nul 2>&1
 )
-exit
+
+echo ========================================================
+echo   ☕ ستارجيت كافيه - STARGATE CAFE v5.0 PRO
+echo   الرابط المحلي (لجهازك):     http://127.0.0.1:5000
+echo   رابط الموظف (على الشبكة):  http://192.168.10.27:5000
+echo ========================================================
+echo السيرفر يعمل الآن... لا تغلق هذه النافذة.
+
+start http://127.0.0.1:5000
+python app.py
+pause
