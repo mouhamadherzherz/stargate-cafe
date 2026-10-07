@@ -141,8 +141,18 @@
 
         <!-- Financial Totals -->
         <div class="py-2.5 border-b-2 border-dashed border-slate-400 space-y-1.5">
+            {% if (order.discount_lbp or 0) > 0 %}
+            <div class="flex justify-between text-[11px] text-slate-700 font-bold px-1">
+                <span>المجموع قبل الخصم:</span>
+                <span class="font-mono-num">{{ (order.subtotal_lbp or (order.total_lbp + order.discount_lbp))|format_currency }} ل.ل</span>
+            </div>
+            <div class="flex justify-between text-[11px] text-rose-700 font-black px-1">
+                <span>خصم{% if order.discount_percent %} ({{ '%g'|format(order.discount_percent) }}%){% endif %}{% if order.discount_reason %} - {{ order.discount_reason }}{% endif %}:</span>
+                <span class="font-mono-num">-{{ order.discount_lbp|format_currency }} ل.ل</span>
+            </div>
+            {% endif %}
             <div class="flex justify-between items-baseline text-sm font-black text-slate-950 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
-                <span>المجموع الإجمالي:</span>
+                <span>{% if (order.discount_lbp or 0) > 0 %}الصافي المطلوب:{% else %}المجموع الإجمالي:{% endif %}</span>
                 <span class="font-mono-num text-base text-emerald-800 font-black">{{ order.total_lbp|format_currency }} ل.ل</span>
             </div>
             <div class="flex justify-between text-[11px] text-slate-700 font-bold px-1">

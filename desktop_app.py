@@ -139,7 +139,7 @@ if __name__ == '__main__':
         ready = wait_for_server(APP_PORT, timeout=5.0)
         log(f"Server ready: {ready}")
 
-        launch_desktop_gui(f"http://127.0.0.1:{APP_PORT}")
+        launch_desktop_gui(f"http://127.0.0.1:{APP_PORT}/employee/login")
         log("GUI launch requested. Entering permanent keep-alive loop.")
 
         while True:

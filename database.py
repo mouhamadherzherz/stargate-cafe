@@ -159,6 +159,12 @@ def init_db(seed_items=True):
     CREATE TABLE IF NOT EXISTS cafe_orders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         order_number TEXT UNIQUE NOT NULL,
+        subtotal_lbp REAL DEFAULT 0.0,
+        subtotal_usd REAL DEFAULT 0.0,
+        discount_lbp REAL DEFAULT 0.0,
+        discount_usd REAL DEFAULT 0.0,
+        discount_percent REAL DEFAULT 0.0,
+        discount_reason TEXT DEFAULT '',
         total_lbp REAL NOT NULL DEFAULT 0.0,
         total_usd REAL NOT NULL DEFAULT 0.0,
         paid_amount REAL NOT NULL DEFAULT 0.0,
@@ -729,6 +735,12 @@ def _run_migrations(cursor, conn):
         "ALTER TABLE coffee_waste_logs ADD COLUMN unit_cost_lbp REAL DEFAULT 0.0",
         "ALTER TABLE coffee_waste_logs ADD COLUMN unit_cost_usd REAL DEFAULT 0.0",
         "ALTER TABLE cafe_order_items ADD COLUMN coffee_batch_id INTEGER DEFAULT NULL",
+        "ALTER TABLE cafe_orders ADD COLUMN subtotal_lbp REAL DEFAULT 0.0",
+        "ALTER TABLE cafe_orders ADD COLUMN subtotal_usd REAL DEFAULT 0.0",
+        "ALTER TABLE cafe_orders ADD COLUMN discount_lbp REAL DEFAULT 0.0",
+        "ALTER TABLE cafe_orders ADD COLUMN discount_usd REAL DEFAULT 0.0",
+        "ALTER TABLE cafe_orders ADD COLUMN discount_percent REAL DEFAULT 0.0",
+        "ALTER TABLE cafe_orders ADD COLUMN discount_reason TEXT DEFAULT ''",
     ]
     for sql in migrations:
         try:
@@ -805,10 +817,11 @@ def _seed_chart_of_accounts(cursor):
         # Equity (حقوق الملكية)
         ('3010', 'Owner Equity & Retained Earnings', 'رأس المال والأرباح المبقاة', 'equity', 'حقوق ملكية الكافيه والمشروع'),
         
-        # Revenues (الإيرادات)
+        # Revenues & Contra-Revenues (الإيرادات والخصومات)
         ('4010', 'Cafe & Beverage Sales Revenue', 'إيرادات مبيعات القهوة والمشروبات', 'revenue', 'مبيعات المنتجات الجاهزة والمصنعة'),
         ('4020', 'Gaming & Computer Revenue', 'إيرادات ألعاب GAMING والكمبيوتر', 'revenue', 'إيرادات ألعاب البلايستيشن والكمبيوتر (100% ربح)'),
         ('4030', 'Other Miscellaneous Revenue', 'إيرادات أخرى متنوعة', 'revenue', 'إيرادات المبيعات الحرة والخدمات'),
+        ('4100', 'Sales Discounts & Hospitality', 'خصومات المبيعات والضيافة', 'expense', 'حسميات الأسعار للزبائن الدائمين، الضيافة، والفناجين المجانية'),
         
         # Expenses (المصروفات والتكاليف)
         ('5010', 'Cost of Goods Sold (COGS)', 'تكلفة البضاعة والمواد المستهلكة', 'expense', 'تكلفة المواد الخام المخصومة مع كل عملية بيع (Recipes & Inventory)'),

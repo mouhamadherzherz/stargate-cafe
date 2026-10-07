@@ -1,9 +1,9 @@
 {
-    "version": "5.5.0",
-    "changelog": "v5.5.0: إغلاق ثغرات التلاعب والسرقة (منع إلغاء الطاولات وحذف الأصناف إلا بموافقة المدير وتوثيق رقابي كامل)، تفعيل نظام الجرد الأعمى للصندوق عند تسكير الوردية، تسجيل الهدر والتوالف بخصم فوري من المخزون، نسخ احتياطي تلقائي متعدد الوجهات، وإبراز ساعات الذروة في التقارير.",
-    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.5.0/Stargate_Cafe_Update.zip",
+    "version": "5.7.0",
+    "changelog": "v5.7.0: حل مشكلة تعليق كاش الخزنة وجعله فورياً ومعتمداً 100% دون انتظار اليوم التالي، ربط رصيد الخزنة والدرج بالواجهة الرئيسية مباشرة، إضافة نظام الخصم الذكي المتقدم (خانة خصم للزبائن الدائمين، نسبة مئوية ومبلغ نقدي، أزرار سريعة وضيافة 100% مجانية، توثيق محاسبي مزدوج وإظهاره في الفاتورة والتقارير مثل Odoo ERP).",
+    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.7.0/Stargate_Cafe_Update.zip",
     "company": "STARGATE EXPERTS",
     "channel": "cafe",
     "name": "Stargate Cafe & Gaming System",
-    "release_date": "2026-10-06"
+    "release_date": "2026-10-07"
 }

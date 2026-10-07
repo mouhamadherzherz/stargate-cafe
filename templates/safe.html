@@ -53,11 +53,19 @@
                         <h2 class="text-lg sm:text-xl font-black text-white">ترحيل مبيعات اليوم إلى الخزنة الخاصة</h2>
                         {% if daily_transfer_status and daily_transfer_status.is_fully_transferred %}
                         <span class="text-[11px] font-bold text-emerald-400 bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-800 flex items-center gap-1">
-                            <i class="fa-solid fa-circle-check"></i> تم الترحيل بنجاح
+                            <i class="fa-solid fa-circle-check"></i> تم الترحيل بنجاح ✓ ({{ daily_transfer_status.already_transferred_lbp|format_currency }} ل.ل)
+                        </span>
+                        {% elif daily_transfer_status and daily_transfer_status.already_transferred_lbp > 0 %}
+                        <span class="text-[11px] font-bold text-emerald-300 bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-800/70 flex items-center gap-1">
+                            <i class="fa-solid fa-circle-check"></i> رُحِّل {{ daily_transfer_status.already_transferred_lbp|format_currency }} ل.ل فوراً للخزنة • متبقٍ بالدرج {{ daily_transfer_status.recommended_transfer_lbp|format_currency }} ل.ل
+                        </span>
+                        {% elif daily_transfer_status and daily_transfer_status.recommended_transfer_lbp <= 0 %}
+                        <span class="text-[11px] font-bold text-slate-300 bg-slate-800 px-2.5 py-0.5 rounded-full border border-slate-700 flex items-center gap-1">
+                            لا يوجد كاش جديد للترحيل اليوم
                         </span>
                         {% else %}
-                        <span class="text-[11px] font-bold text-amber-400 bg-amber-950/80 px-2.5 py-0.5 rounded-full border border-amber-800/80 animate-pulse flex items-center gap-1">
-                            <i class="fa-solid fa-hourglass-half"></i> بانتظار الترحيل للخزنة
+                        <span class="text-[11px] font-bold text-amber-400 bg-amber-950/80 px-2.5 py-0.5 rounded-full border border-amber-800/80 flex items-center gap-1">
+                            <i class="fa-solid fa-sack-dollar"></i> كاش جاهز للترحيل: {{ daily_transfer_status.recommended_transfer_lbp|format_currency }} ل.ل
                         </span>
                         {% endif %}
                     </div>

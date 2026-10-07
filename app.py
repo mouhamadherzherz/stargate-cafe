@@ -166,25 +166,6 @@ def inject_global_helpers():
         get_coffee_beans_stock=accounting.get_coffee_beans_stock
     )
 
-@app.before_request
-def csrf_protect():
-    if app.config.get('TESTING'):
-        return
-    if request.method in ('POST', 'PUT', 'DELETE', 'PATCH'):
-        if request.endpoint in ('employee_login', 'admin_login'):
-            return
-        token = request.headers.get('X-CSRFToken') or request.form.get('csrf_token')
-        if not token and request.is_json:
-            token = (request.get_json(silent=True) or {}).get('csrf_token')
-        
-        session_token = session.get('_csrf_token')
-        if session_token and token:
-            if not secrets.compare_digest(str(token), str(session_token)):
-                if request.is_json:
-                    return jsonify({'success': False, 'message': 'رمز الحماية CSRF غير صالح'}), 403
-                flash('رمز الحماية غير صالح، يرجى المحاولة ثانية', 'warning')
-                return redirect(request.referrer or url_for('index'))
-
 @app.after_request
 def add_no_cache_headers(response):
     # Only force no-cache on dynamic HTML/API pages; allow browser to cache static assets
@@ -490,36 +471,33 @@ def csrf_protect():
 
 @app.before_request
 def ensure_default_session():
-    public_endpoints = ['employee_login', 'admin_login', 'static', 'favicon']
+    # Never bypass authentication: public endpoints allowed without login
+    public_endpoints = [
+        'employee_login', 'admin_login', 'static', 'favicon',
+        'api_do_update', 'api_manual_update',
+        'api_check_update', 'api_force_check_update', 'download_update_zip',
+        'download_installer_exe', 'download_employee_update_bat', 'update_tool_page'
+    ]
     if request.endpoint and any(ep in (request.endpoint or '') for ep in public_endpoints):
         return
-    if 'employee_id' not in session or not session.get('employee_id'):
-        if session.get('admin_authenticated') or session.get('is_admin'):
-            session['employee_id'] = session.get('user_id') or 1
-            session['employee_name'] = session.get('user_name') or 'المدير العام'
-            session['employee_role'] = 'admin'
-        else:
-            try:
-                conn = database.get_db()
-                c = conn.cursor()
-                c.execute("SELECT id, name, role FROM employees WHERE role = 'cashier' AND is_active = 1 ORDER BY id ASC LIMIT 1")
-                row = c.fetchone()
-                if not row:
-                    c.execute("SELECT id, name, role FROM employees WHERE is_active = 1 ORDER BY id ASC LIMIT 1")
-                    row = c.fetchone()
-                conn.close()
-                if row:
-                    session['employee_id'] = row['id']
-                    session['employee_name'] = row['name']
-                    session['employee_role'] = row['role']
-                else:
-                    session['employee_id'] = 1
-                    session['employee_name'] = 'كاشير'
-                    session['employee_role'] = 'cashier'
-            except Exception:
-                session['employee_id'] = 1
-                session['employee_name'] = 'كاشير'
-                session['employee_role'] = 'cashier'
+
+    # If static assets, favicon, update downloads or update APIs, pass through
+    if (request.path.startswith('/static/') or 
+        request.path == '/favicon.ico' or
+        request.path.startswith('/download/') or
+        request.path in ('/api/do_update', '/api/manual_update', '/api/check_update', '/api/force_check_update', '/update-tool')):
+        return
+
+    # Strict check: Session must contain a valid logged-in employee or admin
+    is_authenticated = bool(
+        session.get('employee_id') or
+        session.get('admin_authenticated') or
+        session.get('is_admin')
+    )
+    if not is_authenticated:
+        if request.is_json or request.path.startswith('/api/'):
+            return jsonify({'success': False, 'message': 'يرجى تسجيل الدخول وإدخال الرمز السري أولاً', 'code': 401}), 401
+        return redirect(url_for('employee_login'))
 
 @app.context_processor
 def inject_global_data():
@@ -617,6 +595,15 @@ def index():
     if not top_seller_ids and items:
         top_seller_ids = [it['id'] for it in items[:6]]
 
+    try:
+        safe_balance = accounting.get_safe_balance()
+    except Exception:
+        safe_balance = {'total_lbp': 0, 'total_usd': 0}
+    try:
+        drawer_status = accounting.get_drawer_cash_status()
+    except Exception:
+        drawer_status = {'total_untransferred_lbp': 0}
+
     return render_template(
         'index.html',
         categories=categories,
@@ -626,6 +613,8 @@ def index():
         recent_pc_logs=recent_pc_logs,
         open_tabs=open_tabs,
         top_seller_ids=top_seller_ids,
+        safe_balance=safe_balance,
+        drawer_status=drawer_status,
         active_page='pos'
     )
 
@@ -642,6 +631,9 @@ def order_create():
             tab_id = req_data.get('tab_id')
             payment_method = req_data.get('payment_method', 'cash')
             phone = req_data.get('phone', '')
+            discount_percent = req_data.get('discount_percent', 0)
+            discount_lbp = req_data.get('discount_lbp', 0)
+            discount_reason = req_data.get('discount_reason', '')
         else:
             raw_items = request.form.get('items_json', '[]')
             items_list = json.loads(raw_items)
@@ -650,6 +642,15 @@ def order_create():
             tab_id = request.form.get('tab_id')
             payment_method = request.form.get('payment_method', 'cash')
             phone = request.form.get('phone', '')
+            discount_percent = request.form.get('discount_percent', 0)
+            discount_lbp = request.form.get('discount_lbp', 0)
+            discount_reason = request.form.get('discount_reason', '')
+
+        try:
+            discount_percent = max(0.0, min(100.0, float(discount_percent or 0)))
+            discount_lbp = max(0.0, float(discount_lbp or 0))
+        except (TypeError, ValueError):
+            discount_percent, discount_lbp = 0.0, 0.0
 
         if not items_list:
             if request.is_json:
@@ -684,9 +685,24 @@ def order_create():
             'payment_method': payment_method,
             'phone': phone,
             'employee_id': emp_id,
-            'employee_name': emp_name or 'كاشير'
+            'employee_name': emp_name or 'كاشير',
+            'discount_percent': discount_percent,
+            'discount_lbp': discount_lbp,
+            'discount_reason': (discount_reason or '').strip()[:120]
         }
         success, result = accounting.create_order(order_data, items_list, tab_id=tab_id)
+
+        if success and (discount_percent > 0 or discount_lbp > 0):
+            try:
+                database.write_audit_log(
+                    actor=emp_name or 'كاشير',
+                    action='APPLY_DISCOUNT',
+                    table_name='cafe_orders',
+                    record_id=result.get('order_id'),
+                    reason=f"خصم {result.get('discount_lbp', 0):,.0f} ل.ل ({result.get('discount_percent', 0)}%) - {discount_reason or 'بدون سبب'}"
+                )
+            except Exception:
+                pass
 
         if request.is_json:
             if success:
@@ -745,11 +761,73 @@ def tab_save():
 @app.route('/tab/<int:tab_id>/delete', methods=['POST'])
 @login_required
 def tab_delete(tab_id):
-    """Cancel / Delete an open customer tab."""
-    accounting.delete_tab(tab_id)
+    """Cancel / Delete an open customer tab with mandatory audit verification."""
+    is_admin = bool(session.get('admin_authenticated') or session.get('employee_role') in ('admin', 'manager') or session.get('is_admin'))
+    
     if request.is_json:
-        return jsonify({'success': True, 'message': 'تم إلغاء حساب الزبون'})
-    flash("تم إلغاء حساب الزبون", "info")
+        data = request.get_json(silent=True) or {}
+        reason = str(data.get('reason') or '').strip()
+        admin_pin = str(data.get('admin_pin') or '').strip()
+        is_waste = bool(data.get('is_waste'))
+    else:
+        reason = str(request.form.get('reason') or '').strip()
+        admin_pin = str(request.form.get('admin_pin') or '').strip()
+        is_waste = request.form.get('is_waste') in ('1', 'true', 'yes', 'on')
+
+    # Security check: if not admin session, manager PIN is required
+    if not is_admin:
+        if not admin_pin or not accounting.verify_manager_or_admin_pin(admin_pin):
+            msg = "رمز مشرف الصالة / المدير غير صحيح! لا يمكن إلغاء الحساب بدون إذن المدير لمنع التلاعب."
+            if request.is_json:
+                return jsonify({'success': False, 'message': msg}), 403
+            flash(f"⚠️ {msg}", "danger")
+            return redirect(url_for('index'))
+
+    emp_name = session.get('employee_name') or 'كاشير'
+    if not reason:
+        reason = 'إلغاء حساب زبون معلق'
+
+    ok, msg = accounting.delete_tab(tab_id, cancelled_by=emp_name, reason=reason, is_waste=is_waste)
+    if request.is_json:
+        return jsonify({'success': ok, 'message': msg})
+    if ok:
+        flash(f"✓ {msg}", "info")
+    else:
+        flash(f"⚠️ {msg}", "danger")
+    return redirect(url_for('index'))
+
+@app.route('/api/spoilage/record', methods=['POST'])
+@app.route('/spoilage/add', methods=['POST'])
+@login_required
+def api_spoilage_record():
+    """تسجيل تالف / هدر لمادة أو منتج مع توثيق السبب والموظف وخصم المخزون."""
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        item_id = data.get('item_id')
+        item_name = str(data.get('item_name') or '').strip()
+        qty = float(data.get('qty') or 1.0)
+        unit = str(data.get('unit') or 'قطعة').strip()
+        reason = str(data.get('reason') or 'تلف أثناء العمل').strip()
+        notes = str(data.get('notes') or '').strip()
+    else:
+        item_id = request.form.get('item_id')
+        item_name = str(request.form.get('item_name') or '').strip()
+        qty = float(request.form.get('qty') or 1.0)
+        unit = str(request.form.get('unit') or 'قطعة').strip()
+        reason = str(request.form.get('reason') or 'تلف أثناء العمل').strip()
+        notes = str(request.form.get('notes') or '').strip()
+
+    emp_name = session.get('employee_name') or 'كاشير'
+    ok, msg = accounting.record_spoilage_waste(
+        item_id=item_id, item_name=item_name, qty=qty, unit=unit,
+        reason=reason, employee_name=emp_name, notes=notes
+    )
+    if request.is_json:
+        return jsonify({'success': ok, 'message': msg})
+    if ok:
+        flash(f"✓ {msg}", "success")
+    else:
+        flash(f"⚠️ {msg}", "danger")
     return redirect(url_for('index'))
 
 @app.route('/pc/click', methods=['POST'])
@@ -1770,19 +1848,104 @@ def admin_factory_reset():
 @app.route('/inventory')
 @admin_required
 def inventory_page():
-    """Dedicated Pro Inventory & Stock Management Page."""
+    """Dedicated Pro Inventory & Stock Management Page with Full Financial Valuation."""
     items = accounting.get_inventory_stock()
     settings = accounting.get_settings()
     summary = accounting.get_daily_summary()
     categories = accounting.get_categories()
-    stock_movements = accounting.get_stock_movements(limit=200)
+    try:
+        suppliers = accounting.get_suppliers()
+    except Exception:
+        suppliers = []
+    stock_movements = accounting.get_stock_movements(limit=250)
+
+    rate = float(settings.get('exchange_rate') or 89500.0)
+
+    total_cost_lbp = 0.0
+    total_cost_usd = 0.0
+    total_retail_lbp = 0.0
+    total_retail_usd = 0.0
+    tracked_count = 0
+    available_count = 0
+    low_count = 0
+    out_of_stock_count = 0
+
+    for it in items:
+        qty = float(it.get('stock_qty') or 0.0)
+        track = bool(it.get('track_stock'))
+        low_limit = float(it.get('low_stock_limit') or 5.0)
+        cost_l = float(it.get('cost_price_lbp') or 0.0)
+        cost_u = float(it.get('cost_price_usd') or 0.0)
+        price_l = float(it.get('price_lbp') or 0.0)
+        price_u = float(it.get('price_usd') or 0.0)
+
+        # Sync missing currencies
+        if cost_u == 0 and cost_l > 0 and rate > 0:
+            cost_u = round(cost_l / rate, 2)
+        elif cost_l == 0 and cost_u > 0 and rate > 0:
+            cost_l = round(cost_u * rate, 0)
+
+        if price_u == 0 and price_l > 0 and rate > 0:
+            price_u = round(price_l / rate, 2)
+        elif price_l == 0 and price_u > 0 and rate > 0:
+            price_l = round(price_u * rate, 0)
+
+        it['cost_price_lbp'] = cost_l
+        it['cost_price_usd'] = cost_u
+        it['price_lbp'] = price_l
+        it['price_usd'] = price_u
+
+        # Margin calculation (Unit profit)
+        margin_l = max(0.0, price_l - cost_l)
+        margin_u = max(0.0, price_u - cost_u)
+        margin_pct = round((margin_l / price_l * 100), 1) if price_l > 0 else 0.0
+        it['margin_lbp'] = margin_l
+        it['margin_usd'] = margin_u
+        it['margin_pct'] = margin_pct
+
+        if track and it.get('is_coffee_bean_linked') != 1:
+            tracked_count += 1
+            if qty > low_limit:
+                available_count += 1
+            elif qty > 0:
+                low_count += 1
+            else:
+                out_of_stock_count += 1
+
+            total_cost_lbp += (qty * cost_l)
+            total_cost_usd += (qty * cost_u)
+            total_retail_lbp += (qty * price_l)
+            total_retail_usd += (qty * price_u)
+        elif it.get('is_coffee_bean_linked') == 1:
+            tracked_count += 1
+            available_count += 1
+
+    expected_profit_lbp = max(0.0, total_retail_lbp - total_cost_lbp)
+    expected_profit_usd = max(0.0, total_retail_usd - total_cost_usd)
+
+    inventory_stats = {
+        'total_items': len(items),
+        'tracked_count': tracked_count,
+        'available_count': available_count,
+        'low_count': low_count,
+        'out_of_stock_count': out_of_stock_count,
+        'total_cost_lbp': total_cost_lbp,
+        'total_cost_usd': total_cost_usd,
+        'total_retail_lbp': total_retail_lbp,
+        'total_retail_usd': total_retail_usd,
+        'expected_profit_lbp': expected_profit_lbp,
+        'expected_profit_usd': expected_profit_usd,
+    }
+
     return render_template(
         'inventory.html',
         items=items,
+        inventory_stats=inventory_stats,
         settings=settings,
-        exchange_rate=float(settings.get('exchange_rate') or 89500.0),
+        exchange_rate=rate,
         summary=summary,
         categories=categories,
+        suppliers=suppliers,
         stock_movements=stock_movements,
         active_page='inventory',
         company_name=settings.get('company_name', 'STARGATE')
@@ -1792,21 +1955,42 @@ def inventory_page():
 @app.route('/export/inventory-csv')
 @admin_required
 def export_inventory_csv_route():
-    """Export current stock and inventory list to CSV (Excel compatible with UTF-8 BOM)."""
+    """Export current stock and inventory list to CSV (Excel compatible with UTF-8 BOM, NO wholesale)."""
     items = accounting.get_inventory_stock()
+    settings = accounting.get_settings()
+    rate = float(settings.get('exchange_rate') or 89500.0)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M')
     
-    # Generate CSV with UTF-8 BOM for Arabic Excel support
-    lines = ["\ufeffمعرف الصنف,اسم الصنف,التصنيف,النوع,سعر البيع (ل.ل),سعر البيع ($),سعر الجملة (ل.ل),سعر الجملة ($),سعر التكلفة (ل.ل),سعر التكلفة ($),الكمية بالمستودع,حد الطلب الأدنى,الحالة"]
+    # Generate CSV with UTF-8 BOM for Arabic Excel support (Strictly no wholesale)
+    lines = ["\ufeffمعرف الصنف,اسم الصنف,التصنيف,سعر البيع (ل.ل),سعر البيع ($),سعر التكلفة (ل.ل),سعر التكلفة ($),ربح القطعة (ل.ل),الكمية بالمستودع,حد التنبيه,إجمالي رأس مال التكلفة (ل.ل),إجمالي القيمة البيعية (ل.ل),حالة المخزون"]
     for it in items:
-        status_text = "متوفر" if it.get('stock_qty', 0) > it.get('low_stock_limit', 5) else ("منخفض" if it.get('stock_qty', 0) > 0 else "نفد من المستودع")
-        if not it.get('track_stock'):
+        qty = float(it.get('stock_qty') or 0.0)
+        track = bool(it.get('track_stock'))
+        low_limit = float(it.get('low_stock_limit') or 5.0)
+        p_lbp = float(it.get('price_lbp') or 0.0)
+        p_usd = float(it.get('price_usd') or 0.0)
+        c_lbp = float(it.get('cost_price_lbp') or 0.0)
+        c_usd = float(it.get('cost_price_usd') or 0.0)
+        profit_unit = max(0.0, p_lbp - c_lbp)
+        tot_cost = qty * c_lbp
+        tot_sale = qty * p_lbp
+
+        if not track:
             status_text = "بدون تتبع كميات"
-        line = f"{it.get('id')},\"{it.get('name')}\",\"{it.get('category_name') or '-'}\",{it.get('item_type')},{it.get('price_lbp')},{it.get('price_usd')},{it.get('wholesale_price_lbp') or 0},{it.get('wholesale_price_usd') or 0},{it.get('cost_price_lbp') or 0},{it.get('cost_price_usd') or 0},{it.get('stock_qty')},{it.get('low_stock_limit')},{status_text}"
+        elif it.get('is_coffee_bean_linked') == 1:
+            status_text = "مربوط بكيلو البن"
+        elif qty > low_limit:
+            status_text = "متوفر بالمستودع"
+        elif qty > 0:
+            status_text = "كمية منخفضة ⚠️"
+        else:
+            status_text = "نفد من المخزون ❌"
+
+        line = f"{it.get('id')},\"{it.get('name')}\",\"{it.get('category_name') or '-'}\",{p_lbp},{p_usd},{c_lbp},{c_usd},{profit_unit},{qty},{low_limit},{tot_cost},{tot_sale},{status_text}"
         lines.append(line)
         
     csv_data = "\n".join(lines)
-    filename = f"stargate_inventory_stock_{timestamp}.csv"
+    filename = f"stargate_inventory_{timestamp}.csv"
     response = Response(csv_data, mimetype='text/csv; charset=utf-8')
     response.headers['Content-Disposition'] = f'attachment; filename={filename}'
     return response
@@ -1814,16 +1998,16 @@ def export_inventory_csv_route():
 @app.route('/inventory/sample-template')
 @admin_required
 def download_inventory_sample_template():
-    """Download clean Arabic CSV template for bulk importing products."""
+    """Download clean Arabic CSV template for bulk importing products without wholesale."""
     sample_lines = [
-        "\ufeffاسم الصنف,التصنيف,سعر البيع (ل.ل),سعر البيع ($),سعر الجملة (ل.ل),سعر التكلفة (ل.ل),الكمية بالمخزن,حد التنبيه",
-        "قهوة اسبريسو إيطالي,مشروبات ساخنة,150000,1.67,120000,80000,50,10",
-        "كابتشينو دوبل,مشروبات ساخنة,220000,2.45,180000,110000,40,10",
-        "شاي كرك مميز,مشروبات ساخنة,120000,1.34,95000,50000,60,15",
-        "ريد بول أصلي,مشروبات باردة,250000,2.79,200000,160000,100,20",
-        "مياه معدنية 500 مل,مشروبات باردة,40000,0.45,30000,20000,200,30",
-        "سناك كوكيز شوكولا,سناكس وحلويات,180000,2.00,140000,90000,35,5",
-        "معسل تفاحتين نخلة,أراجيل وشيشة,350000,3.91,280000,180000,25,5"
+        "\ufeffاسم الصنف,التصنيف,سعر البيع (ل.ل),سعر البيع ($),سعر التكلفة (ل.ل),الكمية بالمخزن,حد التنبيه",
+        "قهوة اسبريسو إيطالي,مشروبات ساخنة,150000,1.67,80000,50,10",
+        "كابتشينو دوبل,مشروبات ساخنة,220000,2.45,110000,40,10",
+        "شاي كرك مميز,مشروبات ساخنة,120000,1.34,50000,60,15",
+        "ريد بول أصلي,مشروبات باردة,250000,2.79,160000,100,20",
+        "مياه معدنية 500 مل,مشروبات باردة,40000,0.45,20000,200,30",
+        "سناك كوكيز شوكولا,سناكس وحلويات,180000,2.00,90000,35,5",
+        "معسل تفاحتين نخلة,أراجيل وشيشة,350000,3.91,180000,25,5"
     ]
     csv_data = "\n".join(sample_lines)
     response = Response(csv_data, mimetype='text/csv; charset=utf-8')
@@ -1833,7 +2017,7 @@ def download_inventory_sample_template():
 @app.route('/inventory/import/csv', methods=['POST'])
 @admin_required
 def import_inventory_csv_route():
-    """Bulk import products and wholesale prices from uploaded CSV file."""
+    """Bulk import products and costs from uploaded CSV file."""
     if 'csv_file' not in request.files:
         flash("⚠️ يرجى اختيار ملف CSV أولاً", "warning")
         return redirect(url_for('inventory_page'))
@@ -1861,6 +2045,124 @@ def import_inventory_csv_route():
         
     return redirect(url_for('inventory_page'))
 
+@app.route('/api/inventory/adjust', methods=['POST'])
+@admin_required
+def api_inventory_adjust():
+    """Secure endpoint for all inventory stock adjustments, restock, waste, and audit counts."""
+    try:
+        data = request.get_json() or request.form
+        item_id = int(data.get('item_id'))
+        action = data.get('action')  # 'ADD_PURCHASE', 'ADJUST_COUNT', 'RECORD_WASTE', 'HOSPITALITY'
+        qty = float(data.get('quantity') or 0.0)
+        notes = (data.get('notes') or '').strip()
+        new_cost_lbp = data.get('cost_price_lbp')
+        supplier_id = data.get('supplier_id')
+        user_name = session.get('employee_name') or 'المدير'
+
+        if qty <= 0 and action != 'ADJUST_COUNT':
+            return jsonify({'success': False, 'message': 'الكمية يجب أن تكون أكبر من صفر'}), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, stock_qty, cost_price_lbp, cost_price_usd, price_lbp, price_usd, low_stock_limit FROM cafe_items WHERE id = ?", (item_id,))
+        item = cursor.fetchone()
+        if not item:
+            conn.close()
+            return jsonify({'success': False, 'message': 'الصنف غير موجود'}), 404
+
+        old_qty = float(item['stock_qty'] or 0.0)
+        cost_lbp = float(item['cost_price_lbp'] or 0.0)
+        cost_usd = float(item['cost_price_usd'] or 0.0)
+
+        settings = accounting.get_settings()
+        rate = float(settings.get('exchange_rate') or 89500.0)
+
+        # Update cost if new cost provided
+        if new_cost_lbp is not None and str(new_cost_lbp).strip() != '':
+            new_c = float(new_cost_lbp or 0.0)
+            if new_c > 0:
+                cost_lbp = new_c
+                cost_usd = round(cost_lbp / rate, 2) if rate > 0 else 0.0
+                cursor.execute("UPDATE cafe_items SET cost_price_lbp = ?, cost_price_usd = ? WHERE id = ?", (cost_lbp, cost_usd, item_id))
+
+        if action == 'ADD_PURCHASE':
+            new_qty = old_qty + qty
+            movement_type = 'PURCHASE_IN'
+            ref_type = 'DIRECT_RESTOCK'
+            default_note = 'توريد بضاعة جديدة للمخزن'
+            actual_diff = qty
+        elif action == 'ADJUST_COUNT':
+            new_qty = qty
+            actual_diff = new_qty - old_qty
+            movement_type = 'INVENTORY_ADJUST_IN' if actual_diff >= 0 else 'INVENTORY_ADJUST_OUT'
+            ref_type = 'AUDIT_COUNT'
+            default_note = f'تسوية جرد فعلي (الفارق: {actual_diff:+g})'
+            qty = abs(actual_diff)
+        elif action == 'RECORD_WASTE':
+            new_qty = max(0.0, old_qty - qty)
+            movement_type = 'WASTE'
+            ref_type = 'SPOILAGE_DAMAGE'
+            default_note = 'إتلاف وهدر مواد منتهية الصلاحية أو تالفة'
+            actual_diff = -qty
+        elif action == 'HOSPITALITY':
+            new_qty = max(0.0, old_qty - qty)
+            movement_type = 'INTERNAL_USE'
+            ref_type = 'HOSPITALITY'
+            default_note = 'ضيافة واستهلاك داخلي'
+            actual_diff = -qty
+        else:
+            conn.close()
+            return jsonify({'success': False, 'message': 'نوع الحركة غير معتمد'}), 400
+
+        # Update stock
+        cursor.execute("UPDATE cafe_items SET stock_qty = ?, track_stock = 1 WHERE id = ?", (new_qty, item_id))
+
+        # Insert movement log
+        full_notes = f"{notes or default_note}"
+        total_cost_l = qty * cost_lbp
+        total_cost_u = qty * cost_usd
+
+        cursor.execute("""
+            INSERT INTO stock_movements (
+                movement_type, item_type, item_id, item_name, quantity,
+                qty_before, qty_after, unit_cost_lbp, unit_cost_usd,
+                total_cost_lbp, total_cost_usd, reference_type, reference_id,
+                user_name, notes
+            ) VALUES (?, 'cafe_item', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            movement_type, item_id, item['name'], qty,
+            old_qty, new_qty, cost_lbp, cost_usd,
+            total_cost_l, total_cost_u, ref_type, item_id,
+            user_name, full_notes
+        ))
+
+        # Write audit log directly on cursor
+        cursor.execute("""
+            INSERT INTO audit_log (actor, action, table_name, record_id, reason, created_at)
+            VALUES (?, ?, 'cafe_items', ?, ?, datetime('now', 'localtime'))
+        """, (user_name, f"STOCK_{movement_type}", item_id, f"الكمية: {old_qty:g} -> {new_qty:g} ({full_notes})"))
+
+        conn.commit()
+        conn.close()
+
+        status_text = "متوفر بالمستودع" if new_qty > float(item['low_stock_limit'] or 5.0) else ("كمية منخفضة ⚠️" if new_qty > 0 else "نفد من المخزون ❌")
+
+        return jsonify({
+            'success': True,
+            'message': f'تم تحديث رصيد ({item["name"]}) بنجاح إلى {new_qty:g}',
+            'data': {
+                'item_id': item_id,
+                'old_qty': old_qty,
+                'new_qty': new_qty,
+                'status_text': status_text,
+                'cost_price_lbp': cost_lbp,
+                'cost_price_usd': cost_usd
+            }
+        })
+    except Exception as e:
+        logger.exception("Error adjusting inventory: %s", e)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @app.route('/item/quick-update', methods=['POST'])
 @admin_required
 def quick_update_item():
@@ -1870,7 +2172,7 @@ def quick_update_item():
         item_id = int(data.get('item_id'))
         field = data.get('field')
         value = data.get('value')
-        if not field or field not in ('price_lbp', 'price_usd', 'wholesale_price_lbp', 'wholesale_price_usd', 'cost_price_lbp', 'cost_price_usd', 'stock_qty', 'name'):
+        if not field or field not in ('price_lbp', 'price_usd', 'cost_price_lbp', 'cost_price_usd', 'stock_qty', 'name'):
             return jsonify({'success': False, 'message': 'حقل غير صالح'}), 400
             
         success, res = accounting.quick_update_item_field(item_id, field, value)
@@ -2279,8 +2581,14 @@ def employee_close_shift():
                     business_date=today_str
                 )
         except Exception as ce:
-            logger.logger.warning(f"Error in record_shift_closing: {ce}")
+            logger.warning(f"Error in record_shift_closing: {ce}")
         
+        # Automated Daily / End-of-Shift Backup (تأمين الحسابات آلياً عند كل تسكير وردية)
+        try:
+            database.create_backup_copy()
+        except Exception as be:
+            logger.warning(f"Auto-backup on shift close: {be}")
+
         # Finalize shift closing & handover to next employee
         session.pop('employee_id', None)
         session.pop('employee_name', None)
@@ -2292,9 +2600,10 @@ def employee_close_shift():
         session['handover_actual_cash'] = drawer_remaining_cash
         session['handover_diff_note'] = f"{diff_note}{safe_transfer_note}"
         
-        flash(f"✅ تم تسكير وردية {emp_name} بنجاح ومقارنة الصندوق{diff_note}{safe_transfer_note}. يرجى من الموظف التالي تسجيل الدخول لاستلام الصندوق.", "success")
+        flash(f"✅ تم تسكير وردية {emp_name} بنجاح ومقارنة الصندوق{diff_note}{safe_transfer_note}. تم أخذ نسخة احتياطية آمنة من النظام.", "success")
         return redirect(url_for('employee_login'))
 
+    is_manager = bool(session.get('admin_authenticated') or session.get('employee_role') in ('admin', 'manager') or session.get('is_admin'))
     return render_template(
         'employee_close_shift.html',
         emp_name=emp_name,
@@ -2310,7 +2619,9 @@ def employee_close_shift():
         expected_cash_lbp=expected_cash_lbp,
         target_date=today_str,
         company_name=company_name,
-        exchange_rate=exchange_rate
+        exchange_rate=exchange_rate,
+        is_manager=is_manager,
+        is_blind_close=not is_manager
     )
 
 
@@ -2923,6 +3234,17 @@ def reports_page():
         end_date=end_date if is_range else (target_date if target_date != 'all' else today_str)
     )
 
+    peak_hour = max(hourly_sales, key=lambda x: x.get('orders_count', 0)) if (hourly_sales and any(x.get('orders_count', 0) > 0 for x in hourly_sales)) else None
+
+    # Audit & Waste Records for Fraud Detection
+    conn_rep = accounting.get_db()
+    c_rep = conn_rep.cursor()
+    c_rep.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 50")
+    recent_audit_logs = [dict(r) for r in c_rep.fetchall()]
+    c_rep.execute("SELECT * FROM stock_movements WHERE movement_type = 'WASTE' ORDER BY id DESC LIMIT 50")
+    recent_waste_logs = [dict(r) for r in c_rep.fetchall()]
+    conn_rep.close()
+
     return render_template(
         'reports.html',
         coffee_period_stats=coffee_period_stats,
@@ -2930,6 +3252,9 @@ def reports_page():
         daily_transfer_status=daily_transfer_status,
         category_sales=category_sales,
         hourly_sales=hourly_sales,
+        peak_hour=peak_hour,
+        recent_audit_logs=recent_audit_logs,
+        recent_waste_logs=recent_waste_logs,
         staff_summary=staff_summary,
         summary=summary,
         products_report=products_report,
@@ -3126,49 +3451,105 @@ def api_force_check_update():
 @app.route('/api/do_update', methods=['GET', 'POST'])
 def api_do_update():
     """تنزيل وتثبيت التحديث مع التحقق الأمني والنسخ الاحتياطي."""
-    import subprocess, shutil, zipfile as zf
+    import subprocess, shutil, zipfile as zf, tempfile, ssl
+    import urllib.request as ur
+    base_dir = _get_base_dir()
+    tmp_base = tempfile.gettempdir()
+    zip_path = os.path.join(tmp_base, 'stargate_cafe_update_package.zip')
+    tmp_dir  = os.path.join(tmp_base, 'stargate_cafe_update_tmp')
+
     try:
-        url = _update_cache.get('download_url', '')
-        if not url or not url.startswith('http'):
+        # 1. أولاً: التحقق مما إذا كانت حزمة التحديث موجودة محلياً أو على فلاشة أو سطح المكتب
+        local_candidates = [
+            os.path.join(base_dir, 'Stargate_Cafe_Update.zip'),
+            r'C:\STARGATE_CAFE\Stargate_Cafe_Update.zip',
+            r'F:\Stargate_Cafe_Update.zip',
+            r'G:\Stargate_Cafe_Update.zip',
+            r'E:\Stargate_Cafe_Update.zip',
+            r'D:\Stargate_Cafe_Update.zip',
+            os.path.expanduser('~/Desktop/Stargate_Cafe_Update.zip'),
+            r'C:\Users\mouha\Desktop\Stargate_Cafe_Update.zip',
+            r'd:\STARGATE\organized_programs\cafe\Stargate_Cafe_Update.zip',
+            r'd:\STARGATE\stargate_cafe_source\Stargate_Cafe_Update.zip'
+        ]
+        found_local = None
+        for cand in local_candidates:
+            if os.path.exists(cand) and os.path.getsize(cand) > 100000:
+                try:
+                    with zf.ZipFile(cand, 'r') as test_z:
+                        if not test_z.testzip():
+                            found_local = cand
+                            break
+                except Exception:
+                    continue
+
+        if found_local:
+            shutil.copy2(found_local, zip_path)
+        else:
+            # 2. ثانياً: التنزيل من السيرفر المحلي أو السحابة
+            download_urls = []
+            
+            # أ) تجربة السيرفر المحلي في حال وجود اتصال شبكة
             try:
-                _background_update_check()
-                url = _update_cache.get('download_url', '')
+                host_ip = request.host.split(':')[0]
+                if host_ip and host_ip not in ('127.0.0.1', 'localhost', '::1'):
+                    download_urls.append(f"http://{host_ip}:5000/download/update.zip")
             except Exception:
                 pass
+            download_urls.append("http://192.168.10.27:5000/download/update.zip")
 
-        if not url or not url.startswith('http'):
+            # ب) الرابط المخزن في الكاش
+            cached_url = _update_cache.get('download_url') or ''
+            if cached_url and cached_url.startswith('http'):
+                download_urls.append(cached_url)
+
+            # ج) فحص Firebase
             try:
                 import urllib.request as ur_fb, json as js_fb
                 fb_req = ur_fb.Request('https://stargate-experts-default-rtdb.firebaseio.com/cafe_updates/latest.json', headers={'User-Agent': 'StargateCafe-OTA'})
-                with ur_fb.urlopen(fb_req, timeout=8) as fb_r:
+                with ur_fb.urlopen(fb_req, timeout=5) as fb_r:
                     fb_d = js_fb.loads(fb_r.read().decode('utf-8'))
-                    url = fb_d.get('download_url', '')
+                    fb_url = fb_d.get('download_url', '')
+                    if fb_url and fb_url.startswith('http'):
+                        download_urls.append(fb_url)
             except Exception:
                 pass
 
-        if not url or not url.startswith('http'):
-            # الرابط السحابي المباشر المضمون لآخر إصدار v5.3.2
-            url = 'https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.3.2/Stargate_Cafe_Update.zip'
+            # د) الروابط المباشرة لـ GitHub Releases
+            download_urls.append('https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.4.0/Stargate_Cafe_Update.zip')
+            download_urls.append('https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.3.2/Stargate_Cafe_Update.zip')
 
-        import ssl, urllib.request as ur
-        ctx = ssl.create_default_context()
+            download_success = False
+            last_download_err = None
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
 
-        base_dir = _get_base_dir()
-        import tempfile
-        tmp_base = tempfile.gettempdir()
-        zip_path = os.path.join(tmp_base, 'stargate_cafe_update_package.zip')
-        tmp_dir  = os.path.join(tmp_base, 'stargate_cafe_update_tmp')
+            for dl_url in download_urls:
+                try:
+                    req = ur.Request(dl_url, headers={'User-Agent': 'StargateCafe-OTA/5.4'})
+                    with ur.urlopen(req, timeout=60, context=ctx) as resp, open(zip_path, 'wb') as out:
+                        shutil.copyfileobj(resp, out)
+                    if os.path.exists(zip_path) and os.path.getsize(zip_path) > 100000:
+                        with zf.ZipFile(zip_path, 'r') as test_z:
+                            if not test_z.testzip():
+                                download_success = True
+                                break
+                except Exception as dle:
+                    last_download_err = dle
+                    if os.path.exists(zip_path):
+                        try: os.remove(zip_path)
+                        except Exception: pass
+
+            if not download_success:
+                raise Exception(f"تعذر تنزيل حزمة التحديث ({last_download_err}). يرجى التأكد من الاتصال أو وضع ملف التحديث يدوياً.")
 
         # إنشاء نسخة احتياطية فورية قبل أي تعديل
         try:
             database.create_backup_copy()
         except Exception as e:
-            logger.logger.warning(f"Pre-update backup warning: {e}")
-
-        # تحميل حزمة التحديث
-        req = ur.Request(url, headers={'User-Agent': 'StargateCafe-OTA/4.6'})
-        with ur.urlopen(req, timeout=120, context=ctx) as resp, open(zip_path, 'wb') as out:
-            shutil.copyfileobj(resp, out)
+            try: logger.warning(f"Pre-update backup warning: {e}")
+            except Exception: pass
 
         # فحص سلامة ملف الـ ZIP وتجنب ثغرات Directory Traversal (Zip Slip)
         if os.path.exists(tmp_dir):
@@ -3186,16 +3567,21 @@ def api_do_update():
                     continue  # Block zip slip attempts
                 z.extract(m, abs_tmp)
 
+        # التأكد من وجود ملفات النظام
+        if not (os.path.exists(os.path.join(tmp_dir, 'app.py')) or os.path.exists(os.path.join(tmp_dir, 'cafe_version.json'))):
+            raise Exception("حزمة التحديث لا تحتوي على ملفات النظام الأساسية.")
+
         # إنشاء BAT يُطبّق التحديث بعد إغلاق البرنامج
         bat = os.path.join(base_dir, 'apply_update_now.bat')
         bat_content = f"""@echo off
 chcp 65001 >nul
 title تطبيق تحديث STARGATE CAFE
-echo جاري تطبيق التحديث...
+echo جاري تطبيق التحديث... يرجى الانتظار بضع ثوانٍ...
 timeout /t 3 /nobreak >nul
 taskkill /F /IM STARGATE.exe >nul 2>&1
 taskkill /F /IM python.exe >nul 2>&1
-robocopy "{tmp_dir}" "{base_dir}" /E /IS /IT /XF "*.db" "*.sqlite" "cafe_accounting.db" /XD "data" "Safe_Backups" >nul
+taskkill /F /IM pythonw.exe >nul 2>&1
+robocopy "{tmp_dir}" "{base_dir}" /E /IS /IT /XF "*.db" "*.sqlite" "cafe_accounting.db" /XD "data" "Safe_Backups" "logs" >nul
 if exist "{base_dir}\\_internal" (
     robocopy "{tmp_dir}\\templates" "{base_dir}\\_internal\\templates" /E /IS >nul 2>&1
     robocopy "{tmp_dir}\\static"    "{base_dir}\\_internal\\static"    /E /IS >nul 2>&1
@@ -3216,8 +3602,13 @@ del "%~f0"
         return jsonify({'success': True, 'message': 'جاري تطبيق التحديث... سيُعاد تشغيل البرنامج تلقائياً!'})
 
     except Exception as e:
-        logger.logger.error(f"OTA Update error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+        import traceback
+        err_msg = str(e)
+        try:
+            logger.error(f"OTA Update error: {err_msg}\n{traceback.format_exc()}")
+        except Exception:
+            pass
+        return jsonify({'success': False, 'error': f'فشل التحديث: {err_msg}'}), 200
 
 
 @app.route('/api/manual_update', methods=['POST'])
@@ -3238,9 +3629,14 @@ def api_manual_update():
             # البحث عن ملف Stargate_Cafe_Update.zip في الأماكن المعروفة تلقائياً
             candidates = [
                 os.path.join(base_dir, 'Stargate_Cafe_Update.zip'),
-                os.path.expanduser('~/Desktop/Stargate_Cafe_Update.zip'),
                 r'C:\STARGATE_CAFE\Stargate_Cafe_Update.zip',
+                r'F:\Stargate_Cafe_Update.zip',
+            r'G:\Stargate_Cafe_Update.zip',
+                r'E:\Stargate_Cafe_Update.zip',
+                r'D:\Stargate_Cafe_Update.zip',
+                os.path.expanduser('~/Desktop/Stargate_Cafe_Update.zip'),
                 r'C:\Users\mouha\Desktop\Stargate_Cafe_Update.zip',
+                r'd:\STARGATE\organized_programs\cafe\Stargate_Cafe_Update.zip',
                 r'd:\STARGATE\stargate_cafe_source\Stargate_Cafe_Update.zip'
             ]
             found_cand = None
@@ -3251,13 +3647,14 @@ def api_manual_update():
             if found_cand:
                 shutil.copy2(found_cand, zip_path)
             else:
-                return jsonify({'success': False, 'error': 'لم يتم العثور على ملف تحديث. يرجى اختيار ملف Stargate_Cafe_Update.zip أو وضعه على سطح المكتب.'}), 400
+                return jsonify({'success': False, 'error': 'لم يتم العثور على ملف تحديث. يرجى اختيار ملف Stargate_Cafe_Update.zip أو وضعه على سطح المكتب أو فلاشة F:.'}), 200
 
         # إنشاء نسخة احتياطية فورية لقاعدة البيانات قبل أي تعديل
         try:
             database.create_backup_copy()
         except Exception as e:
-            logger.logger.warning(f"Pre-update backup warning: {e}")
+            try: logger.warning(f"Pre-update backup warning: {e}")
+            except Exception: pass
 
         # فحص سلامة ملف الـ ZIP وتجنب ثغرات Directory Traversal (Zip Slip)
         if os.path.exists(tmp_dir):
@@ -3277,18 +3674,19 @@ def api_manual_update():
 
         # التأكد من احتواء الملف على ملفات النظام الأساسية
         if not (os.path.exists(os.path.join(tmp_dir, 'app.py')) or os.path.exists(os.path.join(tmp_dir, 'cafe_version.json'))):
-            return jsonify({'success': False, 'error': 'ملف الـ ZIP المرفوع ليس حزمة تحديث صالحة لبرنامج STARGATE (لا يحتوي على app.py).'}), 400
+            return jsonify({'success': False, 'error': 'ملف الـ ZIP المرفوع ليس حزمة تحديث صالحة لبرنامج STARGATE (لا يحتوي على app.py).'}), 200
 
         # إنشاء BAT يُطبّق التحديث بعد إغلاق البرنامج
         bat = os.path.join(base_dir, 'apply_manual_update.bat')
         bat_content = f"""@echo off
 chcp 65001 >nul
 title تطبيق تحديث STARGATE CAFE اليدوي
-echo جاري تطبيق حزمة التحديث...
+echo جاري تطبيق حزمة التحديث... يرجى الانتظار...
 timeout /t 3 /nobreak >nul
 taskkill /F /IM STARGATE.exe >nul 2>&1
 taskkill /F /IM python.exe >nul 2>&1
-robocopy "{tmp_dir}" "{base_dir}" /E /IS /IT /XF "*.db" "*.sqlite" "cafe_accounting.db" /XD "data" "Safe_Backups" >nul
+taskkill /F /IM pythonw.exe >nul 2>&1
+robocopy "{tmp_dir}" "{base_dir}" /E /IS /IT /XF "*.db" "*.sqlite" "cafe_accounting.db" /XD "data" "Safe_Backups" "logs" >nul
 if exist "{base_dir}\\_internal" (
     robocopy "{tmp_dir}\\templates" "{base_dir}\\_internal\\templates" /E /IS >nul 2>&1
     robocopy "{tmp_dir}\\static"    "{base_dir}\\_internal\\static"    /E /IS >nul 2>&1
@@ -3309,8 +3707,12 @@ del "%~f0"
         return jsonify({'success': True, 'message': 'تم استلام وتثبيت حزمة التحديث بنجاح! سيتم إعادة تشغيل البرنامج فوراً.'})
 
     except Exception as e:
-        logger.logger.error(f"Manual Update error: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+        import traceback
+        try:
+            logger.error(f"Manual Update error: {e}\n{traceback.format_exc()}")
+        except Exception:
+            pass
+        return jsonify({'success': False, 'error': f'فشل التحديث اليدوي: {str(e)}'}), 200
 
 
 @app.route('/download/update.zip')
@@ -3773,6 +4175,13 @@ def table_add():
         except Exception as e:
             flash(f"تنبيه: {e}", "warning")
     return redirect(url_for('tables_page'))
+
+
+@app.errorhandler(500)
+def handle_500_error(e):
+    if request.is_json or request.path.startswith('/api/'):
+        return jsonify({'success': False, 'error': f'خطأ داخلي في الخادم (500): {str(e)}'}), 200
+    return "خطأ داخلي في الخادم (500)", 500
 
 
 if __name__ == '__main__':

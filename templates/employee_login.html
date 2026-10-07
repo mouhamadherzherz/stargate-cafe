@@ -182,7 +182,8 @@
                 method: 'POST',
                 headers: {
                     'Accept': 'application/json',
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token() }}'
                 }
             })
             .then(async response => {
@@ -192,10 +193,13 @@
                     res = JSON.parse(text);
                 } catch (jsonErr) {
                     console.error('Non-JSON server response:', text);
-                    if (text.includes('<!DOCTYPE') || text.includes('<html')) {
-                        throw new Error('انتهت الجلسة أو يلزم تسجيل دخول المدير. يرجى إدخال رمز المدير وإعادة المحاولة.');
+                    if (response.status === 401 || response.status === 403) {
+                        throw new Error('انتهت الجلسة أو تعذر الوصول للصلاحيات. يرجى تسجيل الدخول وإعادة المحاولة.');
                     }
-                    throw new Error('استجابة غير متوقعة من خادم البرنامج.');
+                    throw new Error(`تعذر قراءة استجابة الخادم (كود: ${response.status}).`);
+                }
+                if (!response.ok) {
+                    throw new Error((res && (res.error || res.message)) || `خطأ من الخادم (${response.status})`);
                 }
                 return res;
             })

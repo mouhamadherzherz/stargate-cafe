@@ -373,8 +373,10 @@ def record_shift_closing(
             expenses_lbp, safe_transfers_lbp,
             expected_cash_lbp, actual_cash_lbp,
             difference_lbp, difference_note, orders_count,
-            status, handover_to_employee_name, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'closed', ?, ?)
+            status, handover_to_employee_name,
+            approved_by, approved_at, approval_status,
+            created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'closed', ?, ?, ?, 'approved', ?)
     """, (
         business_date, employee_id, employee_name, now_str,
         opening_float_lbp, opening_float_usd,
@@ -383,7 +385,9 @@ def record_shift_closing(
         expenses_lbp, safe_transfers_lbp,
         expected_cash_lbp, actual_cash_lbp,
         difference_lbp, difference_note, orders_count,
-        handover_to_employee_name, now_str
+        handover_to_employee_name,
+        employee_name or 'الكاشير', now_str,
+        now_str
     ))
     closing_id = cursor.lastrowid
     conn.commit()
@@ -479,6 +483,31 @@ def verify_admin_password(entered_pin):
     if not stored:
         return False
     return verify_password(entered_pin, stored)
+
+def verify_manager_or_admin_pin(entered_pin):
+    """Verify PIN/Password against system admin password OR any active manager/admin employee."""
+    if not entered_pin:
+        return False
+    # Check system admin password
+    if verify_admin_password(entered_pin):
+        return True
+    # Check employees with role 'admin' or 'manager'
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT pin, password FROM employees WHERE role IN ('admin', 'manager') AND is_active = 1")
+        rows = cursor.fetchall()
+        conn.close()
+        for r in rows:
+            p = str(r['pin'] or '').strip()
+            pw = str(r['password'] or '').strip()
+            if p and (p == str(entered_pin).strip() or verify_password(entered_pin, p)):
+                return True
+            if pw and verify_password(entered_pin, pw):
+                return True
+    except Exception as e:
+        logger.error(f"Error checking manager PIN: {e}")
+    return False
 
 def update_admin_password(new_pin):
     """Update admin password (hashed)."""
@@ -1139,9 +1168,32 @@ def create_order(order_data, items_list, tab_id=None):
 
     # 1. Calculate totals centrally using Decimal precision
     calc = calculate_order_totals(items_list, rate)
-    total_lbp = calc['total_lbp']
-    total_usd = calc['total_usd']
+    subtotal_lbp = calc['total_lbp']
+    subtotal_usd = calc['total_usd']
     computed_items = calc['items']
+
+    # Process discounts for regular customers / loyalty / coffee hospitality
+    discount_percent = float(order_data.get('discount_percent') or 0.0)
+    discount_lbp = float(order_data.get('discount_lbp') or 0.0)
+    discount_usd = float(order_data.get('discount_usd') or 0.0)
+    discount_reason = (order_data.get('discount_reason') or '').strip()
+
+    if discount_percent > 0:
+        if discount_percent > 100.0:
+            discount_percent = 100.0
+        discount_lbp = round(subtotal_lbp * (discount_percent / 100.0), 0)
+        discount_usd = round(subtotal_usd * (discount_percent / 100.0), 2)
+    elif discount_usd > 0 and discount_lbp <= 0:
+        discount_lbp = round(discount_usd * rate, 0)
+        discount_percent = round((discount_lbp / subtotal_lbp) * 100, 1) if subtotal_lbp > 0 else 0.0
+    elif discount_lbp > 0:
+        discount_usd = round(discount_lbp / rate, 2) if rate > 0 else 0.0
+        discount_percent = round((discount_lbp / subtotal_lbp) * 100, 1) if subtotal_lbp > 0 else 0.0
+
+    discount_lbp = min(discount_lbp, subtotal_lbp)
+    discount_usd = min(discount_usd, subtotal_usd)
+    total_lbp = max(0.0, subtotal_lbp - discount_lbp)
+    total_usd = max(0.0, subtotal_usd - discount_usd)
 
     customer_name = (order_data.get('customer_name') or '').strip() or 'زبون كاش'
     notes = order_data.get('notes', '')
@@ -1183,6 +1235,17 @@ def create_order(order_data, items_list, tab_id=None):
                             return False, f"الكمية المطلوبة ({q}) غير متوفرة في المخزون للمنتج: {st_row['name']} (المتوفر حالياً: {int(available) if available.is_integer() else available})"
 
         is_wholesale = 1 if order_data.get('is_wholesale') in (1, '1', True, 'true') else 0
+        # Read previously recorded item batch IDs if settling an open tab
+        tab_item_batches = {}
+        if tab_id:
+            try:
+                cursor.execute("SELECT item_id, item_name, coffee_batch_id FROM cafe_order_items WHERE order_id = ? AND coffee_batch_id IS NOT NULL", (tab_id,))
+                for tb in cursor.fetchall():
+                    key = tb['item_id'] or tb['item_name']
+                    tab_item_batches[key] = tb['coffee_batch_id']
+            except Exception:
+                pass
+
         if tab_id:
             # Checkout & Settle existing open customer tab
             emp_id = order_data.get('employee_id')
@@ -1219,11 +1282,22 @@ def create_order(order_data, items_list, tab_id=None):
             """, (order_num, total_lbp, total_usd, paid_amount, payment_method, customer_name, notes, emp_id, emp_name, is_wholesale, get_local_now()))
             order_id = cursor.lastrowid
 
+        # حفظ تفاصيل المجموع قبل الخصم والخصم وسببه في الفاتورة
+        cursor.execute("""
+            UPDATE cafe_orders SET subtotal_lbp = ?, subtotal_usd = ?, discount_lbp = ?, discount_usd = ?,
+                   discount_percent = ?, discount_reason = ?
+            WHERE id = ?
+        """, (subtotal_lbp, subtotal_usd, discount_lbp, discount_usd, discount_percent, discount_reason, order_id))
+
         total_order_cogs_lbp = 0.0
+        _net_ratio = (total_lbp / subtotal_lbp) if subtotal_lbp > 0 else 1.0
         total_order_cogs_usd = 0.0
-        order_coffee_cups = 0
-        order_coffee_rev_lbp = 0.0
-        order_coffee_rev_usd = 0.0
+        coffee_batches_allocation = {}
+
+        # Get latest active batch id as default fallback
+        cursor.execute("SELECT id FROM coffee_bag_batches WHERE status = 'active' ORDER BY id DESC LIMIT 1")
+        latest_act_row = cursor.fetchone()
+        latest_act_id = latest_act_row['id'] if latest_act_row else None
 
         for it in computed_items:
             item_id = it.get('item_id')
@@ -1236,17 +1310,24 @@ def create_order(order_data, items_list, tab_id=None):
             sub_usd = it['subtotal_usd']
             item_is_wholesale = 1 if (it.get('is_wholesale') or is_wholesale) else 0
 
-            cursor.execute("""
-            INSERT INTO cafe_order_items (order_id, item_id, item_name, item_type, quantity, unit_price_lbp, unit_price_usd, subtotal_lbp, subtotal_usd, is_wholesale)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (order_id, item_id, item_name, item_type, q, u_lbp, u_usd, sub_lbp, sub_usd, item_is_wholesale))
-
-            # ☕ Accumulate coffee cups in this order ONLY if linked to coffee beans kilo bag
+            # Determine coffee batch: use tab's original pinned batch or latest active batch
             item_is_coffee_bean_linked = is_coffee_item(item_name, item_id=item_id)
+            target_batch_id = None
             if item_is_coffee_bean_linked:
-                order_coffee_cups += q
-                order_coffee_rev_lbp += sub_lbp
-                order_coffee_rev_usd += sub_usd
+                key = item_id or item_name
+                target_batch_id = tab_item_batches.get(key) or latest_act_id
+
+                if target_batch_id:
+                    if target_batch_id not in coffee_batches_allocation:
+                        coffee_batches_allocation[target_batch_id] = {'cups': 0, 'rev_lbp': 0.0, 'rev_usd': 0.0}
+                    coffee_batches_allocation[target_batch_id]['cups'] += q
+                    coffee_batches_allocation[target_batch_id]['rev_lbp'] += sub_lbp * _net_ratio
+                    coffee_batches_allocation[target_batch_id]['rev_usd'] += sub_usd * _net_ratio
+
+            cursor.execute("""
+            INSERT INTO cafe_order_items (order_id, item_id, item_name, item_type, quantity, unit_price_lbp, unit_price_usd, subtotal_lbp, subtotal_usd, is_wholesale, coffee_batch_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (order_id, item_id, item_name, item_type, q, u_lbp, u_usd, sub_lbp, sub_usd, item_is_wholesale, target_batch_id))
 
             # Deduct stock for finalized sales (direct sale or tab settlement)
             # Coffee bean linked items skip individual cup tracking because they are tracked via the coffee beans batch
@@ -1315,15 +1396,15 @@ def create_order(order_data, items_list, tab_id=None):
             VALUES (?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, 'unpaid', ?, ?)
             """, (customer_name, order_data.get('phone', ''), order_id, order_num, total_lbp, total_usd, total_lbp, total_usd, notes or 'فاتورة كاشير معلقة على الحساب', get_local_now()))
 
-        # ☕ Update Active Coffee Bag Batch atomically in the same transaction
-        if order_coffee_cups > 0:
+        # ☕ Update each target Coffee Bag Batch accurately (even if multiple batches were involved)
+        for b_id, alloc in coffee_batches_allocation.items():
             try:
-                cursor.execute("SELECT * FROM coffee_bag_batches WHERE status = 'active' ORDER BY id DESC LIMIT 1")
+                cursor.execute("SELECT * FROM coffee_bag_batches WHERE id = ?", (b_id,))
                 act_b = cursor.fetchone()
                 if act_b:
-                    n_sold = int(act_b['cups_sold'] or 0) + order_coffee_cups
-                    n_rev_lbp = float(act_b['total_revenue_lbp'] or 0.0) + order_coffee_rev_lbp
-                    n_rev_usd = float(act_b['total_revenue_usd'] or 0.0) + order_coffee_rev_usd
+                    n_sold = int(act_b['cups_sold'] or 0) + alloc['cups']
+                    n_rev_lbp = float(act_b['total_revenue_lbp'] or 0.0) + alloc['rev_lbp']
+                    n_rev_usd = float(act_b['total_revenue_usd'] or 0.0) + alloc['rev_usd']
                     n_damaged = int(act_b['cups_damaged'] or 0)
                     n_tot = n_sold + n_damaged
                     c_kg_lbp = float(act_b['cost_per_kg_lbp'] or 0.0)
@@ -1331,20 +1412,23 @@ def create_order(order_data, items_list, tab_id=None):
                     n_prof_lbp = n_rev_lbp - c_kg_lbp
                     n_prof_usd = n_rev_usd - c_kg_usd
 
+                    cost_cup_lbp = round(c_kg_lbp / max(1, n_tot), 2) if n_tot > 0 else 0.0
+                    cost_cup_usd = round(c_kg_usd / max(1, n_tot), 4) if n_tot > 0 else 0.0
+
                     cursor.execute("""
                         UPDATE coffee_bag_batches
                         SET cups_sold = ?,
                             total_cups = ?,
                             total_revenue_lbp = ?,
                             total_revenue_usd = ?,
-                            cost_per_cup_lbp = 0.0,
-                            cost_per_cup_usd = 0.0,
+                            cost_per_cup_lbp = ?,
+                            cost_per_cup_usd = ?,
                             net_profit_lbp = ?,
                             net_profit_usd = ?
                         WHERE id = ?
-                    """, (n_sold, n_tot, n_rev_lbp, n_rev_usd, n_prof_lbp, n_prof_usd, act_b['id']))
-            except Exception:
-                pass
+                    """, (n_sold, n_tot, n_rev_lbp, n_rev_usd, cost_cup_lbp, cost_cup_usd, n_prof_lbp, n_prof_usd, b_id))
+            except Exception as e:
+                logger.error(f"Error updating coffee batch {b_id}: {e}")
 
         conn.commit()
         conn.close()
@@ -1367,25 +1451,31 @@ def create_order(order_data, items_list, tab_id=None):
                     business_date=get_business_date()
                 )
 
-                # Double Entry: Debit Cash Drawer (1010), Credit Sales Revenue (4010)
+                # Double Entry: Dr Drawer (net) + Dr Discounts 4100, Cr Sales Revenue 4010 (gross)
+                _lines = [
+                    {'account_code': '1010', 'debit_lbp': total_lbp, 'credit_lbp': 0.0, 'debit_usd': total_usd, 'credit_usd': 0.0, 'memo': f"قبض نقدي #{order_num}"}
+                ]
+                if discount_lbp > 0:
+                    _lines.append({'account_code': '4100', 'debit_lbp': discount_lbp, 'credit_lbp': 0.0, 'debit_usd': discount_usd, 'credit_usd': 0.0, 'memo': f"خصم #{order_num} {discount_reason}".strip()})
+                _lines.append({'account_code': '4010', 'debit_lbp': 0.0, 'credit_lbp': subtotal_lbp, 'debit_usd': 0.0, 'credit_usd': subtotal_usd, 'memo': f"إيراد مبيعات كافيه #{order_num}"})
                 record_double_entry_journal(
                     description=f"مبيع نقدي فاتورة #{order_num} ({customer_name})",
-                    lines=[
-                        {'account_code': '1010', 'debit_lbp': total_lbp, 'credit_lbp': 0.0, 'debit_usd': total_usd, 'credit_usd': 0.0, 'memo': f"قبض نقدي #{order_num}"},
-                        {'account_code': '4010', 'debit_lbp': 0.0, 'credit_lbp': total_lbp, 'debit_usd': 0.0, 'credit_usd': total_usd, 'memo': f"إيراد مبيعات كافيه #{order_num}"}
-                    ],
+                    lines=_lines,
                     reference_type='cafe_orders',
                     reference_id=order_id,
                     user_name=emp_name
                 )
             elif payment_method == 'debt':
-                # Double Entry: Debit Accounts Receivable (1030), Credit Sales Revenue (4010)
+                # Double Entry: Dr Receivable (net) + Dr Discounts 4100, Cr Sales Revenue 4010 (gross)
+                _lines = [
+                    {'account_code': '1030', 'debit_lbp': total_lbp, 'credit_lbp': 0.0, 'debit_usd': total_usd, 'credit_usd': 0.0, 'memo': f"ذمة مدينة #{order_num}"}
+                ]
+                if discount_lbp > 0:
+                    _lines.append({'account_code': '4100', 'debit_lbp': discount_lbp, 'credit_lbp': 0.0, 'debit_usd': discount_usd, 'credit_usd': 0.0, 'memo': f"خصم #{order_num} {discount_reason}".strip()})
+                _lines.append({'account_code': '4010', 'debit_lbp': 0.0, 'credit_lbp': subtotal_lbp, 'debit_usd': 0.0, 'credit_usd': subtotal_usd, 'memo': f"إيراد مبيعات آجل #{order_num}"})
                 record_double_entry_journal(
                     description=f"مبيع آجل دين على الزبون فاتورة #{order_num} ({customer_name})",
-                    lines=[
-                        {'account_code': '1030', 'debit_lbp': total_lbp, 'credit_lbp': 0.0, 'debit_usd': total_usd, 'credit_usd': 0.0, 'memo': f"ذمة مدينة #{order_num}"},
-                        {'account_code': '4010', 'debit_lbp': 0.0, 'credit_lbp': total_lbp, 'debit_usd': 0.0, 'credit_usd': total_usd, 'memo': f"إيراد مبيعات آجل #{order_num}"}
-                    ],
+                    lines=_lines,
                     reference_type='cafe_orders',
                     reference_id=order_id,
                     user_name=emp_name
@@ -1393,7 +1483,12 @@ def create_order(order_data, items_list, tab_id=None):
         except Exception:
             pass
 
-        return True, {'order_id': order_id, 'order_number': order_num, 'total_lbp': total_lbp, 'total_usd': total_usd, 'payment_method': payment_method}
+        return True, {
+            'order_id': order_id, 'order_number': order_num,
+            'subtotal_lbp': subtotal_lbp, 'discount_lbp': discount_lbp,
+            'discount_percent': discount_percent, 'discount_reason': discount_reason,
+            'total_lbp': total_lbp, 'total_usd': total_usd, 'payment_method': payment_method
+        }
     except Exception as e:
         conn.rollback()
         conn.close()
@@ -1430,7 +1525,32 @@ def save_customer_tab(customer_name, items_list=None, tab_id=None, notes=''):
                 first_coffee = coffee_items_found[0]
                 return False, f"⚠️ لا يمكن إضافة القهوة للحساب! الصنف ({first_coffee}) يتطلب حبوب بن، ولا يوجد كيلو قهوة مفتوح حالياً في المحل. يجب فتح كيلو جديد أولاً ☕"
 
+        existing_batch_map = {}
         if tab_id:
+            # Preserve existing batch IDs for items that were already placed on this tab
+            cursor.execute("SELECT item_name, quantity, coffee_batch_id FROM cafe_order_items WHERE order_id = ?", (tab_id,))
+            old_rows = cursor.fetchall()
+            for r in old_rows:
+                b_id = r['coffee_batch_id']
+                if b_id:
+                    existing_batch_map.setdefault(r['item_name'], []).append(b_id)
+
+            # Audit check: detect item removal or quantity modification
+            old_summary = ", ".join([f"{r['item_name']} (x{r['quantity']})" for r in old_rows])
+            new_summary = ", ".join([f"{it['name']} (x{it['quantity']})" for it in computed_items])
+            if old_summary and old_summary != new_summary:
+                cursor.execute("""
+                    INSERT INTO audit_log
+                       (actor, action, table_name, record_id, old_value, new_value, reason, ip_address)
+                    VALUES (?, 'MODIFY_TAB_ITEMS', 'cafe_orders', ?, ?, ?, ?, '127.0.0.1')
+                """, (
+                    'كاشير',
+                    tab_id,
+                    old_summary,
+                    new_summary,
+                    f"تعديل أصناف حساب الزبون ({customer_name})"
+                ))
+
             # Update existing open tab
             cursor.execute("""
             UPDATE cafe_orders SET
@@ -1456,6 +1576,10 @@ def save_customer_tab(customer_name, items_list=None, tab_id=None, notes=''):
             """, (order_num, total_lbp, total_usd, customer_name, notes, get_local_now()))
             order_id = cursor.lastrowid
 
+        cursor.execute("SELECT id FROM coffee_bag_batches WHERE status = 'active' ORDER BY id DESC LIMIT 1")
+        active_batch_row = cursor.fetchone()
+        current_active_batch_id = active_batch_row['id'] if active_batch_row else None
+
         for it in computed_items:
             item_id = it.get('item_id')
             item_name = it.get('name', 'صنف')
@@ -1465,11 +1589,19 @@ def save_customer_tab(customer_name, items_list=None, tab_id=None, notes=''):
             u_usd = it['price_usd']
             sub_lbp = it['subtotal_lbp']
             sub_usd = it['subtotal_usd']
+            
+            # If item was already in tab, reuse its original coffee_batch_id; otherwise use current active batch
+            item_coffee_batch = None
+            if is_coffee_item(item_name, item_id=item_id):
+                if existing_batch_map.get(item_name):
+                    item_coffee_batch = existing_batch_map[item_name].pop(0)
+                else:
+                    item_coffee_batch = current_active_batch_id
 
             cursor.execute("""
-            INSERT INTO cafe_order_items (order_id, item_id, item_name, item_type, quantity, unit_price_lbp, unit_price_usd, subtotal_lbp, subtotal_usd)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (order_id, item_id, item_name, item_type, q, u_lbp, u_usd, sub_lbp, sub_usd))
+            INSERT INTO cafe_order_items (order_id, item_id, item_name, item_type, quantity, unit_price_lbp, unit_price_usd, subtotal_lbp, subtotal_usd, coffee_batch_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (order_id, item_id, item_name, item_type, q, u_lbp, u_usd, sub_lbp, sub_usd, item_coffee_batch))
 
         conn.commit()
         conn.close()
@@ -1602,22 +1734,133 @@ def get_inventory_alerts_count():
     return {'total': len(items), 'out_of_stock': out_of_stock, 'low_stock': low_stock}
 
 
-def delete_tab(tab_id):
-    """إلغاء طاولة/حساب مفتوح دون المساس بالمخزون (لأن المخزون لا يُخصم إلا عند الدفع وإصدار الفاتورة)."""
+def delete_tab(tab_id, cancelled_by=None, reason=None, is_waste=False):
+    """إلغاء طاولة/حساب زبون مع توثيق رقابي إلزامي ومسار تدقيق، مع خيار توثيق الأصناف التالفة."""
     conn = get_db()
     cursor = conn.cursor()
     try:
-        # Delete open tab items and order
+        # 1. Fetch order details before deletion
+        cursor.execute("SELECT customer_name, total_lbp, total_usd FROM cafe_orders WHERE id = ? AND status = 'open'", (tab_id,))
+        order_row = cursor.fetchone()
+        if not order_row:
+            conn.close()
+            return False, "الحساب غير موجود أو تم إغلاقه مسبقاً"
+
+        customer_name = order_row['customer_name'] or 'طاولة زبون'
+        total_lbp = float(order_row['total_lbp'] or 0.0)
+        total_usd = float(order_row['total_usd'] or 0.0)
+
+        # 2. Fetch order items
+        cursor.execute("SELECT item_id, item_name, quantity, unit_price_lbp, unit_price_usd, item_type FROM cafe_order_items WHERE order_id = ?", (tab_id,))
+        items = [dict(r) for r in cursor.fetchall()]
+        items_summary = ", ".join([f"{it['item_name']} (x{it['quantity']})" for it in items]) or "بدون أصناف"
+
+        # 3. If marked as waste (تالف/هدر مواد)، record into stock movements and coffee waste
+        actor_name = cancelled_by or 'كاشير'
+        waste_reason = reason or 'إلغاء طاولة / تلف طلب'
+        if is_waste and items:
+            for it in items:
+                cursor.execute("""
+                    INSERT INTO stock_movements (
+                        movement_type, item_type, item_id, item_name, quantity,
+                        reference_type, reference_id, user_name, notes, created_at
+                    ) VALUES ('WASTE', 'cafe_item', ?, ?, ?, 'tab_void_waste', ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (it.get('item_id') or 0, it['item_name'], it['quantity'], tab_id, actor_name, f"تلف عند إلغاء طاولة ({customer_name}): {waste_reason}"))
+                
+                # If coffee item, log to coffee waste if available
+                if 'قهوة' in it['item_name'] or 'اسبريسو' in it['item_name']:
+                    try:
+                        record_coffee_waste(qty=it['quantity'], reason=f"إلغاء حساب {customer_name}: {waste_reason}", employee_name=actor_name)
+                    except Exception:
+                        pass
+
+        # 4. Write audit log (سجل التدقيق الرقابي الإلزامي)
+        cursor.execute("""
+            INSERT INTO audit_log
+               (actor, action, table_name, record_id, old_value, new_value, reason, ip_address)
+            VALUES (?, 'VOID_CUSTOMER_TAB', 'cafe_orders', ?, ?, 'CANCELLED_VOID', ?, '127.0.0.1')
+        """, (
+            actor_name,
+            tab_id,
+            f"الزبون: {customer_name} | الإجمالي: {total_lbp:,.0f} ل.ل ({total_usd:.2f}$) | الأصناف: {items_summary}",
+            f"{waste_reason}{' [تم تسجيله كتالف]' if is_waste else ''}"
+        ))
+
+        # 5. Delete open tab items and order
         cursor.execute("DELETE FROM cafe_order_items WHERE order_id = ?", (tab_id,))
         cursor.execute("DELETE FROM cafe_orders WHERE id = ? AND status = 'open'", (tab_id,))
         conn.commit()
         conn.close()
-        return True
+        return True, f"تم إلغاء حساب ({customer_name}) بنجاح وتوثيق العملية في سجل الرقابة."
     except Exception as e:
         logger.error(f"Error in delete_tab: {e}", exc_info=True)
         conn.rollback()
         conn.close()
-        return False
+        return False, str(e)
+
+
+def record_spoilage_waste(item_id=None, item_name="", qty=1.0, unit="قطعة", reason="", employee_name="كاشير", notes=""):
+    """تسجيل بضاعة تالفة أو مهدورة وخصمها من المخزون مع توثيق إلزامي في السجل الرقابي."""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        qty = float(qty or 1.0)
+        actor_name = employee_name or 'كاشير'
+        clean_reason = reason or 'تلف أثناء العمل'
+        
+        # Deduct from cafe_items or inventory if item_id provided
+        if item_id:
+            cursor.execute("SELECT name, stock_qty, track_stock FROM cafe_items WHERE id = ?", (item_id,))
+            ci = cursor.fetchone()
+            if ci:
+                item_name = ci['name']
+                if ci['track_stock']:
+                    cursor.execute("UPDATE cafe_items SET stock_qty = MAX(0, stock_qty - ?) WHERE id = ?", (qty, item_id))
+            else:
+                cursor.execute("SELECT name, stock_qty FROM inventory WHERE id = ?", (item_id,))
+                inv = cursor.fetchone()
+                if inv:
+                    item_name = inv['name']
+                    cursor.execute("UPDATE inventory SET stock_qty = MAX(0, stock_qty - ?) WHERE id = ?", (qty, item_id))
+
+        if not item_name:
+            item_name = "صنف عام"
+
+        # If it's coffee, log coffee waste as well
+        if 'قهوة' in item_name or 'اسبريسو' in item_name:
+            try:
+                record_coffee_waste(qty=int(qty), reason=clean_reason, employee_name=actor_name, notes=notes)
+            except Exception:
+                pass
+
+        # Record in stock_movements
+        cursor.execute("""
+            INSERT INTO stock_movements (
+                movement_type, item_type, item_id, item_name, quantity,
+                reference_type, user_name, notes, created_at
+            ) VALUES ('WASTE', 'spoilage', ?, ?, ?, 'manual_spoilage', ?, ?, CURRENT_TIMESTAMP)
+        """, (item_id or 0, item_name, qty, actor_name, f"سبب التلف: {clean_reason} | {notes}"))
+
+        # Write audit log directly in the same transaction
+        cursor.execute("""
+            INSERT INTO audit_log
+               (actor, action, table_name, record_id, old_value, new_value, reason, ip_address)
+            VALUES (?, 'RECORD_WASTE_SPOILAGE', 'stock_movements', ?, ?, 'SPOILED_WASTE', ?, '127.0.0.1')
+        """, (
+            actor_name,
+            item_id or 0,
+            f"كمية {qty} {unit} من ({item_name})",
+            clean_reason
+        ))
+
+        conn.commit()
+        conn.close()
+        return True, f"تم تسجيل تالف {qty} من ({item_name}) وتوثيقها رقابياً بنجاح."
+    except Exception as e:
+        logger.error(f"Error in record_spoilage_waste: {e}", exc_info=True)
+        conn.rollback()
+        conn.close()
+        return False, str(e)
 
 def get_orders(target_date=None, limit=5000, employee_id=None):
     conn = get_db()
@@ -2251,6 +2494,7 @@ def get_daily_summary(target_date=None):
         COALESCE(SUM(CASE WHEN source != 'safe' OR source IS NULL THEN amount_usd ELSE 0 END), 0) as expenses_drawer_usd
     FROM expenses
     WHERE DATE(datetime(created_at, '-5 hours')) = DATE(?)
+      AND (status != 'cancelled' OR status IS NULL)
     """, (target_date,))
     exp_res = dict(cursor.fetchone() or {})
 
@@ -2277,8 +2521,22 @@ def get_daily_summary(target_date=None):
             COUNT(id) as transfers_count
         FROM safe_transfers
         WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?) OR note LIKE ?)
+          AND (status != 'cancelled' OR status IS NULL)
     """, (target_date, target_date, f"%{target_date}%"))
     safe_day_row = dict(cursor.fetchone() or {})
+
+    # خصومات اليوم (خصم الزبائن الدائمين والضيافة)
+    try:
+        cursor.execute("""
+            SELECT COALESCE(SUM(discount_lbp), 0) as disc_lbp, COUNT(CASE WHEN discount_lbp > 0 THEN 1 END) as disc_count
+            FROM cafe_orders
+            WHERE DATE(datetime(created_at, '-5 hours')) = DATE(?) AND (status = 'paid' OR status IS NULL OR status = '')
+        """, (target_date,))
+        disc_row = dict(cursor.fetchone() or {})
+    except Exception:
+        disc_row = {}
+    discounts_lbp = float(disc_row.get('disc_lbp') or 0.0)
+    discounts_count = int(disc_row.get('disc_count') or 0)
 
     conn.close()
 
@@ -2313,6 +2571,9 @@ def get_daily_summary(target_date=None):
     drawer_remaining_usd = round(drawer_remaining_lbp / rate, 2) if rate > 0 else 0.0
 
     grand_totals = {
+        'discounts_lbp': discounts_lbp,
+        'discounts_usd': round(discounts_lbp / rate, 2) if rate > 0 else 0.0,
+        'discounts_count': discounts_count,
         'revenue_lbp': actual_cash_in_lbp,
         'revenue_usd': actual_cash_in_usd,
         'total_production_lbp': total_production_lbp,
@@ -3563,8 +3824,12 @@ def get_employee_performance_summary(target_date=None, all_time=False):
 # 🏦 وظائف الخزنة الخاصة والمحاسبة المركزية (Advanced Safe/Vault Management)
 # ============================================================
 
-def add_safe_transfer(amount_lbp=0.0, note='', transferred_by='المدير', rate=None, amount_usd=None, operation_type='deposit', employee_id=None, source='drawer', target='safe'):
+def add_safe_transfer(amount_lbp=0.0, note='', transferred_by='المدير', rate=None, amount_usd=None, operation_type='deposit', employee_id=None, source='drawer', target='safe', employee_name=None):
     """نقل أو سحب مبلغ من/إلى الخزنة الخاصة مع التمييز الدقيق بين مصادر النقدية والوجهات وتوثيقه في السجل المالي."""
+    if employee_name and (not transferred_by or transferred_by == 'المدير'):
+        transferred_by = employee_name
+    transferred_by = transferred_by or 'المدير'
+    note = note or ''
     settings = get_settings()
     rate = rate or float(settings.get('exchange_rate') or 89500.0)
     amount_lbp = float(amount_lbp or 0.0)
@@ -3788,6 +4053,34 @@ def get_safe_balance():
         """)
         row = dict(cursor.fetchone() or {})
         cnt = int(row.get('transfers_count') or 0)
+    else:
+        # مطابقة ذكية: أي حركة خزنة نشطة لم يُكتب لها قيد في السجل المركزي (بسبب قفل/خطأ) تُحتسب فوراً
+        # حتى لا يظهر المبلغ "معلقاً" أبداً
+        try:
+            cursor.execute("""
+                SELECT
+                    COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN 0 ELSE amount_lbp END), 0),
+                    COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN amount_lbp ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN 0 ELSE amount_usd END), 0),
+                    COALESCE(SUM(CASE WHEN operation_type = 'withdraw' THEN amount_usd ELSE 0 END), 0),
+                    COUNT(id)
+                FROM safe_transfers st
+                WHERE (st.status != 'cancelled' OR st.status IS NULL)
+                  AND COALESCE(st.target, 'safe') != 'expense'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM financial_ledger fl
+                      WHERE fl.reference_table = 'safe_transfers' AND fl.reference_id = st.id
+                  )
+            """)
+            orphan = cursor.fetchone()
+            if orphan and int(orphan[4] or 0) > 0:
+                row['total_deposit_lbp'] = float(row.get('total_deposit_lbp') or 0) + float(orphan[0] or 0)
+                row['total_withdraw_lbp'] = float(row.get('total_withdraw_lbp') or 0) + float(orphan[1] or 0)
+                row['total_deposit_usd'] = float(row.get('total_deposit_usd') or 0) + float(orphan[2] or 0)
+                row['total_withdraw_usd'] = float(row.get('total_withdraw_usd') or 0) + float(orphan[3] or 0)
+                cnt += int(orphan[4] or 0)
+        except Exception as e:
+            logger.warning(f"Safe orphan reconciliation skipped: {e}")
 
     conn.close()
 
@@ -3940,7 +4233,7 @@ def get_drawer_cash_status():
     all_debt_rep_lbp = float(cursor.fetchone()[0] or 0.0)
 
     # 5. إجمالي المصاريف المسددة من الدرج عبر كل التاريخ (المصاريف من الخزنة لا تخصم من الدرج)
-    cursor.execute("SELECT COALESCE(SUM(amount_lbp), 0) FROM expenses WHERE source != 'safe' OR source IS NULL")
+    cursor.execute("SELECT COALESCE(SUM(amount_lbp), 0) FROM expenses WHERE (source != 'safe' OR source IS NULL) AND (status != 'cancelled' OR status IS NULL)")
     all_expenses_lbp = float(cursor.fetchone()[0] or 0.0)
 
     # 6. إجمالي ما رُحِّل للخزنة الخاصة من الدرج (خصماً من الدرج)
@@ -3950,6 +4243,7 @@ def get_drawer_cash_status():
             COALESCE(SUM(CASE WHEN operation_type = 'deposit' AND (source != 'external' OR source IS NULL) THEN amount_lbp ELSE 0 END), 0) as deposits_from_drawer,
             COALESCE(SUM(CASE WHEN operation_type = 'withdraw' AND target = 'drawer' THEN amount_lbp ELSE 0 END), 0) as returned_to_drawer
         FROM safe_transfers
+        WHERE (status != 'cancelled' OR status IS NULL)
     """)
     safe_row = cursor.fetchone()
     total_safe_deposits_lbp = float(safe_row[0] or 0.0)
@@ -4010,6 +4304,7 @@ def check_daily_safe_transfer_status(target_date=None):
         SELECT * FROM safe_transfers
         WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?) OR note LIKE ?)
           AND operation_type = 'deposit'
+          AND (status != 'cancelled' OR status IS NULL)
         ORDER BY id DESC
     """, (target_date, target_date, f"%{target_date}%"))
     existing_transfers = [dict(r) for r in cursor.fetchall()]
@@ -4049,6 +4344,7 @@ def check_daily_safe_transfer_status(target_date=None):
             COUNT(id) as expenses_count
         FROM expenses
         WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?))
+          AND (status != 'cancelled' OR status IS NULL)
     """, (target_date, target_date))
     exp_row = dict(cursor.fetchone() or {})
     total_expenses_lbp = float(exp_row.get('expenses_lbp') or 0.0)

@@ -89,6 +89,7 @@ def get_audit_logger() -> logging.Logger:
 # Convenience singleton accessors
 # ──────────────────────────────────────────────
 app_logger  = get_app_logger()
+app_logger.logger = app_logger
 audit_logger = get_audit_logger()
 
 def log_audit(actor: str, action: str, record_id=None,

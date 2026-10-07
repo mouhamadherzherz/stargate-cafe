@@ -104,9 +104,13 @@
                     <span class="text-[11px] font-bold text-emerald-400 bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-800 flex items-center gap-1">
                         <i class="fa-solid fa-circle-check"></i> تم الترحيل بالكامل للخزنة
                     </span>
+                    {% elif daily_transfer_status.already_transferred_lbp > 0 %}
+                    <span class="text-[11px] font-bold text-emerald-300 bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-800/70 flex items-center gap-1">
+                        <i class="fa-solid fa-circle-check"></i> رُحِّل {{ daily_transfer_status.already_transferred_lbp|format_currency }} ل.ل • متبقٍ {{ daily_transfer_status.recommended_transfer_lbp|format_currency }} ل.ل
+                    </span>
                     {% else %}
-                    <span class="text-[11px] font-bold text-amber-400 bg-amber-950/80 px-2.5 py-0.5 rounded-full border border-amber-800/80 animate-pulse flex items-center gap-1">
-                        <i class="fa-solid fa-hourglass-half"></i> بانتظار النقل للخزنة
+                    <span class="text-[11px] font-bold text-amber-400 bg-amber-950/80 px-2.5 py-0.5 rounded-full border border-amber-800/80 flex items-center gap-1">
+                        <i class="fa-solid fa-sack-dollar"></i> كاش جاهز للترحيل
                     </span>
                     {% endif %}
                 </div>

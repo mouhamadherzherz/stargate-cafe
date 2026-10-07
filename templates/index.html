@@ -468,6 +468,18 @@
                         </span>
                         {% endif %}
 
+                        {% if item.track_stock %}
+                            {% if (item.stock_qty|default(0)|float) <= 0 %}
+                            <span class="absolute bottom-2.5 left-2.5 z-30 bg-rose-950/90 text-rose-300 font-bold text-[9px] px-2 py-0.5 rounded-lg border border-rose-600/70 shadow-md flex items-center gap-1">
+                                <span>⚠️</span> نفد المخزون (0)
+                            </span>
+                            {% elif (item.stock_qty|default(0)|float) <= (item.low_stock_limit|default(5)|float) %}
+                            <span class="absolute bottom-2.5 left-2.5 z-30 bg-amber-950/90 text-amber-300 font-bold text-[9px] px-2 py-0.5 rounded-lg border border-amber-600/70 shadow-md flex items-center gap-1 animate-pulse">
+                                <span>⚡</span> متبقي {{ item.stock_qty|int }} فقط
+                            </span>
+                            {% endif %}
+                        {% endif %}
+
                         <!-- Quantity Badge in Cart -->
                         <span class="card-qty-badge hidden absolute top-2.5 left-20 z-30 bg-amber-400 text-slate-950 font-mono font-black text-xs px-2.5 py-1 rounded-full shadow-2xl border-2 border-slate-950 animate-bounce">
                             x1
@@ -585,10 +597,49 @@
             <!-- Cart Bottom: Totals & Direct Pay -->
             <div class="p-3 bg-slate-950/95 border-t border-slate-800 space-y-2.5">
 
+                <!-- DISCOUNT PANEL (خصم للزبائن الدائمين / ضيافة) -->
+                <div id="discountPanel" class="p-2.5 rounded-2xl bg-slate-900/80 border border-pink-500/30 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[11px] font-black text-pink-300 flex items-center gap-1.5">🏷️ خصم على الفاتورة</span>
+                        <div class="flex items-center bg-slate-950 border border-slate-700 rounded-lg p-0.5 text-[10px] font-black">
+                            <button type="button" id="discModePct" onclick="setDiscountMode('pct')" class="px-2 py-0.5 rounded-md bg-pink-600 text-white">%</button>
+                            <button type="button" id="discModeLbp" onclick="setDiscountMode('lbp')" class="px-2 py-0.5 rounded-md text-slate-400">ل.ل</button>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <input type="number" id="discountValueInput" min="0" step="any" placeholder="0" oninput="renderCart()"
+                               class="w-24 bg-slate-950 border border-slate-700 focus:border-pink-400 focus:outline-none rounded-lg px-2 py-1 text-xs font-mono font-black text-pink-200 text-center">
+                        <input type="text" id="discountReasonInput" maxlength="120" placeholder="السبب (زبون دائم، ضيافة...)"
+                               class="flex-1 min-w-0 bg-slate-950 border border-slate-700 focus:border-pink-400 focus:outline-none rounded-lg px-2 py-1 text-[11px] text-slate-200">
+                        <button type="button" onclick="clearDiscount()" title="إزالة الخصم" class="text-slate-500 hover:text-rose-400 px-1.5 text-xs">✕</button>
+                    </div>
+                    <div class="flex flex-wrap gap-1">
+                        <button type="button" onclick="applyQuickDiscount(5)" class="disc-chip">5%</button>
+                        <button type="button" onclick="applyQuickDiscount(10)" class="disc-chip">10%</button>
+                        <button type="button" onclick="applyQuickDiscount(15)" class="disc-chip">15%</button>
+                        <button type="button" onclick="applyQuickDiscount(20)" class="disc-chip">20%</button>
+                        <button type="button" onclick="applyQuickDiscount(50)" class="disc-chip">50%</button>
+                        <button type="button" onclick="applyQuickDiscount(100, 'ضيافة / مجاني')" class="disc-chip !border-amber-500/60 !text-amber-300">☕ ضيافة 100%</button>
+                    </div>
+                    <style>
+                        .disc-chip { font-size: 10px; font-weight: 900; padding: 2px 8px; border-radius: 9999px; border: 1px solid rgba(236,72,153,.4); color: #f9a8d4; background: rgba(2,6,23,.8); transition: all .15s; }
+                        .disc-chip:hover { background: #db2777; color: #fff; transform: translateY(-1px); }
+                    </style>
+                </div>
+
                 <!-- Grand Total Box -->
-                <div class="p-3 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-950 border border-amber-500/40 flex items-center justify-between">
+                <div class="p-3 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-950 border border-amber-500/40 space-y-1.5">
+                    <div id="cartSubtotalRow" class="hidden flex items-center justify-between text-[11px] font-mono">
+                        <span class="text-slate-400 font-sans font-bold">المجموع قبل الخصم:</span>
+                        <span class="text-slate-300 line-through"><span id="cartSubtotalLBP">0</span> ل.ل</span>
+                    </div>
+                    <div id="cartDiscountRow" class="hidden flex items-center justify-between text-[11px] font-mono">
+                        <span class="text-pink-300 font-sans font-bold">الخصم <span id="cartDiscountPctLabel"></span>:</span>
+                        <span class="text-pink-300 font-black">- <span id="cartDiscountLBP">0</span> ل.ل</span>
+                    </div>
+                    <div class="flex items-center justify-between">
                     <div>
-                        <span class="text-[10px] text-slate-400 font-bold block">المجموع الكلي المطلوب:</span>
+                        <span class="text-[10px] text-slate-400 font-bold block">الصافي المطلوب:</span>
                         <div class="text-2xl font-black font-mono text-emerald-400 leading-none mt-1">
                             <span id="cartTotalLBP">0</span> <span class="text-xs font-normal text-slate-400">ل.ل</span>
                         </div>
@@ -596,6 +647,7 @@
                     <div class="text-left">
                         <span class="text-[10px] text-slate-400 block font-mono">1$ = {{ exchange_rate|format_currency }}</span>
                         <span id="cartTotalUSD" class="text-sm font-black font-mono text-amber-300 mt-0.5 block">$0.00</span>
+                    </div>
                     </div>
                 </div>
 
@@ -990,6 +1042,12 @@
     // Update Quantity in Cart
     function updateQty(index, delta) {
         if (cart[index]) {
+            if (activeTabId && delta < 0) {
+                const itName = cart[index].name || 'الصنف';
+                if (!confirm(`⚠️ تنبيه رقابي: الصنف (${itName}) مسجل على طاولة زبون جالس. هل أنت متأكد من تقليل الكمية؟ سيتم توثيق التعديل في سجل الرقابة.`)) {
+                    return;
+                }
+            }
             cart[index].quantity += delta;
             playBeep(delta > 0 ? 750 : 500, 0.04);
             if (cart[index].quantity <= 0) {
@@ -1011,6 +1069,12 @@
     // Remove Item from Cart
     function removeItem(index) {
         if (cart[index]) {
+            if (activeTabId) {
+                const itName = cart[index].name || 'الصنف';
+                if (!confirm(`⚠️ تنبيه رقابي: هل أنت متأكد من حذف (${itName}) من حساب هذا الزبون الجالس؟ سيتم توثيق الحذف في سجل الرقابة.`)) {
+                    return;
+                }
+            }
             playBeep(400, 0.06);
             cart.splice(index, 1);
         }
@@ -1071,6 +1135,8 @@
             }
             if (totalLBPDisplay) totalLBPDisplay.innerText = '0';
             if (totalUSDDisplay) totalUSDDisplay.innerText = '$0.00';
+            document.getElementById('cartSubtotalRow')?.classList.add('hidden');
+            document.getElementById('cartDiscountRow')?.classList.add('hidden');
             if (cartCountBadge) cartCountBadge.innerText = '0 أصناف في الفاتورة';
             if (btnCash) btnCash.disabled = true;
             if (btnDebt) btnDebt.disabled = true;
@@ -1146,11 +1212,89 @@
         });
 
         if (cartCountBadge) cartCountBadge.innerText = `${totalItemsCount} أصناف في الفاتورة`;
-        if (totalLBPDisplay) totalLBPDisplay.innerText = totalLBP.toLocaleString();
-        if (totalUSDDisplay) totalUSDDisplay.innerText = '$' + (totalLBP / EXCHANGE_RATE).toFixed(2);
+        const disc = computeCartDiscount(totalLBP);
+        const netLBP = Math.max(0, totalLBP - disc.amount);
+        const subRow = document.getElementById('cartSubtotalRow');
+        const discRow = document.getElementById('cartDiscountRow');
+        if (disc.amount > 0) {
+            subRow?.classList.remove('hidden');
+            discRow?.classList.remove('hidden');
+            document.getElementById('cartSubtotalLBP').innerText = totalLBP.toLocaleString();
+            document.getElementById('cartDiscountLBP').innerText = disc.amount.toLocaleString();
+            document.getElementById('cartDiscountPctLabel').innerText = `(${disc.percent.toFixed(disc.percent % 1 ? 1 : 0)}%)`;
+        } else {
+            subRow?.classList.add('hidden');
+            discRow?.classList.add('hidden');
+        }
+        if (totalLBPDisplay) totalLBPDisplay.innerText = netLBP.toLocaleString();
+        if (totalUSDDisplay) totalUSDDisplay.innerText = '$' + (netLBP / EXCHANGE_RATE).toFixed(2);
         if (btnCash) btnCash.disabled = false;
         if (btnDebt) btnDebt.disabled = false;
         if (btnHold) btnHold.disabled = false;
+    }
+
+    // ================= DISCOUNT (خصم الزبائن الدائمين / ضيافة) =================
+    var discountMode = 'pct';
+
+    function cartGrossLBP() {
+        return (cart || []).reduce((s, it) => s + ((it.quantity || 1) * (it.price_lbp || 0)), 0);
+    }
+
+    function computeCartDiscount(gross) {
+        const inp = document.getElementById('discountValueInput');
+        let val = parseFloat(inp ? inp.value : 0) || 0;
+        if (val < 0) val = 0;
+        let amount = 0, percent = 0;
+        if (gross <= 0 || val <= 0) return { amount: 0, percent: 0 };
+        if (discountMode === 'pct') {
+            percent = Math.min(100, val);
+            amount = Math.round(gross * percent / 100);
+        } else {
+            amount = Math.min(gross, Math.round(val));
+            percent = gross > 0 ? (amount / gross) * 100 : 0;
+        }
+        return { amount, percent };
+    }
+
+    function setDiscountMode(mode) {
+        discountMode = mode === 'lbp' ? 'lbp' : 'pct';
+        const p = document.getElementById('discModePct');
+        const l = document.getElementById('discModeLbp');
+        if (p && l) {
+            p.className = 'px-2 py-0.5 rounded-md ' + (discountMode === 'pct' ? 'bg-pink-600 text-white' : 'text-slate-400');
+            l.className = 'px-2 py-0.5 rounded-md ' + (discountMode === 'lbp' ? 'bg-pink-600 text-white' : 'text-slate-400');
+        }
+        const inp = document.getElementById('discountValueInput');
+        if (inp) inp.placeholder = discountMode === 'pct' ? '0 %' : '0 ل.ل';
+        renderCart();
+    }
+
+    function applyQuickDiscount(pct, reason) {
+        setDiscountMode('pct');
+        const inp = document.getElementById('discountValueInput');
+        if (inp) inp.value = pct;
+        const r = document.getElementById('discountReasonInput');
+        if (r && (reason || !r.value)) r.value = reason || 'زبون دائم';
+        if (typeof playBeep === 'function') playBeep(780, 0.04);
+        renderCart();
+    }
+
+    function clearDiscount() {
+        const inp = document.getElementById('discountValueInput');
+        const r = document.getElementById('discountReasonInput');
+        if (inp) inp.value = '';
+        if (r) r.value = '';
+        renderCart();
+    }
+
+    function getDiscountPayload() {
+        const gross = cartGrossLBP();
+        const d = computeCartDiscount(gross);
+        if (d.amount <= 0) return { discount_percent: 0, discount_lbp: 0, discount_reason: '' };
+        const reason = (document.getElementById('discountReasonInput')?.value || '').trim();
+        return discountMode === 'pct'
+            ? { discount_percent: d.percent, discount_lbp: 0, discount_reason: reason }
+            : { discount_percent: 0, discount_lbp: d.amount, discount_reason: reason };
     }
 
     // ================= CUSTOMER OPEN TABS LOGIC =================
@@ -1316,21 +1460,85 @@
         }
     }
 
-    // Delete Active Customer Tab
-    async function deleteActiveCustomerTab() {
+    // Delete Active Customer Tab with Anti-Fraud Manager PIN & Reason
+    function deleteActiveCustomerTab() {
         if (!activeTabId) return;
-        if (!confirm('هل تريد إلغاء ومسح حساب هذا الزبون المعلق؟')) return;
+        openCancelTabSecurityModal();
+    }
+
+    function openCancelTabSecurityModal() {
+        const m = document.getElementById('cancelTabSecurityModal');
+        if (m) {
+            m.classList.remove('hidden');
+            const pin = document.getElementById('cancelTabAdminPin');
+            if (pin) pin.value = '';
+            const custom = document.getElementById('cancelTabCustomReason');
+            if (custom) custom.value = '';
+            toggleCancelTabOtherReason();
+            setTimeout(() => {
+                if (pin) pin.focus();
+            }, 100);
+        }
+    }
+
+    function closeCancelTabSecurityModal() {
+        const m = document.getElementById('cancelTabSecurityModal');
+        if (m) m.classList.add('hidden');
+    }
+
+    function toggleCancelTabOtherReason() {
+        const sel = document.getElementById('cancelTabReasonSelect');
+        const div = document.getElementById('cancelTabCustomReasonDiv');
+        if (sel && div) {
+            div.classList.toggle('hidden', sel.value !== 'أخرى');
+        }
+    }
+
+    async function confirmDeleteActiveTab() {
+        if (!activeTabId) return;
+        const sel = document.getElementById('cancelTabReasonSelect');
+        const custom = document.getElementById('cancelTabCustomReason');
+        const pinInp = document.getElementById('cancelTabAdminPin');
+        const wasteCheck = document.getElementById('cancelTabIsWaste');
+        
+        let reason = sel ? sel.value : 'إلغاء حساب معلق';
+        if (reason === 'أخرى' && custom && custom.value.trim()) {
+            reason = custom.value.trim();
+        }
+        const adminPin = pinInp ? pinInp.value.trim() : '';
+        const isWaste = wasteCheck ? wasteCheck.checked : false;
+
+        const btn = document.getElementById('btnConfirmCancelTab');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = 'جاري التوثيق والإلغاء...';
+        }
 
         try {
             const resp = await fetch(`/tab/${activeTabId}/delete`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    reason: reason,
+                    admin_pin: adminPin,
+                    is_waste: isWaste
+                })
             });
             const res = await resp.json();
             if (res.success) {
+                closeCancelTabSecurityModal();
                 window.location.reload();
+            } else {
+                alert(res.message || 'تعذر إلغاء الحساب! تحقق من رمز المدير.');
             }
-        } catch(e){}
+        } catch(e) {
+            alert('حدث خطأ أثناء إلغاء الحساب: ' + e);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerText = 'تأكيد الإلغاء والتوثيق الرقابي';
+            }
+        }
     }
 
     // ================= CHECKOUT (CASH & DEBT) =================
@@ -1341,7 +1549,8 @@
             alert('الفاتورة فارغة، يرجى اختيار أصناف أولاً');
             return;
         }
-        const totalLBP = cart.reduce((sum, it) => sum + ((it.quantity || 1) * (it.price_lbp || 0)), 0);
+        const grossLBP = cart.reduce((sum, it) => sum + ((it.quantity || 1) * (it.price_lbp || 0)), 0);
+        const totalLBP = Math.max(0, grossLBP - computeCartDiscount(grossLBP).amount);
         document.getElementById('debtModalTotalLBP').innerText = totalLBP.toLocaleString() + ' ل.ل';
         
         const activeName = activeTabId ? (openTabsData.find(t => t.id === activeTabId)?.customer_name || '') : '';
@@ -1377,14 +1586,19 @@
                 : 'زبون كاش';
         }
 
-        const payload = {
+        const payload = Object.assign({
             tab_id: activeTabId,
             customer_name: customerName,
             payment_method: paymentMethod,
             phone: phone,
             notes: notes,
             items: cart
-        };
+        }, getDiscountPayload());
+
+        const _dp = getDiscountPayload();
+        if ((_dp.discount_percent >= 100) && !confirm('تأكيد: فاتورة ضيافة مجانية 100% (المبلغ المستلم = 0 ل.ل)؟')) {
+            return;
+        }
 
         const btnCash = document.getElementById('btnSaveCash');
         const btnDebt = document.getElementById('btnSaveDebt');
@@ -1828,6 +2042,61 @@ function closeCoffeeBlockedModal() {
     if (m) m.classList.add('hidden');
 }
 </script>
+
+<!-- ====================================================================== -->
+<!-- CANCEL TAB SECURITY MODAL (إلغاء طاولة مع توثيق رقابي ورمز المدير) -->
+<!-- ====================================================================== -->
+<div id="cancelTabSecurityModal" class="fixed inset-0 z-[120] hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-rose-500/60 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 text-white">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2.5">
+                <span class="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-lg font-black border border-rose-500/30">⚠️</span>
+                <div>
+                    <h3 class="font-black text-sm text-white">إلغاء حساب زبون / طاولة</h3>
+                    <span class="text-[11px] text-slate-400">توثيق رقابي لمنع التلاعب وحذف الطلبات</span>
+                </div>
+            </div>
+            <button type="button" onclick="closeCancelTabSecurityModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition">✕</button>
+        </div>
+
+        <div class="space-y-3 text-xs">
+            <div>
+                <label class="block text-slate-300 font-bold mb-1">سبب الإلغاء: *</label>
+                <select id="cancelTabReasonSelect" onchange="toggleCancelTabOtherReason()" class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:border-rose-500 outline-none">
+                    <option value="طلب بالخطأ (لم يُحضر)">طلب بالخطأ (لم يُحضر)</option>
+                    <option value="زبون غادر قبل الاستلام">زبون غادر قبل الاستلام</option>
+                    <option value="تلف / هدر في التحضير">تلف / هدر في التحضير (سكب / كسر)</option>
+                    <option value="تعديل طاولة أخرى">تعديل طاولة أخرى</option>
+                    <option value="أخرى">سبب آخر (اكتب أدناه)...</option>
+                </select>
+            </div>
+
+            <div id="cancelTabCustomReasonDiv" class="hidden">
+                <input type="text" id="cancelTabCustomReason" placeholder="اكتب سبب الإلغاء بالتفصيل..." class="w-full bg-slate-950 border border-rose-500/50 text-white rounded-xl px-3 py-2 text-xs focus:border-rose-400 outline-none">
+            </div>
+
+            <label class="flex items-center gap-2 bg-slate-950/70 p-2.5 rounded-xl border border-slate-800 cursor-pointer">
+                <input type="checkbox" id="cancelTabIsWaste" class="accent-rose-500 w-4 h-4 rounded">
+                <span class="text-rose-300 font-bold text-[11px]">تسجيل الطلبات كتالف وهدر (خصم المواد من المخزون)</span>
+            </label>
+
+            <div>
+                <label class="block text-amber-300 font-bold mb-1">رمز مدير الصالة / المشرف (Manager PIN):</label>
+                <input type="password" id="cancelTabAdminPin" placeholder="أدخل رمز المشرف للموافقة..." class="w-full bg-slate-950 border border-amber-500/50 text-white font-mono rounded-xl px-3 py-2 text-xs focus:border-amber-400 outline-none text-center">
+                <span class="text-[10px] text-slate-400 block mt-1">مطلوب من الكاشير لمراجعة الإدارة ومنع التلاعب بالحسابات</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 pt-2 border-t border-slate-800">
+            <button type="button" id="btnConfirmCancelTab" onclick="confirmDeleteActiveTab()" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white font-black py-2.5 rounded-xl text-xs transition shadow-lg shadow-rose-600/30 flex items-center justify-center gap-1.5 cursor-pointer">
+                <span>تأكيد الإلغاء والتوثيق الرقابي</span>
+            </button>
+            <button type="button" onclick="closeCancelTabSecurityModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs transition cursor-pointer">
+                تراجع
+            </button>
+        </div>
+    </div>
+</div>
 
 <!-- ====================================================================== -->
 <!-- 2. EDIT SINGLE ITEM MODAL (تعديل فوري للصنف وسعره) -->
