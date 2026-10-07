@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مركز تحميل وتحديث ستارجيت كافيه - STARGATE CAFE v5.7.0 PRO</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.min.css') }}">
+    <script src="{{ url_for('static', filename='js/tailwindcss.js') }}"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
+        body { font-family: 'Cairo', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-2xl w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+        <!-- Glow effects -->
+        <div class="absolute -top-24 -right-24 w-60 h-60 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-24 -left-24 w-60 h-60 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="text-center mb-8 relative">
+            <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 text-white text-3xl shadow-lg shadow-amber-500/30 mb-4 animate-bounce">
+                ☕
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-black text-white tracking-tight">STARGATE CAFE & GAMING</h1>
+            <p class="text-amber-400 font-bold text-lg mt-1">مركز التحديثات والتحميل الرسمي (الإصدار v5.7.0 PRO)</p>
+            <p class="text-slate-400 text-sm mt-1">نظام الكافيه والمحاسبة الذكي - تحديث الخصومات والخزينة الفورية</p>
+        </div>
+
+        <div class="space-y-4 relative">
+            <!-- 1. Download Update ZIP -->
+            <a href="/download/update.zip" class="group flex items-center justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-slate-800 to-slate-800/80 hover:from-amber-600 hover:to-amber-500 border border-slate-700/80 hover:border-amber-400 transition-all duration-300 shadow-md hover:shadow-xl hover:shadow-amber-500/20 transform hover:-translate-y-0.5">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-amber-500/20 group-hover:bg-white/20 text-amber-400 group-hover:text-white flex items-center justify-center text-2xl transition">
+                        📦
+                    </div>
+                    <div>
+                        <div class="text-base sm:text-lg font-bold text-white group-hover:text-white">تحميل حزمة التحديث الكاملة (ZIP)</div>
+                        <div class="text-xs sm:text-sm text-slate-400 group-hover:text-amber-100">Stargate_Cafe_Update.zip - أحدث إصدار v5.7.0 مع كافة التحسينات</div>
+                    </div>
+                </div>
+                <div class="text-amber-400 group-hover:text-white font-black text-xl px-3">
+                    ⬇️
+                </div>
+            </a>
+
+            <!-- 2. Download 1-Click Employee Batch -->
+            <a href="/download/update_employee.bat" class="group flex items-center justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-slate-800 to-slate-800/80 hover:from-blue-600 hover:to-blue-500 border border-slate-700/80 hover:border-blue-400 transition-all duration-300 shadow-md hover:shadow-xl hover:shadow-blue-500/20 transform hover:-translate-y-0.5">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-blue-500/20 group-hover:bg-white/20 text-blue-400 group-hover:text-white flex items-center justify-center text-2xl transition">
+                        ⚡
+                    </div>
+                    <div>
+                        <div class="text-base sm:text-lg font-bold text-white group-hover:text-white">أداة التحديث الفوري لجهاز الموظف (.bat)</div>
+                        <div class="text-xs sm:text-sm text-slate-400 group-hover:text-blue-100">تحديث وتثبيت تلقائي بضغطة زر واحدة دون الحاجة لأي إعدادات</div>
+                    </div>
+                </div>
+                <div class="text-blue-400 group-hover:text-white font-black text-xl px-3">
+                    ⬇️
+                </div>
+            </a>
+
+            <!-- 3. Direct POS Launch -->
+            <a href="/employee/login" class="group flex items-center justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-800/40 to-emerald-700/40 hover:from-emerald-600 hover:to-emerald-500 border border-emerald-600/40 hover:border-emerald-400 transition-all duration-300 shadow-md hover:shadow-xl hover:shadow-emerald-500/20 transform hover:-translate-y-0.5">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/20 group-hover:bg-white/20 text-emerald-400 group-hover:text-white flex items-center justify-center text-2xl transition">
+                        💻
+                    </div>
+                    <div>
+                        <div class="text-base sm:text-lg font-bold text-white group-hover:text-white">فتح شاشة الكاشير والمبيعات الآن</div>
+                        <div class="text-xs sm:text-sm text-emerald-300 group-hover:text-emerald-100">الدخول المباشر إلى نقطة البيع عبر المتصفح دون تنزيل</div>
+                    </div>
+                </div>
+                <div class="text-emerald-400 group-hover:text-white font-black text-xl px-3">
+                    ➔
+                </div>
+            </a>
+
+            <!-- 4. Full Installer Setup -->
+            <a href="/download/installer.exe" class="group flex items-center justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-slate-800/60 to-slate-800/40 hover:from-purple-600 hover:to-purple-500 border border-slate-700/60 hover:border-purple-400 transition-all duration-300 shadow-sm hover:shadow-md transform hover:-translate-y-0.5">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-xl bg-purple-500/20 group-hover:bg-white/20 text-purple-400 group-hover:text-white flex items-center justify-center text-2xl transition">
+                        🛠️
+                    </div>
+                    <div>
+                        <div class="text-base sm:text-lg font-bold text-white group-hover:text-white">برنامج التثبيت الكامل (Setup Installer .exe)</div>
+                        <div class="text-xs sm:text-sm text-slate-400 group-hover:text-purple-100">لتثبيت البرنامج للمرة الأولى على كمبيوتر جديد بالكامل</div>
+                    </div>
+                </div>
+                <div class="text-purple-400 group-hover:text-white font-black text-xl px-3">
+                    ⬇️
+                </div>
+            </a>
+        </div>
+
+        <!-- Footer / Instructions -->
+        <div class="mt-8 pt-6 border-t border-slate-800 text-center text-xs sm:text-sm text-slate-400">
+            <p>💡 <strong class="text-slate-300">ملاحظة سريعة للموظف:</strong> يمكنك أيضاً فتح شاشة الكاشير مباشرة عبر الرابط أعلاه واستخدامها كبرنامج عبر ميزة "تثبيت هذا الموقع كتطبيق" في متصفحك.</p>
+            <p class="mt-2 text-slate-500">STARGATE EXPERTS &copy; 2026 - كافة الحقوق محفوظة</p>
+        </div>
+    </div>
+</body>
+</html>

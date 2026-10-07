@@ -393,6 +393,43 @@ def record_shift_closing(
     conn.commit()
     conn.close()
 
+    # إذا وُجد فرق (عجز أو زيادة في النقدية) ننشئ قيد تسوية مزدوج آلي لضبط الصندوق
+    if abs(float(difference_lbp or 0.0)) > 0:
+        try:
+            settings = get_settings()
+            rate = float(settings.get('exchange_rate') or 89500.0)
+            diff_val = float(difference_lbp)
+            diff_u = round(abs(diff_val) / rate, 2) if rate > 0 else 0.0
+            if diff_val > 0:
+                # زيادة نقدية (Cash Overage - Revenue 4040)
+                # مدين: صندوق الكاشير (1010) / دائن: زيادة وفائض الصندوق (4040)
+                record_double_entry_journal(
+                    description=f"تسوية زيادة نقدية إغلاق وردية ({employee_name}): +{diff_val:,.0f} ل.ل",
+                    lines=[
+                        {'account_code': '1010', 'debit_lbp': diff_val, 'credit_lbp': 0.0, 'debit_usd': diff_u, 'credit_usd': 0.0, 'memo': 'إثبات الزيادة بصندوق الكاشير'},
+                        {'account_code': '4040', 'debit_lbp': 0.0, 'credit_lbp': diff_val, 'debit_usd': 0.0, 'credit_usd': diff_u, 'memo': 'إيراد فائض وزيادة الصندوق'}
+                    ],
+                    reference_type='shift_closings',
+                    reference_id=closing_id,
+                    user_name=employee_name
+                )
+            else:
+                # عجز نقدي (Cash Shortage - Expense 5050)
+                # مدين: عجز الصندوق وفوارق الجرد (5050) / دائن: صندوق الكاشير (1010)
+                abs_diff = abs(diff_val)
+                record_double_entry_journal(
+                    description=f"تسوية عجز نقدي إغلاق وردية ({employee_name}): -{abs_diff:,.0f} ل.ل",
+                    lines=[
+                        {'account_code': '5050', 'debit_lbp': abs_diff, 'credit_lbp': 0.0, 'debit_usd': diff_u, 'credit_usd': 0.0, 'memo': 'مصروف عجز وفوارق الصندوق'},
+                        {'account_code': '1010', 'debit_lbp': 0.0, 'credit_lbp': abs_diff, 'debit_usd': 0.0, 'credit_usd': diff_u, 'memo': 'تخفيض الصندوق لمطابقة العد الفعلي'}
+                    ],
+                    reference_type='shift_closings',
+                    reference_id=closing_id,
+                    user_name=employee_name
+                )
+        except Exception as eje:
+            logger.warning(f"Error creating journal for shift diff: {eje}")
+
     try:
         log_shift_close(
             employee_id=employee_id,
@@ -2999,6 +3036,22 @@ def pay_debt(debt_id, amount_lbp, payment_method='cash', notes=''):
             except Exception:
                 pass
 
+        # قيد محاسبي مزدوج لسداد الدين: مدين صندوق الكاشير (1010) / دائن ذمة الزبون (1030)
+        try:
+            dest_acc = '1010' if payment_method == 'cash' else '1020'
+            record_double_entry_journal(
+                description=f"سداد دين الزبون ({debt['customer_name']})",
+                lines=[
+                    {'account_code': dest_acc, 'debit_lbp': amount_lbp, 'credit_lbp': 0.0, 'debit_usd': amount_usd, 'credit_usd': 0.0, 'memo': f"قبض نقدي سداد دين #{pid}"},
+                    {'account_code': '1030', 'debit_lbp': 0.0, 'credit_lbp': amount_lbp, 'debit_usd': 0.0, 'credit_usd': amount_usd, 'memo': f"تخفيض ذمة الزبون {debt['customer_name']}"}
+                ],
+                reference_type='debt_payments',
+                reference_id=pid,
+                user_name='كاشير'
+            )
+        except Exception:
+            pass
+
         return True, {'debt_id': debt_id, 'paid_lbp': amount_lbp, 'remaining_lbp': new_remaining_lbp, 'status': new_status}
     except Exception as e:
         conn.rollback()
@@ -3843,6 +3896,9 @@ def add_safe_transfer(amount_lbp=0.0, note='', transferred_by='المدير', ra
     else:
         amount_usd = round(amount_lbp / rate, 2) if rate > 0 else 0.0
 
+    if amount_lbp <= 0 and (amount_usd is None or float(amount_usd) <= 0):
+        return None
+
     conn = get_db()
     cursor = conn.cursor()
     try:
@@ -3857,6 +3913,27 @@ def add_safe_transfer(amount_lbp=0.0, note='', transferred_by='المدير', ra
         conn.commit()
     except Exception:
         pass
+
+    # 1. حماية ضد النقر المزدوج والتكرار السريع (Idempotency Lock - 10s)
+    cursor.execute("""
+        SELECT id FROM safe_transfers 
+        WHERE amount_lbp = ? AND operation_type = ? AND source = ? AND target = ? AND status = 'active'
+          AND datetime(created_at) >= datetime('now', '-10 seconds')
+        ORDER BY id DESC LIMIT 1
+    """, (amount_lbp, op_type, source, target))
+    dup_row = cursor.fetchone()
+    if dup_row:
+        conn.close()
+        return dup_row[0]
+
+    # 2. فحص كفاية كاش الدرج إذا كان الترحيل من الدرج للخزنة
+    if op_type == 'deposit' and source == 'drawer':
+        cursor.execute("SELECT COALESCE(balance_lbp, 0) FROM accounts WHERE code = '1010'")
+        d_row = cursor.fetchone()
+        drawer_avail = float(d_row[0] or 0.0) if d_row else 0.0
+        if drawer_avail > 0 and amount_lbp > (drawer_avail + 1000.0):
+            amount_lbp = drawer_avail
+            amount_usd = round(amount_lbp / rate, 2) if rate > 0 else 0.0
 
     now_str = get_local_now()
     cursor.execute("""
@@ -4251,17 +4328,18 @@ def get_drawer_cash_status():
     # الكاش الصافي الذي خرج من الدرج باتجاه الخزنة
     net_to_safe_lbp = max(0.0, total_safe_deposits_lbp - total_returned_to_drawer_lbp)
 
+    # رصيد الحساب المالي الدفتري الحقيقي لصندوق الكاشير (Account 1010)
+    cursor.execute("SELECT COALESCE(balance_lbp, 0), COALESCE(balance_usd, 0) FROM accounts WHERE code = '1010'")
+    acc_row = cursor.fetchone()
+    exact_drawer_lbp = float(acc_row[0] or 0.0) if acc_row else 0.0
+    exact_drawer_usd = float(acc_row[1] or 0.0) if acc_row else 0.0
+
     conn.close()
 
-    # الكاش الإجمالي الفعلي الموجود بالدرج الآن ولم ينقل للخزنة بعد:
-    # (كل الكاش الداخل للدرج) - (مصاريف الدرج) - (صافي ما نُقل للخزنة)
-    total_income_lbp = all_cash_sales_lbp + all_debt_rep_lbp
-    total_outflow_lbp = all_expenses_lbp + net_to_safe_lbp
-    total_untransferred_lbp = max(0.0, total_income_lbp - total_outflow_lbp)
-    total_untransferred_usd = round(total_untransferred_lbp / rate, 2) if rate > 0 else 0.0
+    total_untransferred_lbp = max(0.0, exact_drawer_lbp)
+    total_untransferred_usd = max(0.0, exact_drawer_usd)
 
     # الكاش السابق (قبل اليوم) غير المرحّل للخزنة
-    # نحسبه بنسبة: (past_cash / all_cash) * total_untransferred
     if all_cash_sales_lbp > 0:
         past_ratio = past_cash_sales_lbp / all_cash_sales_lbp
     else:
@@ -4279,7 +4357,9 @@ def get_drawer_cash_status():
         'total_untransferred_usd': total_untransferred_usd,
         'all_transferred_to_safe_lbp': net_to_safe_lbp,
         'all_debt_rep_lbp': all_debt_rep_lbp,
-        'all_expenses_lbp': all_expenses_lbp
+        'all_expenses_lbp': all_expenses_lbp,
+        'exact_drawer_account_lbp': exact_drawer_lbp,
+        'exact_drawer_account_usd': exact_drawer_usd
     }
 
 
@@ -4799,17 +4879,35 @@ def record_supplier_payment(supplier_id, amount_usd=0.0, amount_lbp=0.0, payment
     conn.commit()
     conn.close()
 
-    # Log in General Ledger
+    # Log in Financial Ledger and Double-Entry Journal
     try:
         record_financial_ledger_entry(
-            account_type='cash_safe' if payment_source == 'safe' else 'cash_drawer',
-            entry_type='credit',
+            entry_type='PURCHASE_PAYMENT',
+            source=payment_source,  # 'safe' أو 'drawer'
+            destination='supplier',
             amount_lbp=paid_l,
             amount_usd=paid_u,
             reference_table='supplier_payments',
             reference_id=supplier_id,
             user_name=created_by,
-            notes=f"سداد دفعة للمورد {supp['name']} ({notes})"
+            notes=f"سداد دفعة للمورد {supp['name']} ({notes})",
+            exchange_rate=rate,
+            business_date=get_business_date()
+        )
+    except Exception:
+        pass
+
+    try:
+        credit_code = '1020' if payment_source == 'safe' else '1010'
+        record_double_entry_journal(
+            description=f"سداد دفعة للمورد {supp['name']} ({notes})",
+            lines=[
+                {'account_code': '2010', 'debit_lbp': paid_l, 'credit_lbp': 0.0, 'debit_usd': paid_u, 'credit_usd': 0.0, 'memo': f"دفعة للمورد {supp['name']}"},
+                {'account_code': credit_code, 'debit_lbp': 0.0, 'credit_lbp': paid_l, 'debit_usd': 0.0, 'credit_usd': paid_u, 'memo': f"صادر من {payment_source}"}
+            ],
+            reference_type='supplier_payments',
+            reference_id=supplier_id,
+            user_name=created_by
         )
     except Exception:
         pass
@@ -4985,15 +5083,30 @@ def get_comprehensive_financial_statement(start_date=None, end_date=None):
 # =========================================================================
 
 def get_chart_of_accounts():
-    """جلب شجرة الحسابات المحاسبية كاملة مع أرصدتها وحالتها."""
+    """جلب شجرة الحسابات المحاسبية كاملة مع أرصدتها وحالتها وفق القواعد المحاسبية الدقيقة (Normal Balance)."""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT a.*,
-            COALESCE(SUM(jel.debit_lbp - jel.credit_lbp), 0) as calculated_balance_lbp,
-            COALESCE(SUM(jel.debit_usd - jel.credit_usd), 0) as calculated_balance_usd
+            CASE 
+                WHEN LOWER(a.account_type) IN ('asset', 'expense') THEN
+                    COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.debit_lbp - jel.credit_lbp ELSE 0 END), 0)
+                ELSE
+                    COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.credit_lbp - jel.debit_lbp ELSE 0 END), 0)
+            END as calculated_balance_lbp,
+            CASE 
+                WHEN LOWER(a.account_type) IN ('asset', 'expense') THEN
+                    COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.debit_usd - jel.credit_usd ELSE 0 END), 0)
+                ELSE
+                    COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.credit_usd - jel.debit_usd ELSE 0 END), 0)
+            END as calculated_balance_usd,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.debit_lbp ELSE 0 END), 0) as total_debit_lbp,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.credit_lbp ELSE 0 END), 0) as total_credit_lbp,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.debit_usd ELSE 0 END), 0) as total_debit_usd,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.credit_usd ELSE 0 END), 0) as total_credit_usd
         FROM accounts a
         LEFT JOIN journal_entry_lines jel ON a.code = jel.account_code
+        LEFT JOIN journal_entries je ON jel.journal_entry_id = je.id
         GROUP BY a.id
         ORDER BY a.code ASC
     """)
@@ -5047,9 +5160,10 @@ def record_double_entry_journal(description: str, lines: list, reference_type: s
 
         for l in lines:
             code = l.get('account_code')
-            cursor.execute("SELECT name_ar, name FROM accounts WHERE code = ?", (code,))
+            cursor.execute("SELECT name_ar, name, account_type FROM accounts WHERE code = ?", (code,))
             acc_row = cursor.fetchone()
             acc_name = acc_row['name_ar'] if acc_row else (l.get('account_name') or code)
+            acc_type = (acc_row['account_type'] if acc_row else 'asset').lower()
 
             cursor.execute("""
                 INSERT INTO journal_entry_lines (
@@ -5063,9 +5177,19 @@ def record_double_entry_journal(description: str, lines: list, reference_type: s
                 (l.get('memo') or '').strip()
             ))
 
-            # تحديث رصيد الحساب المباشر
-            net_change_lbp = float(l.get('debit_lbp') or 0.0) - float(l.get('credit_lbp') or 0.0)
-            net_change_usd = float(l.get('debit_usd') or 0.0) - float(l.get('credit_usd') or 0.0)
+            # تحديث رصيد الحساب المباشر وفق الطبيعة المحاسبية (Normal Balance)
+            deb_l = float(l.get('debit_lbp') or 0.0)
+            cr_l = float(l.get('credit_lbp') or 0.0)
+            deb_u = float(l.get('debit_usd') or 0.0)
+            cr_u = float(l.get('credit_usd') or 0.0)
+
+            if acc_type in ('asset', 'expense'):
+                net_change_lbp = deb_l - cr_l
+                net_change_usd = deb_u - cr_u
+            else:
+                net_change_lbp = cr_l - deb_l
+                net_change_usd = cr_u - deb_u
+
             cursor.execute("""
                 UPDATE accounts
                 SET balance_lbp = balance_lbp + ?,
@@ -5080,6 +5204,53 @@ def record_double_entry_journal(description: str, lines: list, reference_type: s
         conn.rollback()
         conn.close()
         return False, str(e)
+
+
+def recalculate_all_account_balances():
+    """
+    إعادة احتساب وتزامن كافة أرصدة شجرة الحسابات (Accounts) بدقة متناهية من واقع قيود اليومية المعتمدة (Posted).
+    تضمن أن الرصيد يتبع الطبيعة المحاسبية (Normal Balance):
+    - الأصول والمصروفات: مدين - دائن
+    - الخصوم وحقوق الملكية والإيرادات: دائن - مدين
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, code, account_type FROM accounts")
+    accs = cursor.fetchall()
+    for acc in accs:
+        code = acc['code']
+        acc_type = (acc['account_type'] or 'asset').lower()
+        cursor.execute("""
+            SELECT 
+                COALESCE(SUM(jel.debit_lbp), 0) as deb_lbp,
+                COALESCE(SUM(jel.credit_lbp), 0) as cr_lbp,
+                COALESCE(SUM(jel.debit_usd), 0) as deb_usd,
+                COALESCE(SUM(jel.credit_usd), 0) as cr_usd
+            FROM journal_entry_lines jel
+            JOIN journal_entries je ON jel.journal_entry_id = je.id
+            WHERE jel.account_code = ? AND je.status = 'posted'
+        """, (code,))
+        totals = cursor.fetchone()
+        deb_l = float(totals['deb_lbp'] or 0.0)
+        cr_l = float(totals['cr_lbp'] or 0.0)
+        deb_u = float(totals['deb_usd'] or 0.0)
+        cr_u = float(totals['cr_usd'] or 0.0)
+
+        if acc_type in ('asset', 'expense'):
+            bal_lbp = deb_l - cr_l
+            bal_usd = deb_u - cr_u
+        else:
+            bal_lbp = cr_l - deb_l
+            bal_usd = cr_u - deb_u
+
+        cursor.execute("""
+            UPDATE accounts 
+            SET balance_lbp = ?, balance_usd = ?
+            WHERE code = ?
+        """, (bal_lbp, bal_usd, code))
+    conn.commit()
+    conn.close()
+    return True
 
 
 def get_journal_entries(limit=100, start_date=None, end_date=None):
@@ -5105,6 +5276,503 @@ def get_journal_entries(limit=100, start_date=None, end_date=None):
 
     conn.close()
     return entries
+
+
+def record_shift_opening_float(employee_id: int, employee_name: str, amount_lbp: float,
+                               amount_usd: float = 0.0, source: str = 'safe', notes: str = '') -> tuple:
+    """
+    تسجيل العهدة الافتتاحية للصندوق (فكة بداية الدوام) بقيد محاسبي مزدوج وسجل مالي رسمي:
+    - مدين: صندوق الكاشير (1010)
+    - دائن: الخزنة الخاصة (1020) إذا وردت من الخزنة، أو رأس المال التأسيسي (3010)
+    """
+    settings = get_settings()
+    rate = float(settings.get('exchange_rate') or 89500.0)
+    amount_lbp = float(amount_lbp or 0.0)
+    if amount_lbp <= 0 and amount_usd > 0:
+        amount_lbp = round(amount_usd * rate, 0)
+    elif amount_usd <= 0 and amount_lbp > 0:
+        amount_usd = round(amount_lbp / rate, 2) if rate > 0 else 0.0
+
+    if amount_lbp <= 0:
+        return False, "مبلغ العهدة يجب أن يكون أكبر من صفر"
+
+    credit_acc = '1020' if source == 'safe' else '3010'
+    credit_name = 'الخزنة الخاصة' if source == 'safe' else 'رأس المال / العهدة'
+    memo = f"عهدة افتتاحية لصندوق الكاشير ({employee_name}) من {credit_name}"
+    if notes:
+        memo += f" - {notes}"
+
+    ok, res = record_double_entry_journal(
+        description=memo,
+        lines=[
+            {'account_code': '1010', 'debit_lbp': amount_lbp, 'credit_lbp': 0.0, 'debit_usd': amount_usd, 'credit_usd': 0.0, 'memo': 'وارد لصندوق الكاشير'},
+            {'account_code': credit_acc, 'debit_lbp': 0.0, 'credit_lbp': amount_lbp, 'debit_usd': 0.0, 'credit_usd': amount_usd, 'memo': f'صادر من {credit_name}'}
+        ],
+        reference_type='opening_float',
+        reference_id=employee_id,
+        user_name=employee_name
+    )
+    if ok:
+        try:
+            record_financial_ledger_entry(
+                entry_type='shift_opening_float',
+                source=source,
+                destination='drawer',
+                amount_lbp=amount_lbp,
+                amount_usd=amount_usd,
+                reference_table='accounts',
+                reference_id=1010,
+                user_id=employee_id,
+                user_name=employee_name,
+                notes=memo,
+                exchange_rate=rate,
+                business_date=get_business_date()
+            )
+        except Exception:
+            pass
+    return ok, res
+
+
+# =========================================================================
+# 📊 FINANCIAL STATEMENTS ENGINE (القوائم المالية الختامية وإقفال السنة)
+# =========================================================================
+
+def get_trial_balance(as_of_date: str = None) -> dict:
+    """
+    توليد ميزان المراجعة المحاسبي (Trial Balance):
+    يتحقق من التساوي الرياضي الصارم: مجموع الأرصدة المدينة = مجموع الأرصدة الدائنة (100%).
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    query = """
+        SELECT a.code, a.name_ar, a.name, a.account_type,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.debit_lbp ELSE 0 END), 0) as total_debit_lbp,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.credit_lbp ELSE 0 END), 0) as total_credit_lbp,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.debit_usd ELSE 0 END), 0) as total_debit_usd,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.credit_usd ELSE 0 END), 0) as total_credit_usd
+        FROM accounts a
+        LEFT JOIN journal_entry_lines jel ON a.code = jel.account_code
+        LEFT JOIN journal_entries je ON jel.journal_entry_id = je.id
+        WHERE 1=1
+    """
+    params = []
+    if as_of_date:
+        query += " AND (je.entry_date IS NULL OR DATE(je.entry_date) <= DATE(?))"
+        params.append(as_of_date)
+    query += " GROUP BY a.id ORDER BY a.code ASC"
+    cursor.execute(query, params)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+
+    total_debit_lbp = 0.0
+    total_credit_lbp = 0.0
+    total_debit_usd = 0.0
+    total_credit_usd = 0.0
+
+    for r in rows:
+        deb_l = float(r['total_debit_lbp'] or 0.0)
+        cr_l = float(r['total_credit_lbp'] or 0.0)
+        deb_u = float(r['total_debit_usd'] or 0.0)
+        cr_u = float(r['total_credit_usd'] or 0.0)
+
+        # حساب الرصيد الصافي المدين أو الدائن
+        net_lbp = deb_l - cr_l
+        net_usd = deb_u - cr_u
+        if net_lbp > 0:
+            r['balance_debit_lbp'] = net_lbp
+            r['balance_credit_lbp'] = 0.0
+        else:
+            r['balance_debit_lbp'] = 0.0
+            r['balance_credit_lbp'] = abs(net_lbp)
+
+        if net_usd > 0:
+            r['balance_debit_usd'] = net_usd
+            r['balance_credit_usd'] = 0.0
+        else:
+            r['balance_debit_usd'] = 0.0
+            r['balance_credit_usd'] = abs(net_usd)
+
+        total_debit_lbp += deb_l
+        total_credit_lbp += cr_l
+        total_debit_usd += deb_u
+        total_credit_usd += cr_u
+
+    diff_lbp = round(total_debit_lbp - total_credit_lbp, 2)
+    diff_usd = round(total_debit_usd - total_credit_usd, 2)
+
+    return {
+        'accounts': rows,
+        'total_debit_lbp': total_debit_lbp,
+        'total_credit_lbp': total_credit_lbp,
+        'total_debit_usd': total_debit_usd,
+        'total_credit_usd': total_credit_usd,
+        'is_balanced': abs(diff_lbp) <= 1.0,
+        'difference_lbp': diff_lbp,
+        'difference_usd': diff_usd,
+        'as_of_date': as_of_date or get_business_date()
+    }
+
+
+def get_income_statement(start_date: str = None, end_date: str = None) -> dict:
+    """
+    قائمة الدخل والأرباح والخسائر (Income Statement / Profit & Loss):
+    - الإيرادات التشغيلية (مبيعات كافيه، ألعاب، إيرادات أخرى، فائض الصندوق)
+    - الخصومات والضيافة
+    - تكلفة البضاعة المباعة (COGS)
+    - مجمل الربح (Gross Profit)
+    - المصروفات التشغيلية والرواتب والتالف وعجز الصندوق
+    - صافي الربح للفترة (Net Operating Profit)
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    query = """
+        SELECT a.code, a.name_ar, a.name, a.account_type,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.debit_lbp ELSE 0 END), 0) as total_debit_lbp,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.credit_lbp ELSE 0 END), 0) as total_credit_lbp,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.debit_usd ELSE 0 END), 0) as total_debit_usd,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.credit_usd ELSE 0 END), 0) as total_credit_usd
+        FROM accounts a
+        LEFT JOIN journal_entry_lines jel ON a.code = jel.account_code
+        LEFT JOIN journal_entries je ON jel.journal_entry_id = je.id
+        WHERE a.account_type IN ('revenue', 'expense')
+    """
+    params = []
+    if start_date:
+        query += " AND (je.entry_date IS NULL OR DATE(je.entry_date) >= DATE(?))"
+        params.append(start_date)
+    if end_date:
+        query += " AND (je.entry_date IS NULL OR DATE(je.entry_date) <= DATE(?))"
+        params.append(end_date)
+    query += " GROUP BY a.id ORDER BY a.code ASC"
+    cursor.execute(query, params)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+
+    revenues = []
+    expenses = []
+    total_revenue_lbp = 0.0
+    total_revenue_usd = 0.0
+    total_expense_lbp = 0.0
+    total_expense_usd = 0.0
+    discounts_lbp = 0.0
+    discounts_usd = 0.0
+    cogs_lbp = 0.0
+    cogs_usd = 0.0
+
+    for r in rows:
+        deb_l = float(r['total_debit_lbp'] or 0.0)
+        cr_l = float(r['total_credit_lbp'] or 0.0)
+        deb_u = float(r['total_debit_usd'] or 0.0)
+        cr_u = float(r['total_credit_usd'] or 0.0)
+        acc_type = r['account_type']
+        code = r['code']
+
+        if acc_type == 'revenue':
+            net_l = cr_l - deb_l
+            net_u = cr_u - deb_u
+            r['net_amount_lbp'] = net_l
+            r['net_amount_usd'] = net_u
+            revenues.append(r)
+            total_revenue_lbp += net_l
+            total_revenue_usd += net_u
+        elif acc_type == 'expense':
+            net_l = deb_l - cr_l
+            net_u = deb_u - cr_u
+            r['net_amount_lbp'] = net_l
+            r['net_amount_usd'] = net_u
+            if code == '4100':  # خصومات المبيعات (حساب مقابل للإيراد)
+                discounts_lbp += net_l
+                discounts_usd += net_u
+            elif code == '5010':  # تكلفة البضاعة المباعة
+                cogs_lbp += net_l
+                cogs_usd += net_u
+            else:
+                expenses.append(r)
+                total_expense_lbp += net_l
+                total_expense_usd += net_u
+
+    net_revenue_lbp = total_revenue_lbp - discounts_lbp
+    net_revenue_usd = total_revenue_usd - discounts_usd
+    gross_profit_lbp = net_revenue_lbp - cogs_lbp
+    gross_profit_usd = net_revenue_usd - cogs_usd
+    net_profit_lbp = gross_profit_lbp - total_expense_lbp
+    net_profit_usd = gross_profit_usd - total_expense_usd
+
+    return {
+        'revenues': revenues,
+        'total_revenue_lbp': total_revenue_lbp,
+        'total_revenue_usd': total_revenue_usd,
+        'discounts_lbp': discounts_lbp,
+        'discounts_usd': discounts_usd,
+        'net_revenue_lbp': net_revenue_lbp,
+        'net_revenue_usd': net_revenue_usd,
+        'cogs_lbp': cogs_lbp,
+        'cogs_usd': cogs_usd,
+        'gross_profit_lbp': gross_profit_lbp,
+        'gross_profit_usd': gross_profit_usd,
+        'operating_expenses': expenses,
+        'total_expense_lbp': total_expense_lbp,
+        'total_expense_usd': total_expense_usd,
+        'net_profit_lbp': net_profit_lbp,
+        'net_profit_usd': net_profit_usd,
+        'start_date': start_date,
+        'end_date': end_date
+    }
+
+
+def get_balance_sheet(as_of_date: str = None) -> dict:
+    """
+    الميزانية العمومية والمركز المالي (Balance Sheet):
+    تتحقق من المعادلة المحاسبية الذهبية:
+    الأصول (Assets) = الخصوم (Liabilities) + حقوق الملكية (Equity) + صافي ربح الفترة الحالية.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    query = """
+        SELECT a.code, a.name_ar, a.name, a.account_type,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.debit_lbp ELSE 0 END), 0) as total_debit_lbp,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.credit_lbp ELSE 0 END), 0) as total_credit_lbp,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.debit_usd ELSE 0 END), 0) as total_debit_usd,
+            COALESCE(SUM(CASE WHEN je.status = 'posted' THEN jel.credit_usd ELSE 0 END), 0) as total_credit_usd
+        FROM accounts a
+        LEFT JOIN journal_entry_lines jel ON a.code = jel.account_code
+        LEFT JOIN journal_entries je ON jel.journal_entry_id = je.id
+        WHERE a.account_type IN ('asset', 'liability', 'equity')
+    """
+    params = []
+    if as_of_date:
+        query += " AND (je.entry_date IS NULL OR DATE(je.entry_date) <= DATE(?))"
+        params.append(as_of_date)
+    query += " GROUP BY a.id ORDER BY a.code ASC"
+    cursor.execute(query, params)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+
+    assets = []
+    liabilities = []
+    equity = []
+    total_assets_lbp = 0.0
+    total_assets_usd = 0.0
+    total_liabilities_lbp = 0.0
+    total_liabilities_usd = 0.0
+    total_equity_lbp = 0.0
+    total_equity_usd = 0.0
+
+    for r in rows:
+        deb_l = float(r['total_debit_lbp'] or 0.0)
+        cr_l = float(r['total_credit_lbp'] or 0.0)
+        deb_u = float(r['total_debit_usd'] or 0.0)
+        cr_u = float(r['total_credit_usd'] or 0.0)
+        acc_type = r['account_type']
+
+        if acc_type == 'asset':
+            net_l = deb_l - cr_l
+            net_u = deb_u - cr_u
+            r['balance_lbp'] = net_l
+            r['balance_usd'] = net_u
+            assets.append(r)
+            total_assets_lbp += net_l
+            total_assets_usd += net_u
+        elif acc_type == 'liability':
+            net_l = cr_l - deb_l
+            net_u = cr_u - deb_u
+            r['balance_lbp'] = net_l
+            r['balance_usd'] = net_u
+            liabilities.append(r)
+            total_liabilities_lbp += net_l
+            total_liabilities_usd += net_u
+        elif acc_type == 'equity':
+            net_l = cr_l - deb_l
+            net_u = cr_u - deb_u
+            r['balance_lbp'] = net_l
+            r['balance_usd'] = net_u
+            equity.append(r)
+            total_equity_lbp += net_l
+            total_equity_usd += net_u
+
+    # احتساب صافي أرباح الفترة الحالية غير المقفلة بعد
+    pnl = get_income_statement(start_date=None, end_date=as_of_date)
+    current_net_income_lbp = pnl['net_profit_lbp']
+    current_net_income_usd = pnl['net_profit_usd']
+
+    total_equity_and_reserves_lbp = total_equity_lbp + current_net_income_lbp
+    total_equity_and_reserves_usd = total_equity_usd + current_net_income_usd
+
+    total_liab_equity_lbp = total_liabilities_lbp + total_equity_and_reserves_lbp
+    total_liab_equity_usd = total_liabilities_usd + total_equity_and_reserves_usd
+
+    diff_lbp = round(total_assets_lbp - total_liab_equity_lbp, 2)
+    diff_usd = round(total_assets_usd - total_liab_equity_usd, 2)
+
+    return {
+        'assets': assets,
+        'total_assets_lbp': total_assets_lbp,
+        'total_assets_usd': total_assets_usd,
+        'liabilities': liabilities,
+        'total_liabilities_lbp': total_liabilities_lbp,
+        'total_liabilities_usd': total_liabilities_usd,
+        'equity': equity,
+        'total_equity_lbp': total_equity_lbp,
+        'total_equity_usd': total_equity_usd,
+        'current_net_income_lbp': current_net_income_lbp,
+        'current_net_income_usd': current_net_income_usd,
+        'total_equity_and_reserves_lbp': total_equity_and_reserves_lbp,
+        'total_equity_and_reserves_usd': total_equity_and_reserves_usd,
+        'total_liabilities_and_equity_lbp': total_liab_equity_lbp,
+        'total_liabilities_and_equity_usd': total_liab_equity_usd,
+        'is_balanced': abs(diff_lbp) <= 1.0,
+        'difference_lbp': diff_lbp,
+        'difference_usd': diff_usd,
+        'as_of_date': as_of_date or get_business_date()
+    }
+
+
+def close_fiscal_year(fiscal_year: int, closed_by: str = 'المدير', notes: str = '') -> tuple:
+    """
+    إقفال السنة المالية رسمياً وتصفير الحسابات المؤقتة وترحيل صافي الربح إلى الأرباح المدورة:
+    - حساب كافة إيرادات ومصروفات السنة المحددة
+    - إنشاء قيد إقفال سنوي رسمي (Year-End Closing Journal Entry)
+    - تصفير حسابات 4xxx و 5xxx وترحيل الفارق دائن لحساب 3020 (الأرباح المبقاة والمدورة)
+    - تسجيل الإقفال في سجل fiscal_year_closings
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM fiscal_year_closings WHERE fiscal_year = ?", (fiscal_year,))
+    if cursor.fetchone():
+        conn.close()
+        return False, f"السنة المالية {fiscal_year} مقفلة بالفعل ولا يمكن إقفالها مرتين"
+
+    start_date = f"{fiscal_year}-01-01"
+    end_date = f"{fiscal_year}-12-31"
+
+    # جلب أرصدة حسابات الإيرادات والمصروفات للسنة
+    cursor.execute("""
+        SELECT a.code, a.name_ar, a.account_type,
+            COALESCE(SUM(jel.debit_lbp), 0) as deb_lbp,
+            COALESCE(SUM(jel.credit_lbp), 0) as cr_lbp,
+            COALESCE(SUM(jel.debit_usd), 0) as deb_usd,
+            COALESCE(SUM(jel.credit_usd), 0) as cr_usd
+        FROM accounts a
+        JOIN journal_entry_lines jel ON a.code = jel.account_code
+        JOIN journal_entries je ON jel.journal_entry_id = je.id
+        WHERE a.account_type IN ('revenue', 'expense')
+          AND je.status = 'posted'
+          AND DATE(je.entry_date) >= DATE(?) AND DATE(je.entry_date) <= DATE(?)
+        GROUP BY a.code
+    """, (start_date, end_date))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+
+    if not rows:
+        return False, f"لا توجد حركات مالية مسجلة في السنة {fiscal_year} لإقفالها"
+
+    closing_lines = []
+    tot_rev_lbp = 0.0
+    tot_rev_usd = 0.0
+    tot_exp_lbp = 0.0
+    tot_exp_usd = 0.0
+
+    for r in rows:
+        code = r['code']
+        acc_type = r['account_type']
+        deb_l, cr_l = float(r['deb_lbp'] or 0.0), float(r['cr_lbp'] or 0.0)
+        deb_u, cr_u = float(r['deb_usd'] or 0.0), float(r['cr_usd'] or 0.0)
+
+        if acc_type == 'revenue':
+            net_l = cr_l - deb_l
+            net_u = cr_u - deb_u
+            if abs(net_l) > 0 or abs(net_u) > 0:
+                tot_rev_lbp += net_l
+                tot_rev_usd += net_u
+                # لتصفير الإيراد: نجعله مدين (Debit)
+                closing_lines.append({
+                    'account_code': code,
+                    'debit_lbp': net_l, 'credit_lbp': 0.0,
+                    'debit_usd': net_u, 'credit_usd': 0.0,
+                    'memo': f"إقفال حساب إيراد {r['name_ar']} للسنة {fiscal_year}"
+                })
+        elif acc_type == 'expense':
+            net_l = deb_l - cr_l
+            net_u = deb_u - cr_u
+            if abs(net_l) > 0 or abs(net_u) > 0:
+                tot_exp_lbp += net_l
+                tot_exp_usd += net_u
+                # لتصفير المصروف: نجعله دائن (Credit)
+                closing_lines.append({
+                    'account_code': code,
+                    'debit_lbp': 0.0, 'credit_lbp': net_l,
+                    'debit_usd': 0.0, 'credit_usd': net_u,
+                    'memo': f"إقفال حساب مصروف {r['name_ar']} للسنة {fiscal_year}"
+                })
+
+    net_profit_lbp = tot_rev_lbp - tot_exp_lbp
+    net_profit_usd = tot_rev_usd - tot_exp_usd
+
+    # ترحيل صافي الربح إلى الأرباح المبقاة والمدورة (3020)
+    if net_profit_lbp >= 0:
+        closing_lines.append({
+            'account_code': '3020',
+            'debit_lbp': 0.0, 'credit_lbp': net_profit_lbp,
+            'debit_usd': 0.0, 'credit_usd': net_profit_usd,
+            'memo': f"صافي ربح السنة المالية {fiscal_year} المرحل للأرباح المدورة"
+        })
+    else:
+        closing_lines.append({
+            'account_code': '3020',
+            'debit_lbp': abs(net_profit_lbp), 'credit_lbp': 0.0,
+            'debit_usd': abs(net_profit_usd), 'credit_usd': 0.0,
+            'memo': f"صافي خسارة السنة المالية {fiscal_year} المحملة على الأرباح المدورة"
+        })
+
+    # تسجيل القيد الختامي المزدوج
+    ok, je_res = record_double_entry_journal(
+        description=f"قيد إقفال السنة المالية {fiscal_year} الشامل وتدوير الأرباح",
+        lines=closing_lines,
+        reference_type='fiscal_closing',
+        reference_id=fiscal_year,
+        user_name=closed_by,
+        entry_date=end_date
+    )
+    if not ok:
+        return False, f"فشل تسجيل قيد الإقفال السنوي: {je_res}"
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO fiscal_year_closings (
+            fiscal_year, closing_date, total_revenues_lbp, total_expenses_lbp, net_profit_lbp,
+            total_revenues_usd, total_expenses_usd, net_profit_usd, closed_by, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        fiscal_year, get_local_now(), tot_rev_lbp, tot_exp_lbp, net_profit_lbp,
+        tot_rev_usd, tot_exp_usd, net_profit_usd, closed_by, notes or 'إقفال سنوي دوري معتمد'
+    ))
+    conn.commit()
+    conn.close()
+
+    # تحديث وتزامن شجرة الحسابات فوراً
+    recalculate_all_account_balances()
+
+    return True, {
+        'fiscal_year': fiscal_year,
+        'total_revenues_lbp': tot_rev_lbp,
+        'total_expenses_lbp': tot_exp_lbp,
+        'net_profit_lbp': net_profit_lbp,
+        'entry_number': je_res
+    }
+
+
+def get_fiscal_closings() -> list:
+    """جلب سجل إقفالات السنوات المالية المسجلة."""
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM fiscal_year_closings ORDER BY fiscal_year DESC")
+        rows = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        rows = []
+    conn.close()
+    return rows
 
 
 # =========================================================================

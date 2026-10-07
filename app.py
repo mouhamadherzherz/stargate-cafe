@@ -474,7 +474,7 @@ def ensure_default_session():
     # Never bypass authentication: public endpoints allowed without login
     public_endpoints = [
         'employee_login', 'admin_login', 'static', 'favicon',
-        'api_do_update', 'api_manual_update',
+        'api_do_update', 'api_manual_update', 'download_hub_page',
         'api_check_update', 'api_force_check_update', 'download_update_zip',
         'download_installer_exe', 'download_employee_update_bat', 'update_tool_page'
     ]
@@ -484,8 +484,8 @@ def ensure_default_session():
     # If static assets, favicon, update downloads or update APIs, pass through
     if (request.path.startswith('/static/') or 
         request.path == '/favicon.ico' or
-        request.path.startswith('/download/') or
-        request.path in ('/api/do_update', '/api/manual_update', '/api/check_update', '/api/force_check_update', '/update-tool')):
+        request.path.startswith('/download') or
+        request.path in ('/update', '/installer', '/api/do_update', '/api/manual_update', '/api/check_update', '/api/force_check_update', '/update-tool')):
         return
 
     # Strict check: Session must contain a valid logged-in employee or admin
@@ -2889,6 +2889,130 @@ def cancel_financial_ledger_route(ledger_id):
     return redirect(url_for('financial_ledger_page'))
 
 
+@app.route('/financial/statements')
+@app.route('/financial-statements')
+@admin_required
+def financial_statements_page():
+    """مركز القوائم المالية الختامية وإقفال السنة (ERP Financial Hub)."""
+    today_str = accounting.get_business_date()
+    start_date = request.args.get('start_date', '').strip()
+    end_date = request.args.get('end_date', '').strip()
+    period = request.args.get('period', '').strip().lower()
+    now_dt = datetime.now()
+
+    if period == 'today':
+        start_date = today_str
+        end_date = today_str
+        display_period = f"اليوم ({today_str})"
+    elif period == 'week':
+        start_date = (now_dt - timedelta(days=6)).strftime('%Y-%m-%d')
+        end_date = today_str
+        display_period = f"هذا الأسبوع ({start_date} إلى {end_date})"
+    elif period == 'month':
+        start_date = now_dt.strftime('%Y-%m-01')
+        end_date = today_str
+        display_period = f"هذا الشهر ({start_date} إلى {end_date})"
+    elif period == 'year':
+        start_date = now_dt.strftime('%Y-01-01')
+        end_date = today_str
+        display_period = f"هذه السنة ({now_dt.year})"
+    elif start_date and end_date:
+        display_period = f"من {start_date} إلى {end_date}"
+    else:
+        # Default: Full current year
+        start_date = now_dt.strftime('%Y-01-01')
+        end_date = today_str
+        display_period = f"كامل السنة المالية ({now_dt.year})"
+
+    # Statements
+    trial_balance = accounting.get_trial_balance(as_of_date=end_date)
+    income_statement = accounting.get_income_statement(start_date=start_date, end_date=end_date)
+    balance_sheet = accounting.get_balance_sheet(as_of_date=end_date)
+    accounts = accounting.get_chart_of_accounts()
+    fiscal_closings = accounting.get_fiscal_closings()
+    drawer_status = accounting.get_drawer_cash_status()
+    safe_balance = accounting.get_safe_balance()
+    settings = accounting.get_settings()
+
+    return render_template(
+        'financial_statements.html',
+        trial_balance=trial_balance,
+        income_statement=income_statement,
+        balance_sheet=balance_sheet,
+        accounts=accounts,
+        fiscal_closings=fiscal_closings,
+        drawer_status=drawer_status,
+        safe_balance=safe_balance,
+        settings=settings,
+        start_date=start_date,
+        end_date=end_date,
+        period=period,
+        display_period=display_period,
+        current_year=now_dt.year
+    )
+
+
+@app.route('/financial/recalculate', methods=['POST'])
+@admin_required
+def financial_recalculate_route():
+    """إعادة احتساب وتزامن كافة أرصدة شجرة الحسابات والمالية من واقع قيود اليومية."""
+    try:
+        accounting.recalculate_all_account_balances()
+        flash("✓ تم إعادة احتساب ومزامنة كافة الأرصدة المالية بنجاح 100%.", "success")
+    except Exception as e:
+        flash(f"⚠️ خطأ أثناء إعادة الاحتساب: {e}", "danger")
+    return redirect(request.referrer or url_for('financial_statements_page'))
+
+
+@app.route('/financial/year-end-close', methods=['POST'])
+@admin_required
+def financial_year_end_close_route():
+    """إقفال السنة المالية رسمياً وتدوير الأرباح."""
+    year_val = request.form.get('fiscal_year', '').strip()
+    notes = request.form.get('notes', '').strip()
+    closed_by = session.get('employee_name') or 'المدير'
+    try:
+        year_num = int(year_val)
+        ok, res = accounting.close_fiscal_year(year_num, closed_by=closed_by, notes=notes)
+        if ok:
+            flash(f"✓ تم إقفال السنة المالية {year_num} بنجاح وترحيل صافي الربح إلى الأرباح المدورة.", "success")
+        else:
+            flash(f"⚠️ {res}", "warning")
+    except Exception as e:
+        flash(f"⚠️ تعذر إقفال السنة المالية: {e}", "danger")
+    return redirect(url_for('financial_statements_page'))
+
+
+@app.route('/shift/open-float', methods=['POST'])
+@login_required
+def shift_open_float_route():
+    """تسجيل فكة وعهدة بداية الدوام للصندوق بقيد رسمي."""
+    emp_id = session.get('employee_id')
+    emp_name = session.get('employee_name') or 'الكاشير'
+    amount_lbp = float(request.form.get('amount_lbp') or 0.0)
+    amount_usd = float(request.form.get('amount_usd') or 0.0)
+    source = request.form.get('source', 'safe').strip()
+    notes = request.form.get('notes', '').strip()
+
+    if amount_lbp <= 0 and amount_usd <= 0:
+        flash("⚠️ يجب تحديد مبلغ أكبر من صفر للعهدة الافتتاحية!", "warning")
+        return redirect(request.referrer or url_for('index'))
+
+    ok, res = accounting.record_shift_opening_float(
+        employee_id=emp_id or 1,
+        employee_name=emp_name,
+        amount_lbp=amount_lbp,
+        amount_usd=amount_usd,
+        source=source,
+        notes=notes
+    )
+    if ok:
+        flash(f"✓ تم تسجيل عهدة بداية الدوام بنجاح ({amount_lbp:,.0f} ل.ل) وإيداعها في الصندوق.", "success")
+    else:
+        flash(f"⚠️ {res}", "danger")
+    return redirect(request.referrer or url_for('index'))
+
+
 
 @app.route('/print/safe-statement')
 @admin_required
@@ -3719,7 +3843,29 @@ del "%~f0"
         return jsonify({'success': False, 'error': f'فشل التحديث اليدوي: {str(e)}'}), 200
 
 
+@app.route('/download')
+@app.route('/download/')
+@app.route('/download/hub')
+def download_hub_page():
+    """صفحة مركز التحميل والتحديثات المباشرة لجهاز الموظف."""
+    return render_template('download_hub.html')
+
+
+@app.route('/login')
+def login_redirect():
+    return redirect(url_for('employee_login'))
+
+
+@app.route('/pos')
+@app.route('/cashier')
+def pos_redirect():
+    return redirect(url_for('index'))
+
+
 @app.route('/download/update.zip')
+@app.route('/download/update')
+@app.route('/update.zip')
+@app.route('/update')
 def download_update_zip():
     """تنزيل مباشر لحزمة التحديث من السيرفر المحلي بسرعة الشبكة المحلية."""
     from flask import send_file
@@ -3729,6 +3875,7 @@ def download_update_zip():
         r'd:\STARGATE\organized_programs\cafe\Stargate_Cafe_Update.zip',
         r'C:\STARGATE_CAFE\Stargate_Cafe_Update.zip',
         os.path.expanduser(r'~\Desktop\Stargate_Cafe_Update.zip'),
+        r'C:\Users\mouha\Desktop\Stargate_Cafe_Update.zip',
         r'd:\STARGATE\stargate_cafe_source\Stargate_Cafe_Update.zip'
     ]
     for cand in zip_candidates:
@@ -3738,13 +3885,19 @@ def download_update_zip():
 
 
 @app.route('/download/installer.exe')
+@app.route('/download/installer')
+@app.route('/installer.exe')
+@app.route('/installer')
+@app.route('/setup.exe')
+@app.route('/setup')
 def download_installer_exe():
     """تنزيل ملف التثبيت الرسمي الكامل v5.3.1 مباشرة لجهاز الموظف."""
     from flask import send_file
     candidates = [
         r'C:\STARGATE_CAFE\StargateCafe_Setup_v5.3.1.exe',
         os.path.expanduser(r'~\Desktop\StargateCafe_Setup_v5.3.1.exe'),
-        r'C:\Users\mouha\Desktop\StargateCafe_Setup_v5.3.1.exe'
+        r'C:\Users\mouha\Desktop\StargateCafe_Setup_v5.3.1.exe',
+        r'C:\Users\mouha\Desktop\StargateCafe_Setup_v5.3.0.exe'
     ]
     for cand in candidates:
         if os.path.exists(cand):

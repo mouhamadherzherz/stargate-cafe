@@ -815,12 +815,14 @@ def _seed_chart_of_accounts(cursor):
         ('2010', 'Accounts Payable (Suppliers)', 'حسابات الموردين (الدائنون)', 'liability', 'المبالغ المستحقة لشركات التوريد وفواتير الشراء الآجلة'),
         
         # Equity (حقوق الملكية)
-        ('3010', 'Owner Equity & Retained Earnings', 'رأس المال والأرباح المبقاة', 'equity', 'حقوق ملكية الكافيه والمشروع'),
+        ('3010', 'Owner Capital', 'رأس المال التأسيسي', 'equity', 'حقوق ملكية الكافيه والمشروع والعهدة الأساسية'),
+        ('3020', 'Retained Earnings', 'الأرباح المبقاة والمدورة', 'equity', 'صافي أرباح السنوات والفترات السابقة المدورة'),
         
         # Revenues & Contra-Revenues (الإيرادات والخصومات)
         ('4010', 'Cafe & Beverage Sales Revenue', 'إيرادات مبيعات القهوة والمشروبات', 'revenue', 'مبيعات المنتجات الجاهزة والمصنعة'),
         ('4020', 'Gaming & Computer Revenue', 'إيرادات ألعاب GAMING والكمبيوتر', 'revenue', 'إيرادات ألعاب البلايستيشن والكمبيوتر (100% ربح)'),
         ('4030', 'Other Miscellaneous Revenue', 'إيرادات أخرى متنوعة', 'revenue', 'إيرادات المبيعات الحرة والخدمات'),
+        ('4040', 'Cash Overage (Surplus)', 'فائض وزيادة الصندوق', 'revenue', 'فوارق الجرد النقدية الإيجابية عند تسكير الوردية'),
         ('4100', 'Sales Discounts & Hospitality', 'خصومات المبيعات والضيافة', 'expense', 'حسميات الأسعار للزبائن الدائمين، الضيافة، والفناجين المجانية'),
         
         # Expenses (المصروفات والتكاليف)
@@ -828,12 +830,32 @@ def _seed_chart_of_accounts(cursor):
         ('5020', 'Operational Expenses', 'مصاريف تشغيلية ونثريات', 'expense', 'المصاريف العامة اليومية والكهرباء والإنترنت والضيافة'),
         ('5030', 'Staff Wages & Commissions', 'رواتب وعمولات الموظفين', 'expense', 'رواتب الكاشير والعمال'),
         ('5040', 'Spoilage & Waste Expense', 'تكلفة التالف والهدر', 'expense', 'هدر وتلف المواد الخام'),
+        ('5050', 'Cash Shortage (Discrepancy)', 'عجز الصندوق وفوارق الجرد', 'expense', 'فوارق عجز النقدية عند مطابقة وإغلاق الوردية'),
     ]
     for code, name, name_ar, acc_type, desc in default_accounts:
         cursor.execute("""
             INSERT OR IGNORE INTO accounts (code, name, name_ar, account_type, description)
             VALUES (?, ?, ?, ?, ?)
         """, (code, name, name_ar, acc_type, desc))
+    
+    # Fiscal Year Closings Table (إقفال السنوات المالية)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS fiscal_year_closings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fiscal_year INTEGER NOT NULL UNIQUE,
+        closing_date TEXT NOT NULL,
+        total_revenues_lbp REAL NOT NULL DEFAULT 0.0,
+        total_expenses_lbp REAL NOT NULL DEFAULT 0.0,
+        net_profit_lbp REAL NOT NULL DEFAULT 0.0,
+        total_revenues_usd REAL NOT NULL DEFAULT 0.0,
+        total_expenses_usd REAL NOT NULL DEFAULT 0.0,
+        net_profit_usd REAL NOT NULL DEFAULT 0.0,
+        journal_entry_id INTEGER,
+        closed_by TEXT NOT NULL,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
 
 
 def _migrate_passwords(cursor, conn):
