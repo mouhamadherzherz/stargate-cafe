@@ -1,9 +1,9 @@
 @echo off
 chcp 65001 >nul
 color 0B
-title STARGATE CAFE - تحديث جهاز الموظف الفوري v5.3.1
+title STARGATE CAFE - تحديث جهاز الموظف الفوري v5.7.0 PRO
 echo ======================================================================
-echo         STARGATE CAFE - تحديث نظام الكافيه للموظف (v5.3.1)
+echo         STARGATE CAFE - تحديث نظام الكافيه للموظف (v5.7.0 PRO)
 echo         سيرفر التحديث المباشر: http://192.168.10.27:5000
 echo ======================================================================
 echo.
@@ -31,14 +31,21 @@ if exist "%TEMP_DIR%" rmdir /S /Q "%TEMP_DIR%" >nul 2>&1
 mkdir "%TEMP_DIR%" >nul 2>&1
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$wc = New-Object System.Net.WebClient; ^
-   $wc.DownloadFile('http://192.168.10.27:5000/download/update.zip', '%TEMP_ZIP%'); ^
+  "try { ^
+     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; ^
+     $wc = New-Object System.Net.WebClient; ^
+     $wc.DownloadFile('http://192.168.10.27:5000/download/update.zip', '%TEMP_ZIP%'); ^
+   } catch { ^
+     Write-Host 'Local server unreachable, downloading from GitHub cloud...'; ^
+     $wc = New-Object System.Net.WebClient; ^
+     $wc.DownloadFile('https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.7.0/Stargate_Cafe_Update.zip', '%TEMP_ZIP%'); ^
+   }; ^
    Expand-Archive -Path '%TEMP_ZIP%' -DestinationPath '%TEMP_DIR%' -Force"
 
 if not exist "%TEMP_DIR%\app.py" (
     echo.
-    echo [!] فشل التنزيل من السيرفر المحلي http://192.168.10.27:5000.
-    echo تأكد أن الجهاز الرئيسي قيد التشغيل ومتصل بنفس الشبكة.
+    echo [!] فشل التنزيل من السيرفر المحلي والإنترنت.
+    echo تأكد من اتصال الشبكة أو الاتصال بالسيرفر الرئيسي.
     pause
     exit /b 1
 )
