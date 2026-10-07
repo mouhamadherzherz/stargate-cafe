@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
-title تحديث برنامج ستارجيت كافيه - STARGATE CAFE v5.3.1
+title تحديث برنامج ستارجيت كافيه - STARGATE CAFE v5.7.0
 color 0b
 
 echo ======================================================================
-echo          STARGATE EXPERTS - تحديث برنامج الكافيه v5.3.1
+echo          STARGATE EXPERTS - تحديث برنامج الكافيه v5.7.0 PRO
 echo ======================================================================
 echo.
 
@@ -21,7 +21,7 @@ if not exist "%CAFE_DIR%" (
 echo [1/5] جاري حفظ نسخة احتياطية آمنة للبيانات والمبيعات...
 if exist "%CAFE_DIR%\data\cafe_accounting.db" (
     if not exist "%CAFE_DIR%\Safe_Backups" mkdir "%CAFE_DIR%\Safe_Backups"
-    copy /Y "%CAFE_DIR%\data\cafe_accounting.db" "%CAFE_DIR%\Safe_Backups\backup_before_v531_%random%.db" >nul 2>&1
+    copy /Y "%CAFE_DIR%\data\cafe_accounting.db" "%CAFE_DIR%\Safe_Backups\backup_before_v570_%random%.db" >nul 2>&1
     echo     [OK] تم تأمين نسخة احتياطية بنجاح 100%%.
 )
 
@@ -34,9 +34,9 @@ timeout /t 2 /nobreak >nul
 echo     [OK] تم فك قفل الملفات.
 
 :: 3. تنزيل التحديث السحابي الجديد
-echo [3/5] جاري تنزيل حزمة التحديث v5.3.2 من السحابة...
-set "ZIP_URL=https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.3.2/Stargate_Cafe_Update.zip"
-set "TEMP_ZIP=%CAFE_DIR%\update_v532.zip"
+echo [3/5] جاري تنزيل حزمة التحديث v5.7.0 من السحابة...
+set "ZIP_URL=https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.7.0/Stargate_Cafe_Update.zip"
+set "TEMP_ZIP=%CAFE_DIR%\update_v570.zip"
 set "TEMP_EXTRACT=%CAFE_DIR%\update_extracted"
 
 if exist "%TEMP_EXTRACT%" rmdir /S /Q "%TEMP_EXTRACT%" >nul 2>&1
@@ -76,10 +76,10 @@ if exist "%CAFE_DIR%\data\app_profile\Default\Code Cache" (
 echo.
 echo ======================================================================
 color 0a
-echo   🎉 تم التحديث إلى الإصدار v4.4.0 بنجاح تام!
+echo   🎉 تم التحديث إلى الإصدار v5.7.0 PRO بنجاح تام!
 echo ======================================================================
-echo   - تم إصلاح كافة أخطاء المالية والحسابات وتسكير اليومية والخزينة.
-echo   - تم تفعيل شريط إشعارات التحديث التلقائي المستقبلي في الشاشة.
+echo   - تم تفعيل نظام الخصومات والضيافة للزبائن (Odoo-Level ERP).
+echo   - تم حل مشكلة تعليق كاش الخزنة وجعله فورياً ولحظياً في الحسابات.
 echo   - تم الحفاظ على 100%% من مبيعاتك وبياناتك وديونك دون أي مساس.
 echo ======================================================================
 echo.
