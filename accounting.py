@@ -1283,19 +1283,24 @@ def create_order(order_data, items_list, tab_id=None):
                 first_coffee = coffee_items_found[0]
                 return False, f"⚠️ لا يمكن إتمام الطلب! الصنف ({first_coffee}) مرتبط بحبوب البن، ولا يوجد كيلو قهوة مفتوح حالياً في المحل. يجب فتح كيلو جديد أولاً من زر 'فتح كيلو ☕' في قسم القهوة."
 
-        if not tab_id:
-            for it in computed_items:
-                item_id = it.get('item_id')
-                q = int(it.get('quantity') or 1)
-                if item_id:
-                    cursor.execute("SELECT stock_qty, name, track_stock FROM cafe_items WHERE id = ?", (item_id,))
-                    st_row = cursor.fetchone()
-                    if st_row and st_row['track_stock'] == 1:
-                        available = float(st_row['stock_qty'] or 0.0)
-                        if available < q:
-                            conn.rollback()
-                            conn.close()
-                            return False, f"الكمية المطلوبة ({q}) غير متوفرة في المخزون للمنتج: {st_row['name']} (المتوفر حالياً: {int(available) if available.is_integer() else available})"
+        # Strict Stock Guard: Check stock availability for all tracked products (both direct orders and tabs)
+        for it in computed_items:
+            item_id = it.get('item_id')
+            item_name = it.get('name', 'صنف')
+            q = float(it.get('quantity') or 1.0)
+            if item_id and not is_coffee_item(item_name, item_id=item_id):
+                cursor.execute("SELECT stock_qty, name, track_stock FROM cafe_items WHERE id = ?", (item_id,))
+                st_row = cursor.fetchone()
+                if st_row and st_row['track_stock'] == 1:
+                    available = float(st_row['stock_qty'] or 0.0)
+                    if available <= 0:
+                        conn.rollback()
+                        conn.close()
+                        return False, f"⚠️ لا يمكن إتمام الطلب! الصنف ({st_row['name']}) غير متوفر نهائياً في المخزون (الرصيد: 0). يرجى توريد كميات جديدة أولاً."
+                    elif available < q:
+                        conn.rollback()
+                        conn.close()
+                        return False, f"⚠️ الكمية المطلوبة ({q}) غير متوفرة في المخزون للمنتج: {st_row['name']} (المتوفر حالياً بالمحل: {int(available) if available.is_integer() else available} فقط)."
 
         is_wholesale = 1 if order_data.get('is_wholesale') in (1, '1', True, 'true') else 0
         # Read previously recorded item batch IDs if settling an open tab
@@ -1609,6 +1614,25 @@ def save_customer_tab(customer_name, items_list=None, tab_id=None, notes='', dis
                 conn.close()
                 first_coffee = coffee_items_found[0]
                 return False, f"⚠️ لا يمكن إضافة القهوة للحساب! الصنف ({first_coffee}) يتطلب حبوب بن، ولا يوجد كيلو قهوة مفتوح حالياً في المحل. يجب فتح كيلو جديد أولاً ☕"
+
+        # 🛑 Strict Stock Guard: Prevent adding out-of-stock items to open customer tabs
+        for it in computed_items:
+            item_id = it.get('item_id')
+            item_name = it.get('name', 'صنف')
+            q = float(it.get('quantity') or 1.0)
+            if item_id and not is_coffee_item(item_name, item_id=item_id):
+                cursor.execute("SELECT stock_qty, name, track_stock FROM cafe_items WHERE id = ?", (item_id,))
+                st_row = cursor.fetchone()
+                if st_row and st_row['track_stock'] == 1:
+                    available = float(st_row['stock_qty'] or 0.0)
+                    if available <= 0:
+                        conn.rollback()
+                        conn.close()
+                        return False, f"⚠️ لا يمكن إضافة الصنف! ({st_row['name']}) غير متوفر نهائياً في المخزون (الرصيد: 0)."
+                    elif available < q:
+                        conn.rollback()
+                        conn.close()
+                        return False, f"⚠️ الكمية المطلوبة ({q}) غير متوفرة في المخزون للمنتج: {st_row['name']} (المتوفر حالياً: {int(available) if available.is_integer() else available} فقط)."
 
         existing_batch_map = {}
         if tab_id:

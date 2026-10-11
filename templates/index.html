@@ -453,11 +453,13 @@
                          data-is-top="{{ 1 if item.id in top_seller_ids else 0 }}"
                          data-sort-order="{{ item.sort_order|default(0) }}"
                          data-is-coffee-bean-linked="{{ item.is_coffee_bean_linked|default(0) }}"
+                         data-track-stock="{{ item.track_stock|default(1) }}"
+                         data-stock-qty="{{ item.stock_qty|default(0) }}"
                          onclick="handleProductCardClick(this)"
                          role="button"
                          tabindex="0"
                          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();handleProductCardClick(this);}"
-                         class="item-card group relative rounded-3xl bg-slate-900/90 hover:bg-slate-850 border border-slate-800 hover:border-amber-400/90 hover:shadow-2xl hover:shadow-amber-500/10 hover:-translate-y-1 active:scale-[0.98] transition-all duration-200 flex flex-col justify-between text-right shadow-lg overflow-hidden min-h-[220px] cursor-pointer select-none">
+                         class="item-card group relative rounded-3xl {% if item.track_stock and (item.stock_qty|default(0)|float) <= 0 %}bg-slate-950/90 border-2 border-rose-500/60 opacity-70{% else %}bg-slate-900/90 hover:bg-slate-850 border border-slate-800 hover:border-amber-400/90 hover:shadow-2xl hover:shadow-amber-500/10 hover:-translate-y-1 active:scale-[0.98]{% endif %} transition-all duration-200 flex flex-col justify-between text-right shadow-lg overflow-hidden min-h-[220px] cursor-pointer select-none">
                         
                         <!-- Quick Direct Edit Button (تعديل سريع ومباشر على الكرت) -->
                         <button type="button" 
@@ -996,14 +998,33 @@
         const price = parseFloat(btn.getAttribute('data-item-price')) || 0;
         const icon = btn.getAttribute('data-item-icon') || '☕';
         const type = btn.getAttribute('data-item-type') || 'cafe';
-        addToCart(id, name, price, icon, type, isCoffeeLinked);
+        const trackStock = btn.getAttribute('data-track-stock') !== '0';
+        const rawStock = btn.getAttribute('data-stock-qty');
+        const stockQty = rawStock !== null ? parseFloat(rawStock) : 999999;
+
+        // 🛑 STRICT OUT-OF-STOCK GUARD (منع طلب أي منتج لا يوجد به مخزون وتنبيه الكاشير)
+        if (type === 'cafe' && !isCoffeeLinked && trackStock && stockQty <= 0) {
+            playBeep(250, 0.3);
+            showOutOfStockModal(name, `رصيد هذا الصنف في المخزون حالياً هو (0). النظام مقفل ويمنع إضافة أي صنف نافد من المحل لحماية الحسابات.`);
+            return;
+        }
+
+        // Check if item already in cart and adding another one would exceed stock
+        const existingInCart = cart.find(i => (i.item_id && parseInt(i.item_id) === parseInt(id)) || (i.name === name && i.item_type === type));
+        if (type === 'cafe' && !isCoffeeLinked && trackStock && existingInCart && existingInCart.quantity >= stockQty) {
+            playBeep(250, 0.3);
+            showOutOfStockModal(name, `لقد أضفت كافة الكمية المتوفرة في المخزون (${stockQty} قطعة). لا يمكن إضافة كمية إضافية لعدم توفر مخزون كافٍ.`);
+            return;
+        }
+
+        addToCart(id, name, price, icon, type, isCoffeeLinked, trackStock, stockQty);
     }
 
     // Add Item to Cart
-    function addToCart(itemId, name, priceLBP, icon, itemType = 'cafe', isCoffeeLinked = false) {
+    function addToCart(itemId, name, priceLBP, icon, itemType = 'cafe', isCoffeeLinked = false, trackStock = true, stockQty = 999999) {
         playBeep(700, 0.05);
         const p = parseFloat(priceLBP) || 0;
-        const existing = cart.find(i => i.name === name && i.item_type === itemType);
+        const existing = cart.find(i => (i.item_id && itemId && parseInt(i.item_id) === parseInt(itemId)) || (i.name === name && i.item_type === itemType));
         if (existing) {
             existing.quantity += 1;
         } else {
@@ -1015,6 +1036,8 @@
                 item_type: itemType,
                 is_wholesale: 0,
                 is_coffee_linked: isCoffeeLinked,
+                track_stock: trackStock,
+                stock_qty: stockQty,
                 quantity: 1
             });
         }
@@ -1082,15 +1105,23 @@
     // Update Quantity in Cart
     function updateQty(index, delta) {
         if (cart[index]) {
+            const it = cart[index];
+            if (delta > 0 && it.track_stock && !it.is_coffee_linked && it.stock_qty !== undefined && it.stock_qty !== null) {
+                if (it.quantity + delta > it.stock_qty) {
+                    playBeep(250, 0.3);
+                    showOutOfStockModal(it.name, `الكمية المتوفرة في المخزون هي (${it.stock_qty} قطعة فقط). لا يمكن زيادة الكمية أكثر من المخزون المتوفر.`);
+                    return;
+                }
+            }
             if (activeTabId && delta < 0) {
-                const itName = cart[index].name || 'الصنف';
+                const itName = it.name || 'الصنف';
                 if (!confirm(`⚠️ تنبيه رقابي: الصنف (${itName}) مسجل على طاولة زبون جالس. هل أنت متأكد من تقليل الكمية؟ سيتم توثيق التعديل في سجل الرقابة.`)) {
                     return;
                 }
             }
-            cart[index].quantity += delta;
+            it.quantity += delta;
             playBeep(delta > 0 ? 750 : 500, 0.04);
-            if (cart[index].quantity <= 0) {
+            if (it.quantity <= 0) {
                 cart.splice(index, 1);
             }
         }
@@ -2111,6 +2142,34 @@
     </div>
 </div>
 
+<!-- ====================================================================== -->
+<!-- 🚫 OUT OF STOCK MODAL (تنبيه منع طلب صنف نفد من المخزون) -->
+<!-- ====================================================================== -->
+<div id="outOfStockModal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-rose-500/80 rounded-3xl p-6 md:p-7 max-w-md w-full shadow-2xl space-y-4 text-center">
+        <div class="w-16 h-16 rounded-3xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-3xl mx-auto border border-rose-500/40 animate-bounce">
+            🚫
+        </div>
+        <h3 class="text-lg font-black text-white">لا يوجد مخزون متاح لهذا الصنف!</h3>
+        <p class="text-xs text-slate-300 leading-relaxed">
+            عذراً، الصنف (<strong id="outOfStockItemName" class="text-rose-400">الصنف</strong>) <span id="outOfStockDesc">رصيده الحالي في المخزون (0) ولا يمكن إضافته للطلب أو بيعه للزبون.</span>
+        </p>
+        <div class="bg-rose-500/10 border border-rose-500/30 p-3 rounded-2xl text-xs text-rose-200 text-right">
+            🔒 <strong>حماية ذكية للمخزون:</strong> يمنع النظام بيع أي منتج غير متوفر فعلياً بالمحل لتجنب حدوث عجز محاسبي وأخطاء تسليم.
+        </div>
+        <div class="flex gap-2.5 pt-2">
+            {% if is_admin or session.get('is_admin') or session.get('employee_role') == 'admin' %}
+            <button type="button" onclick="closeOutOfStockModal(); openManageProductsModal();" class="flex-1 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-black py-3 rounded-2xl text-xs sm:text-sm transition shadow-lg shadow-rose-600/30 active:scale-95 cursor-pointer">
+                📦 توريد وتعديل المخزون
+            </button>
+            {% endif %}
+            <button type="button" onclick="closeOutOfStockModal()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 px-5 py-3 rounded-2xl text-xs font-bold transition">
+                فهمت، إغلاق
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
 function openPosWasteModal() {
     const m = document.getElementById('posCoffeeWasteModal');
@@ -2156,6 +2215,22 @@ function showCoffeeBlockedModal(itemName) {
 }
 function closeCoffeeBlockedModal() {
     const m = document.getElementById('coffeeBlockedModal');
+    if (m) m.classList.add('hidden');
+}
+
+function showOutOfStockModal(itemName, customDesc) {
+    playBeep(250, 0.25);
+    const txt = document.getElementById('outOfStockItemName');
+    if (txt) txt.textContent = itemName || 'الصنف';
+    const desc = document.getElementById('outOfStockDesc');
+    if (desc) {
+        desc.textContent = customDesc || 'رصيده الحالي في المخزون (0) ولا يمكن إضافته للطلب أو بيعه للزبون.';
+    }
+    const m = document.getElementById('outOfStockModal');
+    if (m) m.classList.remove('hidden');
+}
+function closeOutOfStockModal() {
+    const m = document.getElementById('outOfStockModal');
     if (m) m.classList.add('hidden');
 }
 </script>
