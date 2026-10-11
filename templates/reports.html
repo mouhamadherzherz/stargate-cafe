@@ -147,6 +147,86 @@
 
     </div>
 
+    <!-- 🤖 AI SMART OFFLINE AUDITOR DASHBOARD CARD (مدقق الذكاء الاصطناعي الأوفلاين للتقارير) -->
+    {% if ai_audit %}
+    <div class="bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border-2 border-indigo-500/50 rounded-3xl p-5 shadow-2xl space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-500/30 pb-3">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-2xl font-black border border-indigo-500/40">
+                    🤖✨
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-white flex items-center gap-2">
+                        <span>خبير التدقيق والذكاء الاصطناعي (AI Smart Offline Auditor)</span>
+                        <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30">يعمل بدون إنترنت 100%</span>
+                    </h3>
+                    <p class="text-xs text-slate-400">
+                        فحص آلي فوري لكافة العمليات المالية، كشف العجز، مراقبة المخزون، وتحليل ساعات الذروة والأصناف الأكثر ربحاً.
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 self-start sm:self-auto">
+                <div class="bg-slate-950 px-3.5 py-1.5 rounded-2xl border border-indigo-500/40 text-center">
+                    <span class="text-[10px] text-slate-400 block">مؤشر سلامة العمليات:</span>
+                    <strong class="text-sm font-mono font-black {% if ai_audit.health_score >= 85 %}text-emerald-400{% elif ai_audit.health_score >= 60 %}text-amber-400{% else %}text-rose-400{% endif %}">
+                        {{ ai_audit.health_score }}%
+                    </strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Issues and Alerts -->
+        {% if ai_audit.issues %}
+        <div class="space-y-2">
+            <span class="text-xs font-black text-rose-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>ملاحظات وتنبيهات التدقيق المكتشفة:</span>
+            </span>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {% for iss in ai_audit.issues %}
+                <div class="bg-rose-950/40 border border-rose-500/40 p-3 rounded-2xl flex items-start gap-2.5">
+                    <span class="text-base leading-none">⚠️</span>
+                    <div class="space-y-0.5">
+                        <strong class="text-xs font-bold text-rose-200 block">{{ iss.title }}</strong>
+                        <p class="text-[11px] text-slate-300">{{ iss.desc }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- AI Insights & Opportunities -->
+        {% if ai_audit.insights %}
+        <div class="space-y-2 pt-1">
+            <span class="text-xs font-black text-indigo-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-chart-line"></i>
+                <span>رؤى وإحصائيات الذكاء الاصطناعي الذكية لليوم:</span>
+            </span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {% for ins in ai_audit.insights %}
+                <div class="bg-slate-950/90 border border-slate-800 hover:border-indigo-500/40 transition p-3 rounded-2xl space-y-1">
+                    <strong class="text-xs font-bold text-amber-300 block">{{ ins.title }}</strong>
+                    <p class="text-[11px] text-slate-300 leading-relaxed">{{ ins.desc }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Tips Footer -->
+        {% if ai_audit.tips %}
+        <div class="bg-slate-950/60 p-3 rounded-2xl border border-slate-800 text-[11px] text-slate-400 space-y-1">
+            {% for tip in ai_audit.tips %}
+            <div class="flex items-center gap-2">
+                <span>{{ tip }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <!-- P&L MASTER STATEMENT (الأرباح والخسائر الشاملة) -->
     {% if pnl %}
     <div class="bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 border-2 border-purple-500/50 rounded-3xl p-5 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6">

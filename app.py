@@ -3598,10 +3598,12 @@ def reports_page():
     recent_audit_logs = [dict(r) for r in c_rep.fetchall()]
     c_rep.execute("SELECT * FROM stock_movements WHERE movement_type = 'WASTE' ORDER BY id DESC LIMIT 50")
     recent_waste_logs = [dict(r) for r in c_rep.fetchall()]
-    conn_rep.close()
+    # AI Smart Offline Audit Analysis
+    ai_audit = accounting.ai_audit_system(target_date if target_date != 'all' else today_str)
 
     return render_template(
         'reports.html',
+        ai_audit=ai_audit,
         coffee_period_stats=coffee_period_stats,
         pnl=pnl,
         daily_transfer_status=daily_transfer_status,

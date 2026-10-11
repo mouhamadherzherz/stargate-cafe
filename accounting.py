@@ -6965,14 +6965,66 @@ def ai_audit_system(target_date=None):
     except Exception:
         pass
 
-    # 3. فحص الخصومات المرتفعة
+    # 3. فحص عجز أو فروقات تسليم الوردية للموظفين
+    try:
+        cursor.execute("""
+            SELECT employee_name, difference_lbp, actual_cash_lbp, expected_cash_lbp, difference_note, created_at
+            FROM shift_closings
+            WHERE (DATE(business_date) = ? OR DATE(created_at) = ?)
+            ORDER BY id DESC LIMIT 10
+        """, (target_date, target_date))
+        shift_rows = cursor.fetchall()
+        for s in shift_rows:
+            diff = float(s['difference_lbp'] or 0.0)
+            emp = s['employee_name'] or 'كاشير'
+            if diff < -50000:
+                issues.append({
+                    'type': 'critical',
+                    'title': f"🚨 عجز نقدي في تسليم وردية {emp}",
+                    'desc': f"سجل الصندوق نقصاً بقيمة {abs(diff):,.0f} ل.ل (المتوقع: {float(s['expected_cash_lbp']):,.0f} ل.ل | الفعلي: {float(s['actual_cash_lbp']):,.0f} ل.ل). السبب: {s['difference_note'] or 'غير مسجل'}"
+                })
+            elif diff > 50000:
+                issues.append({
+                    'type': 'warning',
+                    'title': f"⚠️ فائض نقدي في وردية {emp}",
+                    'desc': f"سجل الصندوق زيادة بقيمة +{diff:,.0f} ل.ل في الدرج. يوصى بمراجعة الفواتير غير المسجلة."
+                })
+            elif abs(diff) < 1000:
+                insights.append({
+                    'type': 'success',
+                    'title': f"✓ مطابقة مثالية 100% لوردية {emp}",
+                    'desc': "تم تسليم الصندوق ومطابقة الكاش بدون أي عجز أو فلس واحد مفقود."
+                })
+    except Exception:
+        pass
+
+    # 4. كشف تلاعب أو حذوفات في الفواتير (Void / Cancel Anomalies)
+    try:
+        cursor.execute("""
+            SELECT actor, action, table_name, reason, created_at
+            FROM audit_log
+            WHERE (DATE(created_at) = ? OR DATE(created_at, '-5 hours') = ?)
+              AND (action LIKE '%DELETE%' OR action LIKE '%VOID%' OR action LIKE '%CANCEL%')
+            ORDER BY id DESC LIMIT 5
+        """, (target_date, target_date))
+        void_rows = cursor.fetchall()
+        if void_rows:
+            issues.append({
+                'type': 'warning',
+                'title': f"🔍 عمليات حذف أو تعديل مسجلة ({len(void_rows)} عملية)",
+                'desc': f"قام الموظفون بعمليات إلغاء/حذف اليوم: آخرها بواسطة {void_rows[0]['actor']} (السبب: {void_rows[0]['reason'] or 'بدون سبب'})"
+            })
+    except Exception:
+        pass
+
+    # 5. فحص الخصومات المرتفعة
     try:
         cursor.execute("""
             SELECT id, order_number, total_lbp, discount_lbp, employee_name, discount_reason
             FROM cafe_orders
-            WHERE DATE(created_at) = ? AND discount_lbp > 0
+            WHERE (DATE(created_at) = ? OR DATE(datetime(created_at, '-5 hours')) = ?) AND discount_lbp > 0
             ORDER BY discount_lbp DESC LIMIT 5
-        """, (target_date,))
+        """, (target_date, target_date))
         discounted = cursor.fetchall()
         for d in discounted:
             tot = float(d['total_lbp'] or 0.0)
@@ -6986,7 +7038,69 @@ def ai_audit_system(target_date=None):
     except Exception:
         pass
 
-    # 4. تحليل حركة المبيعات وتوجيهات الذكاء الاصطناعي
+    # 6. تحليل أداء القهوة وهدر فناجين البن المفتوح
+    try:
+        coffee_stats = get_coffee_period_stats(start_date=target_date, end_date=target_date)
+        waste_cups = int(coffee_stats.get('total_waste_cups') or 0)
+        yield_per_kg = float(coffee_stats.get('avg_yield_per_kg') or 0.0)
+        if waste_cups > 3:
+            issues.append({
+                'type': 'warning',
+                'title': f"☕ هدر غير اعتيادي بالقهوة ({waste_cups} فنجان تالف)",
+                'desc': f"تم تسجيل تلف {waste_cups} فناجين بن اليوم بخسارة {float(coffee_stats.get('total_waste_loss_lbp') or 0):,.0f} ل.ل. ينصح بفحص ماكينة الإسبريسو أو تدريب الباريستا."
+            })
+        if yield_per_kg > 0:
+            if yield_per_kg < 50:
+                issues.append({
+                    'type': 'warning',
+                    'title': f"📉 إنتاجية كيلو البن منخفضة ({yield_per_kg:.1f} فنجان/كغ)",
+                    'desc': "المعدل القياسي هو 60-75 فنجان لكل كغ. الباريستا يستخدم غرامات زائدة لكل فنجان."
+                })
+            else:
+                insights.append({
+                    'type': 'success',
+                    'title': f"☕ إنتاجية ممتازة للقهوة ({yield_per_kg:.1f} فنجان/كغ)",
+                    'desc': "استهلاك البن مثالي ومطابق للمعايير الاحترافية لتقليل التكلفة."
+                })
+    except Exception:
+        pass
+
+    # 7. التنبؤ بساعات الذروة (Peak Hours Offline Forecast)
+    try:
+        hourly = get_hourly_sales_distribution(target_date)
+        busy_hours = sorted([h for h in hourly if h.get('orders_count', 0) > 0], key=lambda x: x.get('orders_count', 0), reverse=True)
+        if busy_hours:
+            top_h = busy_hours[0]
+            insights.append({
+                'type': 'info',
+                'title': f"⏰ ذروة النشاط اليوم: الساعة {top_h['hour']}:00",
+                'desc': f"سجلت هذه الساعة أعلى ضغط زبائن بـ {top_h['orders_count']} فاتورة ومبيعات {top_h['total_lbp']:,.0f} ل.ل. الذكاء الاصطناعي ينصح بتواجد باريستا إضافي في هذا التوقيت."
+            })
+    except Exception:
+        pass
+
+    # 8. الأصناف الأكثر ربحية والأكثر مبيعاً (Top Performers)
+    try:
+        cursor.execute("""
+            SELECT i.item_name, SUM(i.quantity) as total_qty, SUM(i.total_price_lbp) as total_rev
+            FROM cafe_order_items i
+            JOIN cafe_orders o ON i.order_id = o.id
+            WHERE (DATE(o.created_at) = ? OR DATE(datetime(o.created_at, '-5 hours')) = ?)
+            GROUP BY i.item_name
+            ORDER BY total_qty DESC LIMIT 3
+        """, (target_date, target_date))
+        top_items = cursor.fetchall()
+        if top_items:
+            names = [f"⭐ {r['item_name']} ({int(r['total_qty'])} مبيعاً)" for r in top_items]
+            insights.append({
+                'type': 'success',
+                'title': '🏆 الأصناف الذهبية الأكثر طلباً اليوم',
+                'desc': ' ، '.join(names)
+            })
+    except Exception:
+        pass
+
+    # 9. تحليل حركة المبيعات وتوجيهات الذكاء الاصطناعي المالية
     try:
         summary = get_daily_summary(target_date)
         tot_rev = float(summary['grand_totals']['revenue_lbp'] or 0.0)
@@ -6997,7 +7111,7 @@ def ai_audit_system(target_date=None):
             avg_basket = tot_rev / orders_count
             insights.append({
                 'type': 'success',
-                'title': '📊 مؤشر متوسط الفاتورة (Average Basket)',
+                'title': '📊 متوسط سلة الزبون (Average Basket)',
                 'desc': f"متوسط إنفاق الزبون اليوم هو {avg_basket:,.0f} ل.ل عبر {orders_count} فاتورة."
             })
 
@@ -7005,15 +7119,22 @@ def ai_audit_system(target_date=None):
             margin = (net_prof / tot_rev) * 100
             insights.append({
                 'type': 'success',
-                'title': f'📈 هامش صافي الربح: {margin:.1f}%',
+                'title': f'📈 هامش صافي الربح الحقيقي: {margin:.1f}%',
                 'desc': f"صافي ربح اليوم يعادل {net_prof:,.0f} ل.ل بعد خصم كافة التكاليف والمصاريف."
+            })
+        elif net_prof < 0:
+            issues.append({
+                'type': 'critical',
+                'title': '📉 تنبيه: خسارة تشغيلية لليوم',
+                'desc': f"المصاريف وتكلفة المواد تجاوزت إيرادات اليوم بعجز قدره {abs(net_prof):,.0f} ل.ل."
             })
     except Exception:
         pass
 
-    tips.append("💡 نصيحة ذكية: استخدام الخصم المباشر يزيد ولاء الزبائن الدائمين، ولكن تأكد دائماً من تسجيل سبب الحسم.")
-    tips.append("💡 نصيحة ذكية: يتم خصم البضاعة والمشروبات المباعة من المخزون تلقائياً بدون أي تدخل يدوي.")
-    tips.append("💡 نصيحة ذكية: تفعيل بوت التيليجرام يرسل لك تقارير الإغلاق وحالة الصندوق فورياً إلى هاتفك أينما كنت.")
+    tips.append("💡 الذكاء الاصطناعي: النظام يعمل أوفلاين 100% ويقوم بالتحليل الإحصائي دون الحاجة لأي اتصال بالإنترنت.")
+    tips.append("💡 المخزون الذكي: كل عملية بيع تخصم مكوناتها فورياً من المستودع مع تنبيهات تلقائية عند الاقتراب من النفاد.")
+    tips.append("💡 حماية الصندوق: عند تسليم الوردية، يقارن الذكاء الاصطناعي الكاش الفعلي مع القيود المحاسبية لمنع أي تلاعب.")
+    tips.append("💡 نصيحة تسويقية: الأصناف الأكثر مبيعاً يمكن دمجها في عروض Combo لزيادة متوسط الفاتورة بنسبة 20%.")
 
     conn.close()
 
