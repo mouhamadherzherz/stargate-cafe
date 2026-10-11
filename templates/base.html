@@ -126,6 +126,12 @@
                 <span>📒 سجل الديون</span>
             </a>
 
+            <!-- 2.2 AI Auditor & Smart Advisor (Visible to all) -->
+            <button type="button" onclick="if(typeof openAIAuditModal==='function'){openAIAuditModal();}else{window.location.href='{{ url_for('index') }}';}" class="px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shrink-0 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 text-white font-black shadow-md shadow-indigo-600/30 cursor-pointer border border-indigo-400/40 animate-pulse" title="المستشار والمدقق الذكي المدمج (STARGATE AI - يعمل بدون إنترنت)">
+                <span class="text-sm">🤖</span>
+                <span>الذكاء الاصطناعي ✨</span>
+            </button>
+
             {% if is_admin or session.get('is_admin') or session.get('employee_role') == 'admin' %}
             <!-- Admin Only Pages -->
             <!-- 2.5 Inventory & Stock -->

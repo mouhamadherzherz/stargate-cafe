@@ -150,7 +150,7 @@ def init_db(seed_items=False):
         sort_order INTEGER DEFAULT 0,
         is_active INTEGER DEFAULT 1,
         stock_qty REAL DEFAULT 0,
-        track_stock INTEGER DEFAULT 0,
+        track_stock INTEGER DEFAULT 1,
         low_stock_limit REAL DEFAULT 5,
         image_path TEXT DEFAULT NULL,
         FOREIGN KEY (category_id) REFERENCES cafe_categories(id) ON DELETE CASCADE
@@ -753,6 +753,19 @@ def _run_migrations(cursor, conn):
             cursor.execute(sql)
         except Exception:
             pass
+
+    # Force strict inventory tracking for all cafe items (prevent un-inventoried item leaks)
+    try:
+        cursor.execute("""
+            UPDATE cafe_items 
+            SET track_stock = 1 
+            WHERE (item_type IS NULL OR item_type != 'gaming') 
+              AND (is_coffee_bean_linked IS NULL OR is_coffee_bean_linked = 0)
+              AND (track_stock IS NULL OR track_stock = 0)
+        """)
+    except Exception:
+        pass
+
     conn.commit()
 
 

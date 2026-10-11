@@ -1283,20 +1283,21 @@ def create_order(order_data, items_list, tab_id=None):
                 first_coffee = coffee_items_found[0]
                 return False, f"⚠️ لا يمكن إتمام الطلب! الصنف ({first_coffee}) مرتبط بحبوب البن، ولا يوجد كيلو قهوة مفتوح حالياً في المحل. يجب فتح كيلو جديد أولاً من زر 'فتح كيلو ☕' في قسم القهوة."
 
-        # Strict Stock Guard: Check stock availability for all tracked products (both direct orders and tabs)
+        # Strict Stock Guard: Check stock availability for all products (Direct orders and tabs)
         for it in computed_items:
             item_id = it.get('item_id')
             item_name = it.get('name', 'صنف')
+            item_type = it.get('item_type') or 'cafe'
             q = float(it.get('quantity') or 1.0)
-            if item_id and not is_coffee_item(item_name, item_id=item_id):
+            if item_id and item_type != 'gaming' and not is_coffee_item(item_name, item_id=item_id):
                 cursor.execute("SELECT stock_qty, name, track_stock FROM cafe_items WHERE id = ?", (item_id,))
                 st_row = cursor.fetchone()
-                if st_row and st_row['track_stock'] == 1:
+                if st_row:
                     available = float(st_row['stock_qty'] or 0.0)
                     if available <= 0:
                         conn.rollback()
                         conn.close()
-                        return False, f"⚠️ لا يمكن إتمام الطلب! الصنف ({st_row['name']}) غير متوفر نهائياً في المخزون (الرصيد: 0). يرجى توريد كميات جديدة أولاً."
+                        return False, f"⚠️ لا يمكن إتمام الطلب! الصنف ({st_row['name']}) غير مجرود أو رصيده (0) في المخزن. يمنع بيع أي منتج غير متوفر لحماية الجرد."
                     elif available < q:
                         conn.rollback()
                         conn.close()
@@ -1402,13 +1403,13 @@ def create_order(order_data, items_list, tab_id=None):
             if item_is_coffee_bean_linked:
                 pass
             elif item_id:
-                # 1. Direct finished goods stock deduction if tracked
+                # 1. Direct finished goods stock deduction
                 cursor.execute("SELECT stock_qty, name, track_stock, cost_price_lbp, cost_price_usd FROM cafe_items WHERE id = ?", (item_id,))
                 cur_item_row = cursor.fetchone()
-                if cur_item_row and cur_item_row['track_stock'] == 1:
+                if cur_item_row:
                     q_before = float(cur_item_row['stock_qty'] or 0.0)
                     q_after = max(0.0, q_before - q)
-                    cursor.execute("UPDATE cafe_items SET stock_qty = ? WHERE id = ?", (q_after, item_id))
+                    cursor.execute("UPDATE cafe_items SET stock_qty = ?, track_stock = 1 WHERE id = ?", (q_after, item_id))
                     
                     # Record Stock Movement
                     try:
@@ -1619,16 +1620,17 @@ def save_customer_tab(customer_name, items_list=None, tab_id=None, notes='', dis
         for it in computed_items:
             item_id = it.get('item_id')
             item_name = it.get('name', 'صنف')
+            item_type = it.get('item_type') or 'cafe'
             q = float(it.get('quantity') or 1.0)
-            if item_id and not is_coffee_item(item_name, item_id=item_id):
+            if item_id and item_type != 'gaming' and not is_coffee_item(item_name, item_id=item_id):
                 cursor.execute("SELECT stock_qty, name, track_stock FROM cafe_items WHERE id = ?", (item_id,))
                 st_row = cursor.fetchone()
-                if st_row and st_row['track_stock'] == 1:
+                if st_row:
                     available = float(st_row['stock_qty'] or 0.0)
                     if available <= 0:
                         conn.rollback()
                         conn.close()
-                        return False, f"⚠️ لا يمكن إضافة الصنف! ({st_row['name']}) غير متوفر نهائياً في المخزون (الرصيد: 0)."
+                        return False, f"⚠️ لا يمكن إضافة الصنف! ({st_row['name']}) غير مجرود أو رصيده (0) في المخزن. يمنع بيعه أو إضافته لحساب الطاولة."
                     elif available < q:
                         conn.rollback()
                         conn.close()

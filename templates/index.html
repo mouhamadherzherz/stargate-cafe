@@ -2,6 +2,36 @@
 
 {% block content %}
 <div class="flex-1 flex flex-col p-2.5 lg:p-4 max-w-full space-y-3 pb-12">
+    <!-- 🤖 LIVE AI SMART ASSISTANT POS BANNER (المساعد والمدقق الذكي المباشر على شاشة الكاشير) -->
+    <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-2 border-indigo-500/70 rounded-3xl p-3 shadow-xl flex flex-col md:flex-row items-center justify-between gap-3 shrink-0">
+        <div class="flex items-center gap-3 w-full md:w-auto">
+            <div class="w-11 h-11 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-2xl font-black border border-indigo-500/50 animate-pulse shrink-0">
+                🤖✨
+            </div>
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-xs sm:text-sm font-black text-white">الذكاء الاصطناعي والمساعد الرقابي (STARGATE AI)</span>
+                    <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/40 font-bold">100% بدون إنترنت (Offline AI)</span>
+                    <span class="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/40 font-mono font-bold">سلامة العمليات: {{ ai_audit.health_score if ai_audit else 100 }}%</span>
+                </div>
+                <div class="text-[11px] text-slate-300 truncate mt-0.5">
+                    {% if ai_audit and ai_audit.issues %}
+                    <span class="text-rose-400 font-bold">⚠️ تنبيه رقابي:</span> {{ ai_audit.issues[0].title }} - {{ ai_audit.issues[0].desc }}
+                    {% elif ai_audit and ai_audit.insights %}
+                    <span class="text-amber-300 font-bold">💡 رصد ذكي:</span> {{ ai_audit.insights[0].title }} - {{ ai_audit.insights[0].desc }}
+                    {% else %}
+                    <span class="text-emerald-400 font-bold">✓ كافة العمليات المالية وجرد المخزون في وضع مثالي ومطابق 100%.</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0 self-end md:self-center">
+            <button type="button" onclick="openAIAuditModal()" class="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs px-4 py-2 rounded-xl transition shadow-lg shadow-indigo-600/40 active:scale-95 flex items-center gap-1.5 cursor-pointer border border-indigo-400/30">
+                <span>استشارة الذكاء الاصطناعي ↗</span>
+            </button>
+        </div>
+    </div>
+
     
     <!-- 1. LIVE TOP KPI AUDIT BAR (إحصائيات فورية لإنتاج اليوم) -->
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 shrink-0">
@@ -239,39 +269,7 @@
         </div>
     </div>
 
-    <!-- 🤖 LIVE AI SMART ASSISTANT POS BANNER (المساعد والمدقق الذكي المباشر على شاشة الكاشير) -->
-    {% if ai_audit %}
-    <div class="bg-gradient-to-r from-slate-900 via-indigo-950/90 to-slate-900 border-2 border-indigo-500/50 rounded-3xl p-3 shadow-lg flex flex-col md:flex-row items-center justify-between gap-3 shrink-0">
-        <div class="flex items-center gap-3 w-full md:w-auto">
-            <div class="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xl font-black border border-indigo-500/40 animate-pulse shrink-0">
-                🤖✨
-            </div>
-            <div class="min-w-0">
-                <div class="flex items-center gap-2 flex-wrap">
-                    <span class="text-xs font-black text-white">الذكاء الاصطناعي والمساعد الرقابي (STARGATE AI)</span>
-                    <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30 font-bold">100% بدون إنترنت (Offline)</span>
-                    <span class="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30 font-mono font-bold">سلامة العمليات: {{ ai_audit.health_score }}%</span>
-                </div>
-                <div class="text-[11px] text-slate-300 truncate mt-0.5">
-                    {% if ai_audit.issues %}
-                    <span class="text-rose-400 font-bold">⚠️ تنبيه رقابي:</span> {{ ai_audit.issues[0].title }} - {{ ai_audit.issues[0].desc }}
-                    {% elif ai_audit.insights %}
-                    <span class="text-amber-300 font-bold">💡 رصد ذكي:</span> {{ ai_audit.insights[0].title }} - {{ ai_audit.insights[0].desc }}
-                    {% else %}
-                    <span class="text-emerald-400 font-bold">✓ كافة العمليات المالية والمخزون في وضع مثالي ومطابق 100%.</span>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        <div class="flex items-center gap-2 shrink-0 self-end md:self-center">
-            <button type="button" onclick="openAIAuditModal()" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs px-3.5 py-1.5 rounded-xl transition shadow-md shadow-indigo-600/30 active:scale-95 flex items-center gap-1.5">
-                <span>عرض الفحص الشامل ↗</span>
-            </button>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- 2.8 PRO QUICK COMMAND BAR (الخزنة، تعديل الأصناف، حاسبة الألعاب، الموظفين، الديون) -->
+<!-- 2.8 PRO QUICK COMMAND BAR (الخزنة، تعديل الأصناف، حاسبة الألعاب، الموظفين، الديون) -->
     <div class="bg-gradient-to-r from-slate-900 via-indigo-950/80 to-slate-900 p-2.5 rounded-3xl border border-indigo-500/40 shadow-xl flex flex-wrap items-center justify-between gap-2.5 shrink-0">
         <div class="flex items-center gap-2 flex-wrap">
             <!-- Button 1: Transfer Cash to Safe -->
@@ -490,7 +488,7 @@
                          role="button"
                          tabindex="0"
                          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();handleProductCardClick(this);}"
-                         class="item-card group relative rounded-3xl {% if item.track_stock and (item.stock_qty|default(0)|float) <= 0 %}bg-slate-950/90 border-2 border-rose-500/60 opacity-70{% else %}bg-slate-900/90 hover:bg-slate-850 border border-slate-800 hover:border-amber-400/90 hover:shadow-2xl hover:shadow-amber-500/10 hover:-translate-y-1 active:scale-[0.98]{% endif %} transition-all duration-200 flex flex-col justify-between text-right shadow-lg overflow-hidden min-h-[220px] cursor-pointer select-none">
+                         class="item-card group relative rounded-3xl {% if not item.is_coffee_bean_linked and (item.stock_qty|default(0)|float) <= 0 %}bg-slate-950/90 border-2 border-rose-500/80 opacity-60 cursor-not-allowed{% else %}bg-slate-900/90 hover:bg-slate-850 border border-slate-800 hover:border-amber-400/90 hover:shadow-2xl hover:shadow-amber-500/10 hover:-translate-y-1 active:scale-[0.98] cursor-pointer{% endif %} transition-all duration-200 flex flex-col justify-between text-right shadow-lg overflow-hidden min-h-[220px] select-none">
                         
                         <!-- Quick Direct Edit Button (تعديل سريع ومباشر على الكرت) -->
                         <button type="button" 
@@ -522,16 +520,16 @@
                         </span>
                         {% endif %}
 
-                        {% if item.track_stock %}
+                        {% if not item.is_coffee_bean_linked %}
                             {% if (item.stock_qty|default(0)|float) <= 0 %}
-                            <div class="absolute inset-0 z-20 bg-slate-950/75 backdrop-blur-[1px] flex flex-col items-center justify-center p-3 text-center pointer-events-none border-2 border-rose-500/80 rounded-3xl">
-                                <span class="text-3xl mb-1">🚫</span>
-                                <span class="bg-rose-600 text-white font-black text-[11px] px-2.5 py-1 rounded-xl shadow-lg border border-rose-400">
+                            <div class="absolute inset-0 z-20 bg-slate-950/85 backdrop-blur-[2px] flex flex-col items-center justify-center p-3 text-center pointer-events-none border-2 border-rose-500/90 rounded-3xl">
+                                <span class="text-3xl mb-1 animate-bounce">🚫</span>
+                                <span class="bg-rose-600 text-white font-black text-xs px-3 py-1 rounded-xl shadow-xl border border-rose-400">
                                     غير مجرود / نفد المخزون
                                 </span>
-                                <span class="text-[9px] text-rose-200 mt-1 font-bold">الرصيد: 0 قطعة (البيع مقفل)</span>
+                                <span class="text-[10px] text-rose-200 mt-1 font-bold">الرصيد: 0 قطعة (البيع مقفل تماماً)</span>
                             </div>
-                            <span class="absolute bottom-2.5 left-2.5 z-30 bg-rose-950/90 text-rose-300 font-bold text-[9px] px-2 py-0.5 rounded-lg border border-rose-600/70 shadow-md flex items-center gap-1">
+                            <span class="absolute bottom-2.5 left-2.5 z-30 bg-rose-950 text-rose-300 font-bold text-[9px] px-2 py-0.5 rounded-lg border border-rose-600 shadow-md flex items-center gap-1">
                                 <span>⚠️</span> نفد المخزون (0)
                             </span>
                             {% elif (item.stock_qty|default(0)|float) <= (item.low_stock_limit|default(5)|float) %}
@@ -1044,16 +1042,16 @@
         const rawStock = btn.getAttribute('data-stock-qty');
         const stockQty = rawStock !== null ? parseFloat(rawStock) : 999999;
 
-        // 🛑 STRICT OUT-OF-STOCK GUARD (منع طلب أي منتج لا يوجد به مخزون وتنبيه الكاشير)
-        if (type === 'cafe' && !isCoffeeLinked && trackStock && stockQty <= 0) {
+        // 🛑 STRICT OUT-OF-STOCK GUARD (منع طلب أي منتج لا يوجد به مخزون أو غير مجرود نهائياً)
+        if (type === 'cafe' && !isCoffeeLinked && stockQty <= 0) {
             playBeep(250, 0.3);
-            showOutOfStockModal(name, `رصيد هذا الصنف في المخزون حالياً هو (0). النظام مقفل ويمنع إضافة أي صنف نافد من المحل لحماية الحسابات.`);
+            showOutOfStockModal(name, `رصيد هذا الصنف في المخزون حالياً هو (0) أو غير مجرود بالمحل! النظام مقفل ويمنع إضافة أي صنف غير متوفر حمايةً للمخزون ومنعاً للتلاعب.`);
             return;
         }
 
         // Check if item already in cart and adding another one would exceed stock
         const existingInCart = cart.find(i => (i.item_id && parseInt(i.item_id) === parseInt(id)) || (i.name === name && i.item_type === type));
-        if (type === 'cafe' && !isCoffeeLinked && trackStock && existingInCart && existingInCart.quantity >= stockQty) {
+        if (type === 'cafe' && !isCoffeeLinked && existingInCart && existingInCart.quantity >= stockQty) {
             playBeep(250, 0.3);
             showOutOfStockModal(name, `لقد أضفت كافة الكمية المتوفرة في المخزون (${stockQty} قطعة). لا يمكن إضافة كمية إضافية لعدم توفر مخزون كافٍ.`);
             return;
@@ -1148,7 +1146,7 @@
     function updateQty(index, delta) {
         if (cart[index]) {
             const it = cart[index];
-            if (delta > 0 && it.track_stock && !it.is_coffee_linked && it.stock_qty !== undefined && it.stock_qty !== null) {
+            if (delta > 0 && it.item_type === 'cafe' && !it.is_coffee_linked && it.stock_qty !== undefined && it.stock_qty !== null) {
                 if (it.quantity + delta > it.stock_qty) {
                     playBeep(250, 0.3);
                     showOutOfStockModal(it.name, `الكمية المتوفرة في المخزون هي (${it.stock_qty} قطعة فقط). لا يمكن زيادة الكمية أكثر من المخزون المتوفر.`);
