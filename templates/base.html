@@ -170,6 +170,12 @@
 <span>📑 السجل المالي</span>
 </a>
 
+<!-- 2.96 Financial Statements & Year-End ERP (Admin Only) -->
+<a href="{{ url_for('financial_statements_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'financial_statements_page' %}bg-indigo-600 text-white font-black shadow-md shadow-indigo-600/30{% else %}text-indigo-300 hover:text-white hover:bg-slate-900{% endif %}" title="المركز المالي، P&L، ميزان المراجعة، والميزانية العمومية وإقفال السنة">
+<i class="fa-solid fa-landmark"></i>
+<span>🏛️ القوائم الختامية</span>
+</a>
+
 <!-- Suppliers & Purchases (Admin Only) -->
 <a href="{{ url_for('suppliers_page') }}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if request.endpoint == 'suppliers_page' %}bg-amber-500 text-slate-950 font-black shadow-sm{% else %}text-slate-400 hover:text-white hover:bg-slate-900{% endif %}">
 <i class="fa-solid fa-truck-ramp-box"></i>
@@ -915,6 +921,61 @@ function scanAndApplyLocalZip() {
     </div>
 </div>
 
+<!-- Quick Opening Float Modal (تسجيل فكة / عهدة بداية الدوام للصندوق) -->
+<div id="quickFloatModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 no-print">
+    <div class="bg-slate-900 border-2 border-amber-500/50 rounded-3xl p-5 max-w-md w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black">💼</span>
+                <div>
+                    <h3 class="font-black text-sm text-white">إيداع عهدة بداية الدوام (فكة الصندوق)</h3>
+                    <p class="text-[10px] text-slate-400">تسجيل سيولة نقدية في درج الكاشير مع قيد محاسبي رسمي</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeQuickFloatModal()" class="text-slate-500 hover:text-slate-300 text-lg">✕</button>
+        </div>
+
+        <form action="{{ url_for('shift_open_float_route') }}" method="POST" class="space-y-3" onsubmit="var b=this.querySelector('button[type=submit]'); b.disabled=true; b.innerHTML='⏳ جاري الإيداع...';">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">مبلغ العهدة (ليرة لبنانية): *</label>
+                <input type="number" name="amount_lbp" id="quickFloatAmountLbp" step="500" placeholder="مثال: 1000000" required
+                       class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold text-base px-3 py-2 rounded-xl focus:border-amber-400 outline-none">
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">مصدر العهدة والسيولة:</label>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <label class="bg-slate-950 p-2 rounded-xl border border-amber-500/40 flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="source" value="safe" checked class="text-amber-500 focus:ring-amber-400">
+                        <span class="text-[11px] text-white font-bold">من الخزنة الخاصة 🏦</span>
+                    </label>
+                    <label class="bg-slate-950 p-2 rounded-xl border border-slate-700 flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="source" value="capital" class="text-indigo-500 focus:ring-indigo-400">
+                        <span class="text-[11px] text-indigo-300 font-bold">رأس مال / المالك 💼</span>
+                    </label>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">ملاحظات وبيان العهدة:</label>
+                <input type="text" name="notes" placeholder="فكة بداية الوردية الصباحية / المسائية"
+                       class="w-full bg-slate-950 border border-slate-700 text-slate-200 text-xs px-2.5 py-2 rounded-xl focus:border-amber-400 outline-none">
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-600/20 active:scale-95 cursor-pointer">
+                    تأكيد إيداع العهدة بالصندوق 💼
+                </button>
+                <button type="button" onclick="closeQuickFloatModal()" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 function openQuickExpenseModal() {
     const m = document.getElementById('quickExpenseModal');
@@ -931,6 +992,22 @@ function openQuickExpenseModal() {
 }
 function closeQuickExpenseModal() {
     const m = document.getElementById('quickExpenseModal');
+    if (m) m.classList.add('hidden');
+}
+
+function openQuickFloatModal() {
+    const m = document.getElementById('quickFloatModal');
+    if (m) {
+        m.classList.remove('hidden');
+        const inp = document.getElementById('quickFloatAmountLbp');
+        if (inp) {
+            inp.value = '';
+            inp.focus();
+        }
+    }
+}
+function closeQuickFloatModal() {
+    const m = document.getElementById('quickFloatModal');
     if (m) m.classList.add('hidden');
 }
 

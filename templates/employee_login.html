@@ -86,13 +86,25 @@
             <div id="loginOtaProgress" class="hidden text-[11px] text-amber-200 font-bold bg-slate-950/60 p-2 rounded-xl border border-amber-500/40"></div>
         </div>
 
-        <!-- Quick PIN Form with Numpad -->
-        <form method="POST" action="{{ url_for('employee_login') }}" class="space-y-4 relative z-10" id="loginForm">
+        <!-- Login Mode Switcher Tabs -->
+        <div class="flex items-center justify-center bg-slate-950 p-1 rounded-2xl border border-slate-800 max-w-xs mx-auto text-xs font-bold relative z-10">
+            <button type="button" id="tabBtnPin" onclick="switchLoginMode('pin')" class="flex-1 py-2 px-3 rounded-xl transition bg-indigo-600 text-white shadow-md flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-key"></i>
+                <span>رمز PIN السريع</span>
+            </button>
+            <button type="button" id="tabBtnUser" onclick="switchLoginMode('user')" class="flex-1 py-2 px-3 rounded-xl transition text-slate-400 hover:text-white flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-user-lock"></i>
+                <span>اسم الدخول وكلمة السر</span>
+            </button>
+        </div>
+
+        <!-- 1. Quick PIN Form with Numpad -->
+        <form method="POST" action="{{ url_for('employee_login') }}" class="space-y-4 relative z-10" id="loginFormPin">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div>
                 <label class="block text-xs font-bold text-slate-300 mb-1.5 text-center">أدخل رمز الدخول السريع (PIN)</label>
                 <div class="relative">
-                    <input type="password" name="pin" id="pinDisplay" autofocus autocomplete="off" required placeholder="••••" maxlength="8"
+                    <input type="password" name="pin" id="pinDisplay" autofocus autocomplete="off" placeholder="••••" maxlength="8"
                            class="w-full bg-slate-950 border-2 border-slate-700 focus:border-indigo-500 text-white text-center text-2xl font-mono tracking-widest py-3 rounded-2xl focus:outline-none transition">
                     <button type="button" onclick="clearPin()" class="absolute left-3 top-3.5 text-slate-400 hover:text-white text-xs font-bold px-2 py-0.5 rounded-lg bg-slate-800 transition">
                         مسح
@@ -119,9 +131,32 @@
             </div>
 
             <div class="pt-2">
-                <button type="submit" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black py-3.5 rounded-2xl text-sm transition shadow-lg shadow-indigo-600/30 active:scale-95 flex items-center justify-center gap-2">
+                <button type="submit" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black py-3.5 rounded-2xl text-sm transition shadow-lg shadow-indigo-600/30 active:scale-95 flex items-center justify-center gap-2 cursor-pointer">
                     <i class="fa-solid fa-right-to-bracket"></i>
                     <span>فتح الوردية والدخول للكاشير</span>
+                </button>
+            </div>
+        </form>
+
+        <!-- 2. Username & Password Form -->
+        <form method="POST" action="{{ url_for('employee_login') }}" class="space-y-4 relative z-10 hidden text-right" id="loginFormUser">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">اسم المستخدم (Username):</label>
+                <input type="text" name="username" id="userNameInput" placeholder="أدخل اسم المستخدم"
+                       class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 text-white rounded-2xl py-3 px-3.5 text-xs focus:outline-none transition font-mono">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">كلمة المرور (Password):</label>
+                <input type="password" name="password" id="userPassInput" placeholder="••••••••"
+                       class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 text-white rounded-2xl py-3 px-3.5 text-xs focus:outline-none transition font-mono">
+            </div>
+
+            <div class="pt-2">
+                <button type="submit" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black py-3.5 rounded-2xl text-sm transition shadow-lg shadow-indigo-600/30 active:scale-95 flex items-center justify-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    <span>تسجيل الدخول للكاشير</span>
                 </button>
             </div>
         </form>
@@ -136,6 +171,26 @@
     </div>
 
     <script>
+        function switchLoginMode(mode) {
+            const formPin = document.getElementById('loginFormPin');
+            const formUser = document.getElementById('loginFormUser');
+            const tabPin = document.getElementById('tabBtnPin');
+            const tabUser = document.getElementById('tabBtnUser');
+            if (mode === 'pin') {
+                formPin.classList.remove('hidden');
+                formUser.classList.add('hidden');
+                tabPin.className = 'flex-1 py-2 px-3 rounded-xl transition bg-indigo-600 text-white shadow-md flex items-center justify-center gap-1.5';
+                tabUser.className = 'flex-1 py-2 px-3 rounded-xl transition text-slate-400 hover:text-white flex items-center justify-center gap-1.5';
+                document.getElementById('pinDisplay')?.focus();
+            } else {
+                formPin.classList.add('hidden');
+                formUser.classList.remove('hidden');
+                tabUser.className = 'flex-1 py-2 px-3 rounded-xl transition bg-indigo-600 text-white shadow-md flex items-center justify-center gap-1.5';
+                tabPin.className = 'flex-1 py-2 px-3 rounded-xl transition text-slate-400 hover:text-white flex items-center justify-center gap-1.5';
+                document.getElementById('userNameInput')?.focus();
+            }
+        }
+
         function appendPin(num) {
             const inp = document.getElementById('pinDisplay');
             if (inp.value.length < 8) {

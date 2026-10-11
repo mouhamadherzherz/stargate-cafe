@@ -157,7 +157,7 @@
                     <span>✓ تم ترحيل كامل كاش اليوم إلى الخزنة الخاصة بنجاح (رصيد الكاش المتبقي: 0 ل.ل) 🔒</span>
                 </div>
                 {% elif daily_transfer_status and daily_transfer_status.recommended_transfer_lbp > 0 %}
-                <form action="{{ url_for('safe_transfer_daily') }}" method="POST" class="w-full sm:w-auto">
+                <form action="{{ url_for('safe_transfer_daily') }}" method="POST" class="w-full sm:w-auto" onsubmit="var b=this.querySelector('button'); b.disabled=true; b.innerHTML='⏳ جاري النقل...';">
                     <input type="hidden" name="target_date" value="{{ target_date }}">
                     <input type="hidden" name="amount_lbp" value="{{ daily_transfer_status.recommended_transfer_lbp }}">
                     <input type="hidden" name="amount_usd" value="{{ daily_transfer_status.recommended_transfer_usd }}">
@@ -204,7 +204,7 @@
 
         <div class="flex items-center gap-2 flex-wrap">
             {% if drawer_status.past_untransferred_lbp > 0 %}
-            <form action="{{ url_for('safe_transfer_daily') }}" method="POST">
+            <form action="{{ url_for('safe_transfer_daily') }}" method="POST" onsubmit="var b=this.querySelector('button'); b.disabled=true; b.innerHTML='⏳ جاري النقل...';">
                 <input type="hidden" name="amount_lbp" value="{{ drawer_status.past_untransferred_lbp }}">
                 <input type="hidden" name="note" value="ترحيل كاش مبيعات الأمس المتراكم">
                 <button type="submit"
@@ -213,7 +213,7 @@
                 </button>
             </form>
             {% endif %}
-            <form action="{{ url_for('safe_transfer_drawer_total') }}" method="POST">
+            <form action="{{ url_for('safe_transfer_drawer_total') }}" method="POST" onsubmit="var b=this.querySelector('button'); b.disabled=true; b.innerHTML='⏳ جاري النقل...';">
                 <button type="submit"
                         class="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-4 py-2.5 rounded-xl text-xs transition shadow-lg shadow-emerald-600/25 flex items-center gap-1.5 active:scale-95 cursor-pointer">
                     <span>💰 نقل كامل الكاش المتوفر ({{ drawer_status.total_untransferred_lbp|format_currency }} ل.ل)</span>

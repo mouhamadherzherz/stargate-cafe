@@ -147,7 +147,7 @@
                 <span class="font-mono-num">{{ (order.subtotal_lbp or (order.total_lbp + order.discount_lbp))|format_currency }} ل.ل</span>
             </div>
             <div class="flex justify-between text-[11px] text-rose-700 font-black px-1">
-                <span>خصم{% if order.discount_percent %} ({{ '%g'|format(order.discount_percent) }}%){% endif %}{% if order.discount_reason %} - {{ order.discount_reason }}{% endif %}:</span>
+                <span>خصم نقدي{% if order.discount_reason %} ({{ order.discount_reason }}){% endif %}:</span>
                 <span class="font-mono-num">-{{ order.discount_lbp|format_currency }} ل.ل</span>
             </div>
             {% endif %}

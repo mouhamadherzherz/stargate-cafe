@@ -91,8 +91,8 @@ def _needs_hash_upgrade(stored: str) -> bool:
 # ──────────────────────────────────────────────
 # DB Init
 # ──────────────────────────────────────────────
-def init_db(seed_items=True):
-    """Initialize database – create tables, run migrations, seed defaults."""
+def init_db(seed_items=False):
+    """Initialize database – create tables, run migrations, zero defaults."""
     os.makedirs(DB_DIR, exist_ok=True)
     conn = get_db()
     cursor = conn.cursor()
@@ -118,6 +118,9 @@ def init_db(seed_items=True):
         whatsapp_instance_id TEXT DEFAULT '',
         whatsapp_token TEXT DEFAULT '',
         whatsapp_api_url TEXT DEFAULT 'https://api.ultramsg.com',
+        telegram_enabled INTEGER DEFAULT 0,
+        telegram_bot_token TEXT DEFAULT '',
+        telegram_chat_id TEXT DEFAULT '',
         is_seeded INTEGER DEFAULT 0,
         setup_complete INTEGER DEFAULT 0,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -675,6 +678,9 @@ def _run_migrations(cursor, conn):
         "ALTER TABLE settings ADD COLUMN whatsapp_instance_id TEXT DEFAULT ''",
         "ALTER TABLE settings ADD COLUMN whatsapp_token TEXT DEFAULT ''",
         "ALTER TABLE settings ADD COLUMN whatsapp_api_url TEXT DEFAULT 'https://api.ultramsg.com'",
+        "ALTER TABLE settings ADD COLUMN telegram_enabled INTEGER DEFAULT 0",
+        "ALTER TABLE settings ADD COLUMN telegram_bot_token TEXT DEFAULT ''",
+        "ALTER TABLE settings ADD COLUMN telegram_chat_id TEXT DEFAULT ''",
         "ALTER TABLE cafe_items ADD COLUMN stock_qty REAL DEFAULT 0",
         "ALTER TABLE cafe_items ADD COLUMN track_stock INTEGER DEFAULT 0",
         "ALTER TABLE cafe_items ADD COLUMN low_stock_limit REAL DEFAULT 5",

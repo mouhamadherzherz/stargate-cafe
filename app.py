@@ -471,9 +471,23 @@ def csrf_protect():
 
 @app.before_request
 def ensure_default_session():
+    # If setup wizard is pending (virgin factory reset state), force setup wizard first
+    if not (request.path.startswith('/static/') or request.path == '/favicon.ico'):
+        try:
+            settings = accounting.get_settings()
+            conn = database.get_db()
+            admin_count = conn.execute("SELECT COUNT(*) FROM employees WHERE role='admin' AND is_active=1").fetchone()[0]
+            conn.close()
+            if settings.get('setup_complete') != 1 or admin_count == 0:
+                if request.endpoint != 'setup_wizard':
+                    return redirect(url_for('setup_wizard'))
+                return
+        except Exception:
+            pass
+
     # Never bypass authentication: public endpoints allowed without login
     public_endpoints = [
-        'employee_login', 'admin_login', 'static', 'favicon',
+        'setup_wizard', 'employee_login', 'admin_login', 'static', 'favicon',
         'api_do_update', 'api_manual_update', 'download_hub_page',
         'api_check_update', 'api_force_check_update', 'download_update_zip',
         'download_installer_exe', 'download_employee_update_bat', 'update_tool_page'
@@ -485,7 +499,7 @@ def ensure_default_session():
     if (request.path.startswith('/static/') or 
         request.path == '/favicon.ico' or
         request.path.startswith('/download') or
-        request.path in ('/update', '/installer', '/api/do_update', '/api/manual_update', '/api/check_update', '/api/force_check_update', '/update-tool')):
+        request.path in ('/update', '/installer', '/api/do_update', '/api/manual_update', '/api/check_update', '/api/force_check_update', '/update-tool', '/setup')):
         return
 
     # Strict check: Session must contain a valid logged-in employee or admin
@@ -633,6 +647,7 @@ def order_create():
             phone = req_data.get('phone', '')
             discount_percent = req_data.get('discount_percent', 0)
             discount_lbp = req_data.get('discount_lbp', 0)
+            discount_usd = req_data.get('discount_usd', 0)
             discount_reason = req_data.get('discount_reason', '')
         else:
             raw_items = request.form.get('items_json', '[]')
@@ -644,13 +659,15 @@ def order_create():
             phone = request.form.get('phone', '')
             discount_percent = request.form.get('discount_percent', 0)
             discount_lbp = request.form.get('discount_lbp', 0)
+            discount_usd = request.form.get('discount_usd', 0)
             discount_reason = request.form.get('discount_reason', '')
 
         try:
             discount_percent = max(0.0, min(100.0, float(discount_percent or 0)))
             discount_lbp = max(0.0, float(discount_lbp or 0))
+            discount_usd = max(0.0, float(discount_usd or 0))
         except (TypeError, ValueError):
-            discount_percent, discount_lbp = 0.0, 0.0
+            discount_percent, discount_lbp, discount_usd = 0.0, 0.0, 0.0
 
         if not items_list:
             if request.is_json:
@@ -688,18 +705,19 @@ def order_create():
             'employee_name': emp_name or 'كاشير',
             'discount_percent': discount_percent,
             'discount_lbp': discount_lbp,
+            'discount_usd': discount_usd,
             'discount_reason': (discount_reason or '').strip()[:120]
         }
         success, result = accounting.create_order(order_data, items_list, tab_id=tab_id)
 
-        if success and (discount_percent > 0 or discount_lbp > 0):
+        if success and (discount_percent > 0 or discount_lbp > 0 or discount_usd > 0):
             try:
                 database.write_audit_log(
                     actor=emp_name or 'كاشير',
                     action='APPLY_DISCOUNT',
                     table_name='cafe_orders',
                     record_id=result.get('order_id'),
-                    reason=f"خصم {result.get('discount_lbp', 0):,.0f} ل.ل ({result.get('discount_percent', 0)}%) - {discount_reason or 'بدون سبب'}"
+                    reason=f"حسم نقدي بمبلغ {result.get('discount_lbp', 0):,.0f} ل.ل (${result.get('discount_usd', 0):.2f}) - {discount_reason or 'بدون سبب'}"
                 )
             except Exception:
                 pass
@@ -733,14 +751,33 @@ def tab_save():
             customer_name = req_data.get('customer_name', 'زبون في المحل')
             notes = req_data.get('notes', '')
             tab_id = req_data.get('tab_id')
+            discount_percent = req_data.get('discount_percent', 0)
+            discount_lbp = req_data.get('discount_lbp', 0)
+            discount_usd = req_data.get('discount_usd', 0)
+            discount_reason = req_data.get('discount_reason', '')
         else:
             raw_items = request.form.get('items_json', '[]')
             items_list = json.loads(raw_items)
             customer_name = request.form.get('customer_name', 'زبون في المحل')
             notes = request.form.get('notes', '')
             tab_id = request.form.get('tab_id')
+            discount_percent = request.form.get('discount_percent', 0)
+            discount_lbp = request.form.get('discount_lbp', 0)
+            discount_usd = request.form.get('discount_usd', 0)
+            discount_reason = request.form.get('discount_reason', '')
 
-        success, result = accounting.save_customer_tab(customer_name, items_list, tab_id=tab_id, notes=notes)
+        try:
+            discount_percent = max(0.0, min(100.0, float(discount_percent or 0)))
+            discount_lbp = max(0.0, float(discount_lbp or 0))
+            discount_usd = max(0.0, float(discount_usd or 0))
+        except (TypeError, ValueError):
+            discount_percent, discount_lbp, discount_usd = 0.0, 0.0, 0.0
+
+        success, result = accounting.save_customer_tab(
+            customer_name, items_list, tab_id=tab_id, notes=notes,
+            discount_lbp=discount_lbp, discount_usd=discount_usd,
+            discount_percent=discount_percent, discount_reason=discount_reason
+        )
         if request.is_json:
             if success:
                 return jsonify({'success': True, 'data': result, 'message': f"تم حفظ حساب {customer_name} بنجاح 📌"})
@@ -1080,6 +1117,7 @@ def admin_panel():
     safe_balance = accounting.get_safe_balance()
     safe_daily = accounting.get_safe_daily_summary(target_date=target_date)
     daily_transfer_status = accounting.check_daily_safe_transfer_status(target_date=target_date)
+    settings = accounting.get_settings()
     return render_template(
         'admin.html',
         daily_transfer_status=daily_transfer_status,
@@ -1094,6 +1132,10 @@ def admin_panel():
         target_date=target_date,
         safe_balance=safe_balance,
         safe_daily=safe_daily,
+        settings=settings,
+        company_name=settings.get('company_name', 'STARGATE'),
+        pc_price_lbp=settings.get('pc_price_per_click_lbp', 100000.0),
+        exchange_rate=settings.get('exchange_rate', 89500.0),
         active_page='admin'
     )
 
@@ -1416,8 +1458,47 @@ def settings_update():
     if not session.get('admin_authenticated'):
         return redirect(url_for('admin_login'))
     accounting.update_settings(request.form)
-    flash("تم حفظ الإعدادات وسعر صرف الدولار بنجاح", "success")
+    flash("تم حفظ الإعدادات وربط تيليجرام وسعر الصرف بنجاح ✅", "success")
     return redirect(url_for('admin_panel'))
+
+
+@app.route('/api/telegram/test', methods=['POST'])
+@admin_required
+def telegram_test():
+    """اختبار فوري لاتصال بوت التيليجرام وإرسال رسالة تجريبية."""
+    data = request.get_json(silent=True) or request.form
+    token = data.get('telegram_bot_token')
+    chat_id = data.get('telegram_chat_id')
+    settings = accounting.get_settings()
+    comp = settings.get('company_name', 'STARGATE CAFE')
+
+    test_msg = f"<b>🚀 تجربة اتصال ناجحة - {comp}</b>\n\nنظام STARGATE POS الذكي متصل الآن بحساب التيليجرام الخاص بك وسيقوم بإرسال التقارير اليومية وتنبيهات الصندوق والمخزون مباشرة إلى هنا."
+    ok, msg = accounting.send_telegram_message(test_msg, bot_token=token, chat_id=chat_id)
+    if ok:
+        return jsonify({'success': True, 'message': 'تم إرسال رسالة الاختبار بنجاح إلى التيليجرام! ✈️'})
+    return jsonify({'success': False, 'message': msg}), 400
+
+
+@app.route('/api/telegram/send-daily-report', methods=['POST'])
+@admin_required
+def telegram_send_daily_report():
+    """إرسال تقرير الإغلاق المالي الحالي إلى التيليجرام بضغطة زر واحدة."""
+    target_date = request.form.get('target_date') or request.args.get('target_date') or accounting.get_business_date()
+    ok, msg = accounting.send_daily_closing_telegram_report(target_date)
+    if ok:
+        flash(f"تم إرسال التقرير المالي لتاريخ {target_date} إلى التيليجرام بنجاح 🚀", "success")
+    else:
+        flash(f"تعذر إرسال التقرير إلى التيليجرام: {msg}", "warning")
+    return redirect(request.referrer or url_for('admin_panel'))
+
+
+@app.route('/api/ai/audit', methods=['GET'])
+@login_required
+def ai_audit_api():
+    """فحص الذكاء الاصطناعي الشامل للعمليات والمخزون والصندوق والأخطاء."""
+    target_date = request.args.get('date', accounting.get_business_date())
+    report = accounting.ai_audit_system(target_date)
+    return jsonify({'success': True, 'audit': report})
 
 # ----------------- CATEGORY & MENU ITEM MANAGEMENT -----------------
 
@@ -2341,6 +2422,94 @@ def get_current_employee():
         'employee_name': emp_name,
         'role': session.get('employee_role', 'cashier')
     })
+
+# ==========================================
+# SETUP WIZARD (FIRST-RUN SYSTEM INITIALIZATION)
+# ==========================================
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup_wizard():
+    """Initial setup wizard for fresh installation or full factory reset."""
+    settings = accounting.get_settings()
+    conn = database.get_db()
+    admin_count = conn.execute("SELECT COUNT(*) FROM employees WHERE role='admin' AND is_active=1").fetchone()[0]
+    conn.close()
+
+    # If setup is already complete and admin exists, redirect to employee login
+    if settings.get('setup_complete') == 1 and admin_count > 0:
+        return redirect(url_for('employee_login'))
+
+    if request.method == 'POST':
+        company_name = request.form.get('company_name', '').strip() or 'STARGATE CAFE'
+        admin_name = request.form.get('admin_name', '').strip()
+        admin_username = request.form.get('admin_username', '').strip()
+        admin_pin = request.form.get('admin_pin', '').strip()
+        admin_password = request.form.get('admin_password', '').strip()
+        exchange_rate = float(request.form.get('exchange_rate') or 89500.0)
+        pc_price_lbp = float(request.form.get('pc_price_lbp') or 100000.0)
+
+        if not admin_name or not admin_username or not admin_password or not admin_pin:
+            flash("⚠️ يرجى ملء كافة الحقول الأساسية لإنشاء حساب المدير العام!", "danger")
+            return render_template('setup_wizard.html')
+
+        if len(admin_pin) < 4:
+            flash("⚠️ رمز الـ PIN يجب أن يتكون من 4 أرقام على الأقل!", "danger")
+            return render_template('setup_wizard.html')
+
+        # Hash passwords securely
+        hashed_password = database.hash_password(admin_password)
+        hashed_pin = database.hash_password(admin_pin)
+
+        conn = database.get_db()
+        cursor = conn.cursor()
+        try:
+            # 1. Update company settings
+            cursor.execute("""
+                UPDATE settings
+                SET company_name = ?, exchange_rate = ?, pc_price_per_click_lbp = ?,
+                    admin_password = ?, setup_complete = 1, is_seeded = 1
+                WHERE id = 1
+            """, (company_name, exchange_rate, pc_price_lbp, hashed_password))
+
+            # 2. Insert primary admin employee
+            cursor.execute("""
+                INSERT INTO employees (name, username, password, pin, role, is_active, password_is_hashed)
+                VALUES (?, ?, ?, ?, 'admin', 1, 1)
+            """, (admin_name, admin_username, hashed_password, hashed_pin))
+            new_emp_id = cursor.lastrowid
+
+            conn.commit()
+            try:
+                cursor.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
+            conn.close()
+
+            # Automatically log in the created admin
+            session['employee_id'] = new_emp_id
+            session['employee_name'] = admin_name
+            session['employee_role'] = 'admin'
+            session['admin_authenticated'] = True
+            session['admin_logged_in'] = True
+            session['is_admin'] = True
+
+            database.write_audit_log(
+                actor=admin_name,
+                action='SYSTEM_SETUP',
+                table_name='settings',
+                reason='اكتمال الإعداد الأولي للنظام وتعيين حساب المدير العام'
+            )
+
+            flash(f"🎉 مرحباً بك يا {admin_name}! تم إعداد وتأمين النظام بنجاح، يمكنك الآن بدء العمل وإضافة الأصناف أو البيع.", "success")
+            return redirect(url_for('index'))
+        except Exception as e:
+            conn.rollback()
+            conn.close()
+            logger.exception("Error in setup_wizard: %s", e)
+            flash(f"حدث خطأ أثناء حفظ الإعداد: {str(e)}", "danger")
+            return render_template('setup_wizard.html')
+
+    return render_template('setup_wizard.html')
 
 # ==========================================
 # EMPLOYEE AUTHENTICATION & SHIFT CLOSING

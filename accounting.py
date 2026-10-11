@@ -572,15 +572,33 @@ def update_settings(data):
     rate = float(data.get('exchange_rate') or 89500.0)
     pc_price = float(data.get('pc_price_per_click_lbp') or data.get('pc_session_price_lbp') or 100000.0)
 
-    cursor.execute(f"""
-    UPDATE settings SET
-        company_name = ?,
-        phone = ?,
-        exchange_rate = ?,
-        pc_price_per_click_lbp = ?,
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = 1
-    """, (company_name, phone, rate, pc_price))
+    telegram_enabled = 1 if data.get('telegram_enabled') in (1, '1', True, 'on') else 0
+    telegram_bot_token = data.get('telegram_bot_token', '').strip() if 'telegram_bot_token' in data else None
+    telegram_chat_id = data.get('telegram_chat_id', '').strip() if 'telegram_chat_id' in data else None
+
+    if telegram_bot_token is not None and telegram_chat_id is not None:
+        cursor.execute("""
+        UPDATE settings SET
+            company_name = ?,
+            phone = ?,
+            exchange_rate = ?,
+            pc_price_per_click_lbp = ?,
+            telegram_enabled = ?,
+            telegram_bot_token = ?,
+            telegram_chat_id = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = 1
+        """, (company_name, phone, rate, pc_price, telegram_enabled, telegram_bot_token, telegram_chat_id))
+    else:
+        cursor.execute("""
+        UPDATE settings SET
+            company_name = ?,
+            phone = ?,
+            exchange_rate = ?,
+            pc_price_per_click_lbp = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = 1
+        """, (company_name, phone, rate, pc_price))
     conn.commit()
 
     # Also update GAMING item in menu if exists
@@ -1042,8 +1060,11 @@ def add_item(data):
     icon = data.get('icon', '☕').strip() or '☕'
     item_type = data.get('item_type', 'cafe').strip() or 'cafe'
     sort_order = int(data.get('sort_order') or 0)
-    stock_qty = float(data.get('stock_qty') or 0.0)
-    track_stock = 1 if data.get('track_stock') in (1, '1', True, 'on') else 0
+    stock_qty = float(data.get('stock_qty') or 100.0) if data.get('stock_qty') not in (None, '') else 100.0
+    # Automatic inventory tracking: ALWAYS 1 unless explicitly set to 0 or item_type is 'gaming'
+    track_stock = 0 if item_type == 'gaming' else 1
+    if 'track_stock' in data and data.get('track_stock') in (0, '0', False):
+        track_stock = 0
     low_stock_limit = float(data.get('low_stock_limit') or 5.0)
     is_coffee_bean_linked = 1 if data.get('is_coffee_bean_linked') in (1, '1', True, 'on') else 0
 
@@ -1103,8 +1124,14 @@ def update_item(item_id, data):
     item_type = data.get('item_type', 'cafe').strip() or 'cafe'
     sort_order = int(data.get('sort_order') or 0)
     is_active = 1 if data.get('is_active') in (1, '1', True, 'on') else 0
-    stock_qty = float(data.get('stock_qty') or 0.0) if 'stock_qty' in data else None
-    track_stock = (1 if data.get('track_stock') in (1, '1', True, 'on') else 0) if 'track_stock' in data else None
+    stock_qty = float(data.get('stock_qty') or 0.0) if 'stock_qty' in data and data.get('stock_qty') not in (None, '') else None
+    # Auto track stock if not gaming
+    if item_type == 'gaming':
+        track_stock = 0
+    elif 'track_stock' in data:
+        track_stock = 0 if data.get('track_stock') in (0, '0', False) else 1
+    else:
+        track_stock = 1
     low_stock_limit = float(data.get('low_stock_limit') or 5.0) if 'low_stock_limit' in data else None
     is_coffee_bean_linked = (1 if data.get('is_coffee_bean_linked') in (1, '1', True, 'on') else 0) if 'is_coffee_bean_linked' in data else None
 
@@ -1112,8 +1139,7 @@ def update_item(item_id, data):
     if is_coffee_bean_linked == 1:
         if stock_qty is not None:
             stock_qty = 0.0
-        if track_stock is not None:
-            track_stock = 0
+        track_stock = 0
 
     settings = get_settings()
     rate = float(settings.get('exchange_rate') or 89500.0)
@@ -1209,23 +1235,23 @@ def create_order(order_data, items_list, tab_id=None):
     subtotal_usd = calc['total_usd']
     computed_items = calc['items']
 
-    # Process discounts for regular customers / loyalty / coffee hospitality
-    discount_percent = float(order_data.get('discount_percent') or 0.0)
+    # Process discounts by currency amount first (حسم نقدي بالعملة)
     discount_lbp = float(order_data.get('discount_lbp') or 0.0)
     discount_usd = float(order_data.get('discount_usd') or 0.0)
+    discount_percent = float(order_data.get('discount_percent') or 0.0)
     discount_reason = (order_data.get('discount_reason') or '').strip()
 
-    if discount_percent > 0:
+    if discount_lbp > 0:
+        discount_usd = round(discount_lbp / rate, 2) if rate > 0 else 0.0
+        discount_percent = round((discount_lbp / subtotal_lbp) * 100, 1) if subtotal_lbp > 0 else 0.0
+    elif discount_usd > 0:
+        discount_lbp = round(discount_usd * rate, 0)
+        discount_percent = round((discount_lbp / subtotal_lbp) * 100, 1) if subtotal_lbp > 0 else 0.0
+    elif discount_percent > 0:
         if discount_percent > 100.0:
             discount_percent = 100.0
         discount_lbp = round(subtotal_lbp * (discount_percent / 100.0), 0)
         discount_usd = round(subtotal_usd * (discount_percent / 100.0), 2)
-    elif discount_usd > 0 and discount_lbp <= 0:
-        discount_lbp = round(discount_usd * rate, 0)
-        discount_percent = round((discount_lbp / subtotal_lbp) * 100, 1) if subtotal_lbp > 0 else 0.0
-    elif discount_lbp > 0:
-        discount_usd = round(discount_lbp / rate, 2) if rate > 0 else 0.0
-        discount_percent = round((discount_lbp / subtotal_lbp) * 100, 1) if subtotal_lbp > 0 else 0.0
 
     discount_lbp = min(discount_lbp, subtotal_lbp)
     discount_usd = min(discount_usd, subtotal_usd)
@@ -1531,17 +1557,39 @@ def create_order(order_data, items_list, tab_id=None):
         conn.close()
         return False, str(e)
 
-def save_customer_tab(customer_name, items_list=None, tab_id=None, notes=''):
-    """Save or update an open customer tab (الزبائن الجالسون بالمحل)."""
+def save_customer_tab(customer_name, items_list=None, tab_id=None, notes='', discount_lbp=0.0, discount_usd=0.0, discount_percent=0.0, discount_reason=''):
+    """Save or update an open customer tab (الزبائن الجالسون بالمحل) including discounts."""
     items_list = items_list or []
     customer_name = (customer_name or '').strip() or 'زبون في المحل'
     settings = get_settings()
     rate = float(settings.get('exchange_rate') or 89500.0)
 
     calc = calculate_order_totals(items_list, rate)
-    total_lbp = calc['total_lbp']
-    total_usd = calc['total_usd']
+    subtotal_lbp = calc['total_lbp']
+    subtotal_usd = calc['total_usd']
     computed_items = calc['items']
+
+    discount_lbp = float(discount_lbp or 0.0)
+    discount_usd = float(discount_usd or 0.0)
+    discount_percent = float(discount_percent or 0.0)
+    discount_reason = (discount_reason or '').strip()
+
+    if discount_lbp > 0:
+        discount_usd = round(discount_lbp / rate, 2) if rate > 0 else 0.0
+        discount_percent = round((discount_lbp / subtotal_lbp) * 100, 1) if subtotal_lbp > 0 else 0.0
+    elif discount_usd > 0:
+        discount_lbp = round(discount_usd * rate, 0)
+        discount_percent = round((discount_lbp / subtotal_lbp) * 100, 1) if subtotal_lbp > 0 else 0.0
+    elif discount_percent > 0:
+        if discount_percent > 100.0:
+            discount_percent = 100.0
+        discount_lbp = round(subtotal_lbp * (discount_percent / 100.0), 0)
+        discount_usd = round(subtotal_usd * (discount_percent / 100.0), 2)
+
+    discount_lbp = min(discount_lbp, subtotal_lbp)
+    discount_usd = min(discount_usd, subtotal_usd)
+    total_lbp = max(0.0, subtotal_lbp - discount_lbp)
+    total_usd = max(0.0, subtotal_usd - discount_usd)
 
     conn = get_db()
     cursor = conn.cursor()
@@ -1592,13 +1640,19 @@ def save_customer_tab(customer_name, items_list=None, tab_id=None, notes=''):
             cursor.execute("""
             UPDATE cafe_orders SET
                 customer_name = ?,
+                subtotal_lbp = ?,
+                subtotal_usd = ?,
+                discount_lbp = ?,
+                discount_usd = ?,
+                discount_percent = ?,
+                discount_reason = ?,
                 total_lbp = ?,
                 total_usd = ?,
                 notes = ?,
                 status = 'open',
                 is_tab = 1
             WHERE id = ?
-            """, (customer_name, total_lbp, total_usd, notes, tab_id))
+            """, (customer_name, subtotal_lbp, subtotal_usd, discount_lbp, discount_usd, discount_percent, discount_reason, total_lbp, total_usd, notes, tab_id))
             order_id = tab_id
             cursor.execute("SELECT order_number FROM cafe_orders WHERE id = ?", (order_id,))
             row = cursor.fetchone()
@@ -1608,9 +1662,9 @@ def save_customer_tab(customer_name, items_list=None, tab_id=None, notes=''):
             # Create new open tab
             order_num = generate_order_number()
             cursor.execute("""
-            INSERT INTO cafe_orders (order_number, total_lbp, total_usd, paid_amount, payment_method, customer_name, notes, status, is_tab, created_at)
-            VALUES (?, ?, ?, 0.0, 'tab', ?, ?, 'open', 1, ?)
-            """, (order_num, total_lbp, total_usd, customer_name, notes, get_local_now()))
+            INSERT INTO cafe_orders (order_number, subtotal_lbp, subtotal_usd, discount_lbp, discount_usd, discount_percent, discount_reason, total_lbp, total_usd, paid_amount, payment_method, customer_name, notes, status, is_tab, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 'tab', ?, ?, 'open', 1, ?)
+            """, (order_num, subtotal_lbp, subtotal_usd, discount_lbp, discount_usd, discount_percent, discount_reason, total_lbp, total_usd, customer_name, notes, get_local_now()))
             order_id = cursor.lastrowid
 
         cursor.execute("SELECT id FROM coffee_bag_batches WHERE status = 'active' ORDER BY id DESC LIMIT 1")
@@ -1942,10 +1996,10 @@ def get_product_sales_breakdown(target_date=None, start_date=None, end_date=None
         SUM(i.quantity) as total_qty,
         SUM(CASE WHEN i.is_wholesale = 1 OR o.is_wholesale = 1 THEN i.quantity ELSE 0 END) as wholesale_qty,
         SUM(CASE WHEN (i.is_wholesale = 0 OR i.is_wholesale IS NULL) AND (o.is_wholesale = 0 OR o.is_wholesale IS NULL) THEN i.quantity ELSE 0 END) as retail_qty,
-        SUM(i.subtotal_lbp) as total_lbp,
-        SUM(i.subtotal_usd) as total_usd,
-        SUM(CASE WHEN i.is_wholesale = 1 OR o.is_wholesale = 1 THEN i.subtotal_lbp ELSE 0 END) as wholesale_revenue_lbp,
-        SUM(CASE WHEN (i.is_wholesale = 0 OR i.is_wholesale IS NULL) AND (o.is_wholesale = 0 OR o.is_wholesale IS NULL) THEN i.subtotal_lbp ELSE 0 END) as retail_revenue_lbp,
+        SUM(i.subtotal_lbp * (CASE WHEN o.subtotal_lbp > 0 THEN o.total_lbp / o.subtotal_lbp ELSE 1.0 END)) as total_lbp,
+        SUM(i.subtotal_usd * (CASE WHEN o.subtotal_usd > 0 THEN o.total_usd / o.subtotal_usd ELSE 1.0 END)) as total_usd,
+        SUM(CASE WHEN i.is_wholesale = 1 OR o.is_wholesale = 1 THEN i.subtotal_lbp * (CASE WHEN o.subtotal_lbp > 0 THEN o.total_lbp / o.subtotal_lbp ELSE 1.0 END) ELSE 0 END) as wholesale_revenue_lbp,
+        SUM(CASE WHEN (i.is_wholesale = 0 OR i.is_wholesale IS NULL) AND (o.is_wholesale = 0 OR o.is_wholesale IS NULL) THEN i.subtotal_lbp * (CASE WHEN o.subtotal_lbp > 0 THEN o.total_lbp / o.subtotal_lbp ELSE 1.0 END) ELSE 0 END) as retail_revenue_lbp,
         ROUND(AVG(i.unit_price_lbp), 0) as avg_price_lbp,
         ROUND(AVG(i.unit_price_usd), 2) as avg_price_usd,
         COALESCE(
@@ -1963,7 +2017,7 @@ def get_product_sales_breakdown(target_date=None, start_date=None, end_date=None
                 ELSE ci.cost_price_lbp
             END, 0
         ) * i.quantity) as total_cost_lbp,
-        SUM(i.subtotal_lbp - (COALESCE(
+        SUM((i.subtotal_lbp * (CASE WHEN o.subtotal_lbp > 0 THEN o.total_lbp / o.subtotal_lbp ELSE 1.0 END)) - (COALESCE(
             CASE 
                 WHEN (ci.is_coffee_bean_linked = 1 OR i.item_name LIKE '%قهوة%') AND (ci.cost_price_lbp IS NULL OR ci.cost_price_lbp <= 0)
                 THEN (CASE WHEN i.item_name LIKE '%دوبل%' THEN 50586.0 ELSE 25293.0 END)
@@ -2427,6 +2481,10 @@ def get_daily_summary(target_date=None):
         COUNT(id) as orders_count,
         COALESCE(SUM(total_lbp), 0) as total_lbp,
         COALESCE(SUM(total_usd), 0) as total_usd,
+        COALESCE(SUM(CASE WHEN subtotal_lbp > 0 THEN subtotal_lbp ELSE total_lbp END), 0) as gross_production_lbp,
+        COALESCE(SUM(CASE WHEN subtotal_usd > 0 THEN subtotal_usd ELSE total_usd END), 0) as gross_production_usd,
+        COALESCE(SUM(discount_lbp), 0) as total_discounts_lbp,
+        COALESCE(SUM(discount_usd), 0) as total_discounts_usd,
         COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total_lbp ELSE 0 END), 0) as cash_sales_lbp,
         COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total_usd ELSE 0 END), 0) as cash_sales_usd,
         COALESCE(SUM(CASE WHEN payment_method = 'debt' THEN total_lbp ELSE 0 END), 0) as debt_sales_lbp,
@@ -2447,12 +2505,12 @@ def get_daily_summary(target_date=None):
     """, (target_date,))
     debt_rep = dict(cursor.fetchone() or {})
 
-    # 1. Cafe items breakdown (coffee, drinks, snacks) - Strictly isolated
+    # 1. Cafe items breakdown (coffee, drinks, snacks) - Net revenue after discounts
     cursor.execute("""
     SELECT 
         COALESCE(SUM(i.quantity), 0) as cups_count,
-        COALESCE(SUM(i.subtotal_lbp), 0) as total_lbp,
-        COALESCE(SUM(i.subtotal_usd), 0) as total_usd
+        COALESCE(SUM(i.subtotal_lbp * (CASE WHEN o.subtotal_lbp > 0 THEN o.total_lbp / o.subtotal_lbp ELSE 1.0 END)), 0) as total_lbp,
+        COALESCE(SUM(i.subtotal_usd * (CASE WHEN o.subtotal_usd > 0 THEN o.total_usd / o.subtotal_usd ELSE 1.0 END)), 0) as total_usd
     FROM cafe_order_items i
     JOIN cafe_orders o ON i.order_id = o.id
     WHERE DATE(datetime(o.created_at, '-5 hours')) = DATE(?) AND (o.status = 'paid' OR o.status IS NULL OR o.status = '') AND (
@@ -2472,12 +2530,12 @@ def get_daily_summary(target_date=None):
     cafe_res = dict(cursor.fetchone() or {})
     cafe_res['orders_count'] = all_orders['orders_count']
 
-    # 2. GAMING PC & Computer breakdown - Dedicated isolated accounts & profit
+    # 2. GAMING PC & Computer breakdown - Net revenue after discounts
     cursor.execute("""
     SELECT 
         COALESCE(SUM(i.quantity), 0) as clicks_count,
-        COALESCE(SUM(i.subtotal_lbp), 0) as total_lbp,
-        COALESCE(SUM(i.subtotal_usd), 0) as total_usd
+        COALESCE(SUM(i.subtotal_lbp * (CASE WHEN o.subtotal_lbp > 0 THEN o.total_lbp / o.subtotal_lbp ELSE 1.0 END)), 0) as total_lbp,
+        COALESCE(SUM(i.subtotal_usd * (CASE WHEN o.subtotal_usd > 0 THEN o.total_usd / o.subtotal_usd ELSE 1.0 END)), 0) as total_usd
     FROM cafe_order_items i
     JOIN cafe_orders o ON i.order_id = o.id
     WHERE DATE(datetime(o.created_at, '-5 hours')) = DATE(?) AND (o.status = 'paid' OR o.status IS NULL OR o.status = '') AND (
@@ -2486,22 +2544,21 @@ def get_daily_summary(target_date=None):
         OR i.item_name LIKE '%ألعاب%' 
         OR i.item_name LIKE '%العاب%' 
         OR i.item_name LIKE '%كمبيوتر%' 
-        OR i.item_name LIKE '%بلايستيشن%'
-        OR i.item_name LIKE '%ساعة%'
+        OR i.item_name LIKE '%بلايستيشن%' 
+        OR i.item_name LIKE '%ساعة%' 
         OR i.item_name LIKE '%ساعات%'
     )
     """, (target_date,))
     pc_res = dict(cursor.fetchone() or {})
-    # 100% of gaming/computer revenue is pure net profit (no raw food/drink cost)
     pc_res['profit_lbp'] = pc_res['total_lbp']
     pc_res['profit_usd'] = pc_res['total_usd']
 
-    # 3. Others breakdown
+    # 3. Others breakdown - Net revenue after discounts
     cursor.execute("""
     SELECT 
         COALESCE(SUM(i.quantity), 0) as count,
-        COALESCE(SUM(i.subtotal_lbp), 0) as total_lbp,
-        COALESCE(SUM(i.subtotal_usd), 0) as total_usd
+        COALESCE(SUM(i.subtotal_lbp * (CASE WHEN o.subtotal_lbp > 0 THEN o.total_lbp / o.subtotal_lbp ELSE 1.0 END)), 0) as total_lbp,
+        COALESCE(SUM(i.subtotal_usd * (CASE WHEN o.subtotal_usd > 0 THEN o.total_usd / o.subtotal_usd ELSE 1.0 END)), 0) as total_usd
     FROM cafe_order_items i
     JOIN cafe_orders o ON i.order_id = o.id
     WHERE DATE(datetime(o.created_at, '-5 hours')) = DATE(?) AND (o.status = 'paid' OR o.status IS NULL OR o.status = '') AND i.item_type = 'others'
@@ -2607,12 +2664,17 @@ def get_daily_summary(target_date=None):
     drawer_remaining_lbp = max(0.0, actual_cash_in_lbp - expenses_drawer_lbp - safe_transferred_day_lbp)
     drawer_remaining_usd = round(drawer_remaining_lbp / rate, 2) if rate > 0 else 0.0
 
+    gross_production_lbp = float(all_orders.get('gross_production_lbp') or total_production_lbp)
+    gross_production_usd = round(gross_production_lbp / rate, 2) if rate > 0 else 0.0
+
     grand_totals = {
         'discounts_lbp': discounts_lbp,
         'discounts_usd': round(discounts_lbp / rate, 2) if rate > 0 else 0.0,
         'discounts_count': discounts_count,
         'revenue_lbp': actual_cash_in_lbp,
         'revenue_usd': actual_cash_in_usd,
+        'gross_production_lbp': gross_production_lbp,
+        'gross_production_usd': gross_production_usd,
         'total_production_lbp': total_production_lbp,
         'total_production_usd': total_production_usd,
         'cash_sales_lbp': cash_sales_lbp,
@@ -2663,6 +2725,8 @@ def get_daily_summary(target_date=None):
             'cash_sales_usd': round(cash_sales_lbp / rate, 2) if rate > 0 else 0.0,
         },
         'grand_totals': grand_totals,
+        'gross_production_lbp': gross_production_lbp,
+        'gross_production_usd': gross_production_usd,
         'total_production_lbp': total_production_lbp,
         'total_production_usd': total_production_usd,
         'total_revenue_lbp': actual_cash_in_lbp,
@@ -2766,8 +2830,8 @@ def factory_reset(reset_type='full', admin_pin=None, actor='المدير'):
             )
             return True, "تم تصفير وتسفير جميع المبيعات والفواتير والمصاريف والديون والخزنة والورديات بنجاح 100%! تم الحفاظ على قائمة الأصناف والأسعار والموردين والموظفين."
 
-        else: # 'full' (ضبط المصنع الشامل 100%)
-            # Get list of all user tables
+        else: # 'full' (ضبط المصنع الشامل 100% صفر بكل شيء)
+            # Drop all user tables
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
             tables = [row[0] for row in cursor.fetchall()]
             for t in tables:
@@ -2786,42 +2850,22 @@ def factory_reset(reset_type='full', admin_pin=None, actor='المدير'):
                 pass
             conn.close()
 
-            # Re-initialize clean fresh database schema
+            # Re-initialize clean fresh database schema WITHOUT any default items or seed menus
             database.init_db(seed_items=False)
 
-            # Determine admin password / PIN securely
-            if admin_pin and len(str(admin_pin).strip()) >= 4:
-                final_admin_hash = database.hash_password(str(admin_pin).strip())
-                pin_notice = f"رمز دخول الإدارة المعتمد: {admin_pin}"
-            elif preserved_admin_hash:
-                final_admin_hash = preserved_admin_hash
-                pin_notice = "تم الحفاظ على رمز وكلمة سر الإدارة السابقة"
-            else:
-                # Generate a secure random 6-digit PIN
-                gen_pin = str(random.randint(100000, 999999))
-                final_admin_hash = database.hash_password(gen_pin)
-                pin_notice = f"رمز دخول الإدارة العشوائي الجديد: {gen_pin}"
-
-            # Ensure default STARGATE settings with hashed admin credentials
+            # Clean settings to 100% virgin state: no default password, setup_complete = 0
             conn2 = get_db()
             conn2.execute("""
                 UPDATE settings 
-                SET company_name = 'STARGATE', exchange_rate = 89500.0, 
-                    pc_price_per_click_lbp = 100000.0, is_seeded = 1,
-                    admin_password = ?
+                SET company_name = 'STARGATE CAFE', exchange_rate = 89500.0, 
+                    pc_price_per_click_lbp = 100000.0, is_seeded = 0,
+                    setup_complete = 0, admin_password = ''
                 WHERE id = 1
-            """, (final_admin_hash,))
-            
-            # Ensure default admin employee exists with the same secure credentials
-            cursor2 = conn2.cursor()
-            cursor2.execute("SELECT id FROM employees WHERE role = 'admin' LIMIT 1")
-            admin_emp = cursor2.fetchone()
-            if not admin_emp:
-                cursor2.execute("""
-                    INSERT INTO employees (name, role, pin_hash, is_active, max_discount_pct, can_void_orders)
-                    VALUES (?, ?, ?, 1, 100, 1)
-                """, ('المدير العام', 'admin', final_admin_hash))
-            
+            """)
+            # Ensure NO default employees exist
+            conn2.execute("DELETE FROM employees")
+            conn2.execute("DELETE FROM cafe_items")
+            conn2.execute("DELETE FROM cafe_categories")
             conn2.commit()
             try:
                 conn2.execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -2833,9 +2877,9 @@ def factory_reset(reset_type='full', admin_pin=None, actor='المدير'):
                 actor=actor,
                 action='FACTORY_RESET',
                 table_name='ALL_TABLES',
-                reason='استعادة ضبط المصنع الشامل'
+                reason='استعادة ضبط المصنع الشامل 100% صفر بكل شيء وبدون أي حسابات افتراضية'
             )
-            return True, f"تمت استعادة ضبط المصنع بنجاح 100%! تم تصفير ومسح كافة البيانات ليصبح السيستم نظيفاً تماماً. ({pin_notice})"
+            return True, "تمت استعادة ضبط المصنع الشامل بنجاح 100%! تم تفريغ وتصفير كل شيء (0 منتجات، 0 موظفين، 0 فواتير)، والنظام الآن بانتظار إعداد حساب الإدارة الأول."
 
     except Exception as e:
         logger.error(f"Error in factory_reset: {e}", exc_info=True)
@@ -4328,16 +4372,23 @@ def get_drawer_cash_status():
     # الكاش الصافي الذي خرج من الدرج باتجاه الخزنة
     net_to_safe_lbp = max(0.0, total_safe_deposits_lbp - total_returned_to_drawer_lbp)
 
-    # رصيد الحساب المالي الدفتري الحقيقي لصندوق الكاشير (Account 1010)
-    cursor.execute("SELECT COALESCE(balance_lbp, 0), COALESCE(balance_usd, 0) FROM accounts WHERE code = '1010'")
-    acc_row = cursor.fetchone()
-    exact_drawer_lbp = float(acc_row[0] or 0.0) if acc_row else 0.0
-    exact_drawer_usd = float(acc_row[1] or 0.0) if acc_row else 0.0
+    # حساب الكاش الفعلي الحقيقي الموجود في الصندوق والدرج:
+    # الكاش الفعلي = (كل مبيعات الكاش + سدادات الديون المستلمة) - (مصاريف الدرج + ما تم تحويله للخزنة)
+    calculated_cash_drawer_lbp = max(0.0, (all_cash_sales_lbp + all_debt_rep_lbp) - (all_expenses_lbp + net_to_safe_lbp))
+    calculated_cash_drawer_usd = round(calculated_cash_drawer_lbp / rate, 2) if rate > 0 else 0.0
+
+    # مزامنة رصيد الحساب المالي الدفتري (Account 1010) تلقائياً ليكون مطابقاً 100% للواقع
+    try:
+        cursor.execute("UPDATE accounts SET balance_lbp = ?, balance_usd = ? WHERE code = '1010'",
+                       (calculated_cash_drawer_lbp, calculated_cash_drawer_usd))
+        conn.commit()
+    except Exception:
+        pass
 
     conn.close()
 
-    total_untransferred_lbp = max(0.0, exact_drawer_lbp)
-    total_untransferred_usd = max(0.0, exact_drawer_usd)
+    total_untransferred_lbp = calculated_cash_drawer_lbp
+    total_untransferred_usd = calculated_cash_drawer_usd
 
     # الكاش السابق (قبل اليوم) غير المرحّل للخزنة
     if all_cash_sales_lbp > 0:
@@ -4358,8 +4409,8 @@ def get_drawer_cash_status():
         'all_transferred_to_safe_lbp': net_to_safe_lbp,
         'all_debt_rep_lbp': all_debt_rep_lbp,
         'all_expenses_lbp': all_expenses_lbp,
-        'exact_drawer_account_lbp': exact_drawer_lbp,
-        'exact_drawer_account_usd': exact_drawer_usd
+        'exact_drawer_account_lbp': calculated_cash_drawer_lbp,
+        'exact_drawer_account_usd': calculated_cash_drawer_usd
     }
 
 
@@ -6844,4 +6895,224 @@ def get_coffee_period_stats(start_date=None, end_date=None):
         'net_coffee_profit_usd': net_coffee_profit_usd,
         'waste_logs': waste_logs
     }
+
+
+# ============================================================================
+# 🤖 AI SMART ASSISTANT & AUDITOR (نظام الذكاء الاصطناعي لكشف الأخطاء ومساعدة الكاشير)
+# ============================================================================
+
+def ai_audit_system(target_date=None):
+    """
+    مساعد و خبير تدقيق مالي ذكي بالكامل:
+    - يفحص كل العمليات النقدية، فوارق الصندوق، فواتير المبيعات، ومراقبة المخزون.
+    - يكتشف أي تلاعب، نسيان، نقص حاد في المخزون، أو عمليات غير منطقية.
+    - يقدم نصائح استباقية للمدير والموظف لرفع المبيعات وتقليل الهدر.
+    """
+    if not target_date:
+        target_date = get_business_date()
+
+    issues = []
+    insights = []
+    tips = []
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    # 1. فحص المخزون المنخفض والمنتهي
+    try:
+        cursor.execute("""
+            SELECT id, name, stock_qty, low_stock_limit 
+            FROM cafe_items 
+            WHERE is_active = 1 AND track_stock = 1
+            ORDER BY stock_qty ASC
+        """)
+        items = cursor.fetchall()
+        out_of_stock = []
+        low_stock = []
+        for it in items:
+            q = float(it['stock_qty'] or 0.0)
+            lim = float(it['low_stock_limit'] or 5.0)
+            if q <= 0:
+                out_of_stock.append(it['name'])
+            elif q <= lim:
+                low_stock.append(f"{it['name']} (باقي {int(q)})")
+
+        if out_of_stock:
+            issues.append({
+                'type': 'critical',
+                'title': '🚨 أصناف نفدت بالكامل من المخزون',
+                'desc': f"الأصناف التالية رصيدها 0 ويجب توريدها فوراً: {', '.join(out_of_stock[:5])}" + (f" و {len(out_of_stock)-5} أصناف أخرى" if len(out_of_stock)>5 else "")
+            })
+        if low_stock:
+            issues.append({
+                'type': 'warning',
+                'title': '⚠️ أصناف تقترب من النفاد',
+                'desc': f"وصلت للحد الأدنى: {', '.join(low_stock[:5])}"
+            })
+    except Exception:
+        pass
+
+    # 2. فحص فوارق الصندوق والتسليم اليومي
+    try:
+        drawer = get_drawer_cash_status(target_date)
+        untransferred = float(drawer.get('total_untransferred_lbp') or 0.0)
+        if untransferred > 5000000:
+            insights.append({
+                'type': 'info',
+                'title': '💼 تراكم نقدية في درج الكاشير',
+                'desc': f"يوجد في الدرج نقدية متراكمة بقيمة {untransferred:,.0f} ل.ل. الذكاء الاصطناعي ينصح بترحيل دفعة إلى الخزنة لتأمين السيولة."
+            })
+    except Exception:
+        pass
+
+    # 3. فحص الخصومات المرتفعة
+    try:
+        cursor.execute("""
+            SELECT id, order_number, total_lbp, discount_lbp, employee_name, discount_reason
+            FROM cafe_orders
+            WHERE DATE(created_at) = ? AND discount_lbp > 0
+            ORDER BY discount_lbp DESC LIMIT 5
+        """, (target_date,))
+        discounted = cursor.fetchall()
+        for d in discounted:
+            tot = float(d['total_lbp'] or 0.0)
+            disc = float(d['discount_lbp'] or 0.0)
+            if tot + disc > 0 and (disc / (tot + disc)) >= 0.30:
+                issues.append({
+                    'type': 'warning',
+                    'title': f"🏷️ حسم مرتفع بالفاتورة #{d['order_number']}",
+                    'desc': f"تم تطبيق حسم {disc:,.0f} ل.ل بنسبة تفوق 30% بواسطة {d['employee_name']} (السبب: {d['discount_reason'] or 'غير محدد'})"
+                })
+    except Exception:
+        pass
+
+    # 4. تحليل حركة المبيعات وتوجيهات الذكاء الاصطناعي
+    try:
+        summary = get_daily_summary(target_date)
+        tot_rev = float(summary['grand_totals']['revenue_lbp'] or 0.0)
+        net_prof = float(summary['grand_totals']['net_profit_lbp'] or 0.0)
+        orders_count = int(summary['orders']['count'] or 0)
+
+        if orders_count > 0:
+            avg_basket = tot_rev / orders_count
+            insights.append({
+                'type': 'success',
+                'title': '📊 مؤشر متوسط الفاتورة (Average Basket)',
+                'desc': f"متوسط إنفاق الزبون اليوم هو {avg_basket:,.0f} ل.ل عبر {orders_count} فاتورة."
+            })
+
+        if net_prof > 0 and tot_rev > 0:
+            margin = (net_prof / tot_rev) * 100
+            insights.append({
+                'type': 'success',
+                'title': f'📈 هامش صافي الربح: {margin:.1f}%',
+                'desc': f"صافي ربح اليوم يعادل {net_prof:,.0f} ل.ل بعد خصم كافة التكاليف والمصاريف."
+            })
+    except Exception:
+        pass
+
+    tips.append("💡 نصيحة ذكية: استخدام الخصم المباشر يزيد ولاء الزبائن الدائمين، ولكن تأكد دائماً من تسجيل سبب الحسم.")
+    tips.append("💡 نصيحة ذكية: يتم خصم البضاعة والمشروبات المباعة من المخزون تلقائياً بدون أي تدخل يدوي.")
+    tips.append("💡 نصيحة ذكية: تفعيل بوت التيليجرام يرسل لك تقارير الإغلاق وحالة الصندوق فورياً إلى هاتفك أينما كنت.")
+
+    conn.close()
+
+    health_score = 100
+    for iss in issues:
+        if iss['type'] == 'critical':
+            health_score -= 20
+        elif iss['type'] == 'warning':
+            health_score -= 10
+    health_score = max(20, min(100, health_score))
+
+    return {
+        'status': 'optimal' if health_score >= 85 else ('needs_attention' if health_score >= 60 else 'critical'),
+        'health_score': health_score,
+        'issues': issues,
+        'insights': insights,
+        'tips': tips,
+        'audited_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+
+
+# ============================================================================
+# ✈️ TELEGRAM BOT DISPATCHER (إرسال التقارير والإشعارات اللحظية عبر التيليجرام)
+# ============================================================================
+
+def send_telegram_message(message_text, bot_token=None, chat_id=None):
+    """
+    إرسال رسالة نصية أو تقرير ذكي عبر Telegram Bot API مباشرة.
+    """
+    import urllib.request, urllib.parse, json
+
+    if not bot_token or not chat_id:
+        settings = get_settings()
+        bot_token = bot_token or settings.get('telegram_bot_token', '').strip()
+        chat_id = chat_id or settings.get('telegram_chat_id', '').strip()
+
+    if not bot_token or not chat_id:
+        return False, "بيانات بوت التيليجرام غير مكتملة (Bot Token أو Chat ID مفقود)"
+
+    api_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {
+        'chat_id': str(chat_id).strip(),
+        'text': message_text,
+        'parse_mode': 'HTML'
+    }
+
+    try:
+        data_encoded = urllib.parse.urlencode(payload).encode('utf-8')
+        req = urllib.request.Request(api_url, data=data_encoded, headers={'User-Agent': 'StarGateCafeBot/5.8'})
+        with urllib.request.urlopen(req, timeout=8) as response:
+            res_body = response.read().decode('utf-8')
+            res_json = json.loads(res_body)
+            if res_json.get('ok'):
+                return True, "تم إرسال الرسالة إلى التيليجرام بنجاح 🚀"
+            else:
+                return False, f"خطأ من تيليجرام: {res_json.get('description')}"
+    except Exception as e:
+        return False, f"تعذر الاتصال بخادم تيليجرام: {str(e)}"
+
+
+def send_daily_closing_telegram_report(target_date=None):
+    """
+    إنشاء وإرسال ملخص تقرير الإغلاق المالي الذكي لليوم إلى حساب تيليجرام المحدد.
+    """
+    if not target_date:
+        target_date = get_business_date()
+
+    settings = get_settings()
+    if not settings.get('telegram_enabled'):
+        return False, "إشعارات التيليجرام غير مفعلة في الإعدادات"
+
+    summary = get_daily_summary(target_date)
+    company = settings.get('company_name', 'STARGATE CAFE')
+    rate = float(settings.get('exchange_rate') or 89500.0)
+
+    rev_lbp = summary['grand_totals']['revenue_lbp']
+    rev_usd = summary['grand_totals']['revenue_usd']
+    exp_lbp = summary['expenses']['total_lbp']
+    profit_lbp = summary['grand_totals']['net_profit_lbp']
+    profit_usd = summary['grand_totals']['net_profit_usd']
+    orders_cnt = summary['orders']['count']
+    gaming_rev = summary['gaming']['total_lbp']
+    drawer = get_drawer_cash_status(target_date)
+    untransferred = drawer.get('total_untransferred_lbp', 0.0)
+
+    msg = f"<b>☕ تقرير الإغلاق المالي الذكي - {company}</b>\n"
+    msg += f"📅 <b>التاريخ:</b> <code>{target_date}</code>\n"
+    msg += f"💵 <b>سعر الصرف المعتمد:</b> <code>1$ = {rate:,.0f} ل.ل</code>\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    msg += f"📦 <b>عدد الفواتير:</b> <b>{orders_cnt}</b> فاتورة\n"
+    msg += f"💰 <b>إجمالي الإيرادات:</b> <b>{rev_lbp:,.0f} ل.ل</b> (<i>{rev_usd:,.2f}$</i>)\n"
+    msg += f"🎮 <b>إيراد GAMING والكمبيوتر:</b> <b>{gaming_rev:,.0f} ل.ل</b>\n"
+    msg += f"💸 <b>إجمالي المصاريف:</b> <b>{exp_lbp:,.0f} ل.ل</b>\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    msg += f"💎 <b>صافي الربح الحقيقي:</b> <b>{profit_lbp:,.0f} ل.ل</b> (<i>{profit_usd:,.2f}$</i>)\n"
+    msg += f"🏦 <b>نقدية الصندوق (الدرج):</b> <b>{untransferred:,.0f} ل.ل</b>\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    msg += "🤖 <i>تم الإرسال تلقائياً بواسطة نظام الذكاء الاصطناعي STARGATE AI PRO</i>"
+
+    return send_telegram_message(msg)
+
 

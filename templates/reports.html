@@ -189,8 +189,8 @@
     </div>
     {% endif %}
 
-    <!-- 7 MASTER FINANCIAL KPI CARDS -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+    <!-- 8 MASTER FINANCIAL KPI CARDS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-3">
         
         <!-- 1. Total Sales / Production -->
         <div class="bg-slate-900 border border-slate-800 p-4 rounded-3xl shadow-sm flex flex-col justify-between">
@@ -203,6 +203,19 @@
                 <div class="text-[10px] font-mono text-indigo-300 font-bold">≈ {{ (summary.grand_totals.total_production_usd or 0)|to_usd }}</div>
             </div>
             <div class="text-[9px] text-slate-500 border-t border-slate-800 pt-1.5">{{ orders|length or 0 }} طلب / فاتورة</div>
+        </div>
+
+        <!-- 2. Discounts Given -->
+        <div class="bg-slate-900 border border-pink-500/40 p-4 rounded-3xl shadow-sm flex flex-col justify-between">
+            <div class="text-[11px] font-bold text-pink-400 flex items-center justify-between">
+                <span>🏷️ حسومات نقدية</span>
+                <span class="text-base">🎁</span>
+            </div>
+            <div class="my-2">
+                <div class="text-lg font-black font-mono text-pink-300">{{ (summary.grand_totals.discounts_lbp or 0)|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span></div>
+                <div class="text-[10px] font-mono text-pink-400 font-bold">≈ {{ (summary.grand_totals.discounts_usd or 0)|to_usd }}</div>
+            </div>
+            <div class="text-[9px] text-pink-300/80 border-t border-slate-800 pt-1.5">{{ summary.grand_totals.discounts_count or 0 }} فاتورة مخفّضة</div>
         </div>
 
         <!-- 2. Pure Cash Sales -->
@@ -580,14 +593,21 @@
                             <th class="p-3">رقم الفاتورة</th>
                             <th class="p-3">الوقت</th>
                             <th class="p-3">طريقة الدفع</th>
-                            <th class="p-3">الإجمالي</th>
+                            <th class="p-3">المجموع قبل الحسم</th>
+                            <th class="p-3">الحسم النقدي</th>
+                            <th class="p-3">الصافي الفعلي</th>
                             <th class="p-3">الموظف</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-800/60">
                         {% for o in orders %}
                         <tr class="hover:bg-slate-800/40">
-                            <td class="p-3 font-mono font-bold text-amber-300">{{ o.order_number }}</td>
+                            <td class="p-3 font-mono font-bold text-amber-300">
+                                {{ o.order_number }}
+                                {% if o.customer_name and o.customer_name != 'زبون كاش' %}
+                                <span class="block text-[10px] text-slate-400 font-sans">{{ o.customer_name }}</span>
+                                {% endif %}
+                            </td>
                             <td class="p-3 text-slate-400 font-mono">{{ o.created_at[11:16] if o.created_at and o.created_at|length > 15 else o.created_at }}</td>
                             <td class="p-3">
                                 {% if o.payment_method == 'cash' %}
@@ -596,7 +616,25 @@
                                 <span class="bg-rose-950 text-rose-300 px-2 py-0.5 rounded text-[10px] font-bold border border-rose-800">دين 🔴</span>
                                 {% endif %}
                             </td>
-                            <td class="p-3 font-mono font-bold text-white">{{ o.total_lbp|format_currency }} ل.ل</td>
+                            <td class="p-3 font-mono text-slate-300">
+                                {{ (o.subtotal_lbp or (o.total_lbp + (o.discount_lbp or 0)))|format_currency }} ل.ل
+                            </td>
+                            <td class="p-3 font-mono font-black">
+                                {% if (o.discount_lbp or 0) > 0 %}
+                                <span class="text-pink-400 bg-pink-950/60 border border-pink-500/30 px-2 py-0.5 rounded text-[11px]">
+                                    -{{ o.discount_lbp|format_currency }} ل.ل
+                                </span>
+                                {% if o.discount_reason %}
+                                <span class="block text-[9px] text-pink-300/80 font-sans mt-0.5">{{ o.discount_reason }}</span>
+                                {% endif %}
+                                {% else %}
+                                <span class="text-slate-600">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-3 font-mono font-bold text-emerald-400 text-sm">
+                                {{ o.total_lbp|format_currency }} ل.ل
+                                <span class="block text-[9px] text-slate-500 font-mono">{{ o.total_usd|to_usd }}</span>
+                            </td>
                             <td class="p-3 text-slate-300 text-[11px]">{{ o.employee_name or 'كاشير' }}</td>
                         </tr>
                         {% endfor %}

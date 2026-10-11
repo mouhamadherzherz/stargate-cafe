@@ -58,6 +58,19 @@
                 <span>قفل الإدارة 🔒</span>
             </a>
 
+            <form method="POST" action="{{ url_for('telegram_send_daily_report') }}" class="inline">
+                <input type="hidden" name="target_date" value="{{ target_date }}">
+                <button type="submit" class="bg-sky-600 hover:bg-sky-500 text-white font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-1.5 shadow-md shadow-sky-600/30" title="إرسال تقرير اليوم فورياً إلى التيليجرام">
+                    <i class="fa-brands fa-telegram"></i>
+                    <span>إرسال للتيليجرام ✈️</span>
+                </button>
+            </form>
+
+            <button type="button" onclick="openAIAuditModal()" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-1.5 shadow-md shadow-indigo-600/30 animate-pulse">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                <span>فحص الذكاء الاصطناعي 🤖</span>
+            </button>
+
             <a href="{{ url_for('print_daily', date=target_date) }}" target="_blank" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-1.5 shadow-md shadow-amber-500/20">
                 <i class="fa-solid fa-print"></i>
                 <span>طباعة إغلاق اليوم</span>
@@ -743,32 +756,75 @@
 
 <!-- 1. Modal: Settings & PC Pricing -->
 <div id="settingsModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-800 text-white">
+    <div class="bg-slate-900 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-800 text-white max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
-            <h3 class="font-black text-sm">إعدادات المحل وسعر GAMING ⚙️</h3>
+            <h3 class="font-black text-sm flex items-center gap-2">
+                <i class="fa-solid fa-gear text-amber-400"></i>
+                <span>إعدادات النظام، سعر الصرف، وربط التيليجرام ⚙️</span>
+            </h3>
             <button type="button" onclick="closeModal('settingsModal')" class="text-slate-400 hover:text-white">
                 <i class="fa-solid fa-xmark text-lg"></i>
             </button>
         </div>
-        <form method="POST" action="{{ url_for('settings_update') }}" class="space-y-3">
-            <div>
-                <label class="block text-xs font-bold text-slate-300 mb-1">اسم المحل / الكافيه</label>
-                <input type="text" name="company_name" value="{{ company_name }}" class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-amber-500">
-            </div>
+        <form method="POST" action="{{ url_for('settings_update') }}" class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">اسم المحل / الكافيه</label>
+                    <input type="text" name="company_name" value="{{ settings.company_name or company_name }}" class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-amber-500 font-bold">
+                </div>
 
-            <div>
-                <label class="block text-xs font-bold text-slate-300 mb-1">سعر كبسة / دور GAMING (ل.ل)</label>
-                <input type="number" step="any" min="0" name="pc_price_per_click_lbp" value="{{ pc_price_lbp }}" class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none font-mono font-bold text-purple-400">
-                <span class="text-[10px] text-slate-500 mt-0.5 block">السعر الافتراضي عند الضغط على كمبيوتر في الكاشير</span>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">سعر كبسة / دور GAMING (ل.ل)</label>
+                    <input type="number" step="any" min="0" name="pc_price_per_click_lbp" value="{{ settings.pc_price_per_click_lbp or pc_price_lbp }}" class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none font-mono font-bold text-purple-400">
+                </div>
             </div>
 
             <div>
                 <label class="block text-xs font-bold text-slate-300 mb-1">سعر صرف الدولار (1$ = ل.ل)</label>
-                <input type="number" step="any" min="0" name="exchange_rate" value="{{ exchange_rate }}" class="w-full bg-slate-950 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none font-mono">
+                <input type="number" step="any" min="0" name="exchange_rate" value="{{ settings.exchange_rate or exchange_rate }}" class="w-full bg-slate-950 text-emerald-400 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none font-mono font-bold">
+            </div>
+
+            <!-- TELEGRAM BOT INTEGRATION SECTION -->
+            <div class="p-3.5 rounded-2xl bg-slate-950 border border-sky-500/30 space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-brands fa-telegram text-sky-400 text-lg"></i>
+                        <span class="text-xs font-black text-sky-300">ربط بوت التيليجرام لإرسال التقارير اليومية ✈️</span>
+                    </div>
+                    <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" name="telegram_enabled" value="1" {{ 'checked' if settings.telegram_enabled }} class="w-4 h-4 rounded text-sky-500 bg-slate-900 border-slate-700 focus:ring-0">
+                        <span class="text-[11px] font-bold text-slate-300">تفعيل الإشعارات</span>
+                    </label>
+                </div>
+
+                <div class="space-y-2">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 mb-1">رمز البوت (Bot Token)</label>
+                        <input type="text" name="telegram_bot_token" id="tgBotTokenInput" value="{{ settings.telegram_bot_token or '' }}" placeholder="123456789:ABCdefGHIjklMNO..." class="w-full bg-slate-900 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-sky-500 font-mono text-left" dir="ltr">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-400 mb-1">معرف المحادثة أو القناة (Chat ID)</label>
+                        <input type="text" name="telegram_chat_id" id="tgChatIdInput" value="{{ settings.telegram_chat_id or '' }}" placeholder="مثال: 987654321 أو -100123456789" class="w-full bg-slate-900 text-white text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-sky-500 font-mono text-left" dir="ltr">
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-1">
+                    <button type="button" onclick="testTelegramConnection()" class="bg-sky-600 hover:bg-sky-500 text-white font-bold px-3 py-1.5 rounded-xl text-[11px] flex items-center gap-1.5 transition shadow-sm">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        <span>تجربة إرسال رسالة تيليجرام الآن</span>
+                    </button>
+                    <span id="tgTestStatus" class="text-[11px] font-bold"></span>
+                </div>
+
+                <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-[10px] text-slate-400 leading-relaxed space-y-1">
+                    <div class="font-bold text-amber-300">💡 كيف تحصل على Token و Chat ID مجاناً في دقيقة واحدة؟</div>
+                    <div>1. افتح تطبيق تيليجرام وابحث عن <b>@BotFather</b> واكتب <code>/newbot</code> ثم انسخ رمز <b>HTTP API Token</b>.</div>
+                    <div>2. افتح محادثة مع بوتك واضغط <b>Start</b>، ثم ابحث عن بوت <b>@userinfobot</b> لمعرفة رقم <b>Id</b> الخاص بك وانسخه في خانة Chat ID.</div>
+                </div>
             </div>
 
             <div class="flex items-center gap-2 pt-2">
-                <button type="submit" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition">حفظ الإعدادات</button>
+                <button type="submit" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition">حفظ الإعدادات بالكامل</button>
                 <button type="button" onclick="closeModal('settingsModal')" class="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs">إلغاء</button>
             </div>
         </form>
@@ -1452,6 +1508,49 @@
     </div>
 </div>
 
+<!-- ================= AI AUDIT & SMART ASSISTANT MODAL ================= -->
+<div id="aiAuditModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-indigo-500/50 text-white max-h-[90vh] flex flex-col space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-xl shadow-lg shadow-indigo-500/30">
+                    🤖
+                </div>
+                <div>
+                    <h3 class="font-black text-sm text-white flex items-center gap-2">
+                        <span>خبير الذكاء الاصطناعي والتدقيق المالي الذكي (STARGATE AI)</span>
+                        <span id="aiHealthBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">100% ممتاز</span>
+                    </h3>
+                    <p class="text-xs text-slate-400">فحص تلقائي شامل للصندوق، حركة المبيعات، ومراقبة المخزون، وتنبيهات الأخطاء</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeModal('aiAuditModal')" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <div id="aiAuditContent" class="overflow-y-auto space-y-4 pr-1 text-xs">
+            <div class="p-8 text-center text-slate-400 flex flex-col items-center justify-center space-y-3">
+                <i class="fa-solid fa-circle-notch fa-spin text-3xl text-indigo-500"></i>
+                <p class="font-bold">جاري الفحص المالي والتشغيلي بالذكاء الاصطناعي...</p>
+            </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-800 flex items-center justify-between">
+            <span id="aiAuditTimestamp" class="text-[10px] text-slate-500 font-mono"></span>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="fetchAIAudit()" class="bg-slate-800 hover:bg-slate-700 text-indigo-300 font-bold px-4 py-2 rounded-xl text-xs transition flex items-center gap-1.5 border border-indigo-500/30">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>إعادة الفحص الآن</span>
+                </button>
+                <button type="button" onclick="closeModal('aiAuditModal')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-5 py-2 rounded-xl text-xs transition">
+                    إغلاق
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     function togglePasswordVisibility(inputId, btn) {
         const inp = document.getElementById(inputId);
@@ -1845,7 +1944,143 @@ window.addEventListener('paste', function(e) {
             break;
         }
     }
-});
+// =========================================================================
+// TELEGRAM BOT REAL-TIME TEST DISPATCHER
+// =========================================================================
+async function testTelegramConnection() {
+    const tokenInput = document.getElementById('tgBotTokenInput');
+    const chatIdInput = document.getElementById('tgChatIdInput');
+    const statusEl = document.getElementById('tgTestStatus');
+
+    const token = tokenInput ? tokenInput.value.trim() : '';
+    const chatId = chatIdInput ? chatIdInput.value.trim() : '';
+
+    if (!token || !chatId) {
+        alert('⚠️ يرجى كتابة رمز البوت (Bot Token) و (Chat ID) أولاً لإجراء الاختبار.');
+        return;
+    }
+
+    if (statusEl) {
+        statusEl.className = 'text-[11px] font-bold text-sky-400 animate-pulse';
+        statusEl.innerText = '⏳ جاري الإرسال للتجربة...';
+    }
+
+    try {
+        const resp = await fetch('/api/telegram/test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({telegram_bot_token: token, telegram_chat_id: chatId})
+        });
+        const res = await resp.json();
+        if (res.success) {
+            if (statusEl) {
+                statusEl.className = 'text-[11px] font-bold text-emerald-400';
+                statusEl.innerText = '✓ وصلت الرسالة بنجاح!';
+            }
+            alert('🚀 مبروك! ' + res.message);
+        } else {
+            if (statusEl) {
+                statusEl.className = 'text-[11px] font-bold text-rose-400';
+                statusEl.innerText = 'فشل: ' + (res.message || 'خطأ غير معروف');
+            }
+            alert('⚠️ ' + res.message);
+        }
+    } catch(err) {
+        if (statusEl) {
+            statusEl.className = 'text-[11px] font-bold text-rose-400';
+            statusEl.innerText = 'فشل الاتصال: ' + err.message;
+        }
+        alert('❌ تعذر الاتصال بالسيرفر: ' + err.message);
+    }
+
+// =========================================================================
+// AI SMART AUDIT FETCH & RENDER ENGINE
+// =========================================================================
+function openAIAuditModal() {
+    openModal('aiAuditModal');
+    fetchAIAudit();
+}
+
+async function fetchAIAudit() {
+    const cont = document.getElementById('aiAuditContent');
+    const badge = document.getElementById('aiHealthBadge');
+    const timeEl = document.getElementById('aiAuditTimestamp');
+    if (cont) {
+        cont.innerHTML = `
+            <div class="p-8 text-center text-slate-400 flex flex-col items-center justify-center space-y-3">
+                <i class="fa-solid fa-circle-notch fa-spin text-3xl text-indigo-500"></i>
+                <p class="font-bold">جاري تشغيل محرك الذكاء الاصطناعي وفحص السجلات...</p>
+            </div>
+        `;
+    }
+
+    try {
+        const resp = await fetch('/api/ai/audit?date={{ target_date or "" }}');
+        const data = await resp.json();
+        if (data.success && data.audit) {
+            const audit = data.audit;
+            if (badge) {
+                badge.innerText = `${audit.health_score}% ${audit.status === 'optimal' ? 'ممتاز ومستقر' : (audit.status === 'needs_attention' ? 'يحتاج انتباه' : 'حرج')}`;
+                badge.className = `text-[10px] font-bold px-2 py-0.5 rounded-full ${audit.health_score >= 80 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : (audit.health_score >= 60 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30')}`;
+            }
+            if (timeEl) timeEl.innerText = `آخر تدقيق: ${audit.audited_at}`;
+
+            let html = '';
+
+            // 1. Issues Section
+            if (audit.issues && audit.issues.length > 0) {
+                html += `<div class="space-y-2">`;
+                html += `<h4 class="font-bold text-xs text-rose-400 flex items-center gap-1.5"><i class="fa-solid fa-triangle-exclamation"></i> ملاحظات وتنبيهات الأخطاء والمخزون:</h4>`;
+                audit.issues.forEach(iss => {
+                    const bg = iss.type === 'critical' ? 'bg-rose-950/60 border-rose-800 text-rose-200' : 'bg-amber-950/60 border-amber-800 text-amber-200';
+                    html += `
+                        <div class="p-3 rounded-2xl border ${bg} space-y-1">
+                            <div class="font-black text-xs">${iss.title}</div>
+                            <div class="text-[11px] opacity-90 leading-relaxed">${iss.desc}</div>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            } else {
+                html += `
+                    <div class="p-3.5 rounded-2xl bg-emerald-950/50 border border-emerald-800 text-emerald-200 flex items-center gap-2">
+                        <i class="fa-solid fa-circle-check text-emerald-400 text-base"></i>
+                        <span class="font-bold text-xs">كافة العمليات متطابقة ولا توجد أي أخطاء أو نواقص في المخزون أو فوارق بالصندوق!</span>
+                    </div>
+                `;
+            }
+
+            // 2. Insights Section
+            if (audit.insights && audit.insights.length > 0) {
+                html += `<div class="space-y-2 pt-1">`;
+                html += `<h4 class="font-bold text-xs text-sky-400 flex items-center gap-1.5"><i class="fa-solid fa-chart-line"></i> تحليلات الأداء المالي:</h4>`;
+                audit.insights.forEach(ins => {
+                    html += `
+                        <div class="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-1">
+                            <div class="font-black text-xs text-white">${ins.title}</div>
+                            <div class="text-[11px] text-slate-300 leading-relaxed">${ins.desc}</div>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            }
+
+            // 3. Tips Section
+            if (audit.tips && audit.tips.length > 0) {
+                html += `<div class="space-y-1.5 pt-1">`;
+                html += `<h4 class="font-bold text-xs text-purple-400 flex items-center gap-1.5"><i class="fa-solid fa-lightbulb"></i> إرشادات وتوجيهات الذكاء الاصطناعي:</h4>`;
+                audit.tips.forEach(t => {
+                    html += `<div class="p-2.5 rounded-xl bg-purple-950/30 border border-purple-500/20 text-[11px] text-purple-200">${t}</div>`;
+                });
+                html += `</div>`;
+            }
+
+            if (cont) cont.innerHTML = html;
+        }
+    } catch(e) {
+        if (cont) cont.innerHTML = `<div class="p-4 text-center text-rose-400 font-bold">تعذر تحميل تدقيق الذكاء الاصطناعي: ${e.message}</div>`;
+    }
+}
 
 </script>
 {% endblock %}
