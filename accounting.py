@@ -1060,7 +1060,7 @@ def add_item(data):
     icon = data.get('icon', '☕').strip() or '☕'
     item_type = data.get('item_type', 'cafe').strip() or 'cafe'
     sort_order = int(data.get('sort_order') or 0)
-    stock_qty = float(data.get('stock_qty') or 100.0) if data.get('stock_qty') not in (None, '') else 100.0
+    stock_qty = float(data.get('stock_qty') or 0.0) if data.get('stock_qty') not in (None, '') else 0.0
     # Automatic inventory tracking: ALWAYS 1 unless explicitly set to 0 or item_type is 'gaming'
     track_stock = 0 if item_type == 'gaming' else 1
     if 'track_stock' in data and data.get('track_stock') in (0, '0', False):

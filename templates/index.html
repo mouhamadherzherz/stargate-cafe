@@ -239,7 +239,38 @@
         </div>
     </div>
 
-    
+    <!-- 🤖 LIVE AI SMART ASSISTANT POS BANNER (المساعد والمدقق الذكي المباشر على شاشة الكاشير) -->
+    {% if ai_audit %}
+    <div class="bg-gradient-to-r from-slate-900 via-indigo-950/90 to-slate-900 border-2 border-indigo-500/50 rounded-3xl p-3 shadow-lg flex flex-col md:flex-row items-center justify-between gap-3 shrink-0">
+        <div class="flex items-center gap-3 w-full md:w-auto">
+            <div class="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xl font-black border border-indigo-500/40 animate-pulse shrink-0">
+                🤖✨
+            </div>
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-xs font-black text-white">الذكاء الاصطناعي والمساعد الرقابي (STARGATE AI)</span>
+                    <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30 font-bold">100% بدون إنترنت (Offline)</span>
+                    <span class="text-[9px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30 font-mono font-bold">سلامة العمليات: {{ ai_audit.health_score }}%</span>
+                </div>
+                <div class="text-[11px] text-slate-300 truncate mt-0.5">
+                    {% if ai_audit.issues %}
+                    <span class="text-rose-400 font-bold">⚠️ تنبيه رقابي:</span> {{ ai_audit.issues[0].title }} - {{ ai_audit.issues[0].desc }}
+                    {% elif ai_audit.insights %}
+                    <span class="text-amber-300 font-bold">💡 رصد ذكي:</span> {{ ai_audit.insights[0].title }} - {{ ai_audit.insights[0].desc }}
+                    {% else %}
+                    <span class="text-emerald-400 font-bold">✓ كافة العمليات المالية والمخزون في وضع مثالي ومطابق 100%.</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0 self-end md:self-center">
+            <button type="button" onclick="openAIAuditModal()" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs px-3.5 py-1.5 rounded-xl transition shadow-md shadow-indigo-600/30 active:scale-95 flex items-center gap-1.5">
+                <span>عرض الفحص الشامل ↗</span>
+            </button>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- 2.8 PRO QUICK COMMAND BAR (الخزنة، تعديل الأصناف، حاسبة الألعاب، الموظفين، الديون) -->
     <div class="bg-gradient-to-r from-slate-900 via-indigo-950/80 to-slate-900 p-2.5 rounded-3xl border border-indigo-500/40 shadow-xl flex flex-wrap items-center justify-between gap-2.5 shrink-0">
         <div class="flex items-center gap-2 flex-wrap">
@@ -493,12 +524,23 @@
 
                         {% if item.track_stock %}
                             {% if (item.stock_qty|default(0)|float) <= 0 %}
+                            <div class="absolute inset-0 z-20 bg-slate-950/75 backdrop-blur-[1px] flex flex-col items-center justify-center p-3 text-center pointer-events-none border-2 border-rose-500/80 rounded-3xl">
+                                <span class="text-3xl mb-1">🚫</span>
+                                <span class="bg-rose-600 text-white font-black text-[11px] px-2.5 py-1 rounded-xl shadow-lg border border-rose-400">
+                                    غير مجرود / نفد المخزون
+                                </span>
+                                <span class="text-[9px] text-rose-200 mt-1 font-bold">الرصيد: 0 قطعة (البيع مقفل)</span>
+                            </div>
                             <span class="absolute bottom-2.5 left-2.5 z-30 bg-rose-950/90 text-rose-300 font-bold text-[9px] px-2 py-0.5 rounded-lg border border-rose-600/70 shadow-md flex items-center gap-1">
                                 <span>⚠️</span> نفد المخزون (0)
                             </span>
                             {% elif (item.stock_qty|default(0)|float) <= (item.low_stock_limit|default(5)|float) %}
                             <span class="absolute bottom-2.5 left-2.5 z-30 bg-amber-950/90 text-amber-300 font-bold text-[9px] px-2 py-0.5 rounded-lg border border-amber-600/70 shadow-md flex items-center gap-1 animate-pulse">
                                 <span>⚡</span> متبقي {{ item.stock_qty|int }} فقط
+                            </span>
+                            {% else %}
+                            <span class="absolute bottom-2.5 left-2.5 z-30 bg-slate-950/80 text-emerald-400 font-mono font-bold text-[9px] px-2 py-0.5 rounded-lg border border-slate-700 shadow-sm flex items-center gap-1">
+                                <span>📦</span> متوفر: {{ item.stock_qty|int }}
                             </span>
                             {% endif %}
                         {% endif %}

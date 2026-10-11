@@ -628,8 +628,14 @@ def index():
     except Exception:
         drawer_status = {'total_untransferred_lbp': 0}
 
+    try:
+        ai_audit = accounting.ai_audit_system(today_str)
+    except Exception:
+        ai_audit = None
+
     return render_template(
         'index.html',
+        ai_audit=ai_audit,
         categories=categories,
         items=items,
         summary=daily_summary,
