@@ -272,11 +272,21 @@
 
             <!-- Button 4: Quick Coffee Waste Log (تسجيل فنجان تالف) -->
             <button type="button" onclick="openPosWasteModal()" class="bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-black text-xs px-3.5 py-2 rounded-2xl transition flex items-center gap-2 shadow-lg shadow-rose-600/25 active:scale-95 cursor-pointer" title="تسجيل فنجان تالف كخسارة على الكيلو المفتوح">
+                <span class="text-sm">☕</span>
+                <span>تسجيل تلف</span>
+            </button>
+
             <!-- Button 4.5: AI Smart Assistant & Auditor for Cashier -->
             <button type="button" onclick="openAIAuditModal()" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs px-3.5 py-2 rounded-2xl transition flex items-center gap-2 shadow-lg shadow-indigo-600/25 active:scale-95 cursor-pointer animate-pulse" title="المساعد والمدقق الذكي لكشف النواقص ومساعدة الموظف">
                 <span class="text-sm">🤖✨</span>
                 <span>المساعد الذكي (AI)</span>
             </button>
+
+            <!-- Button 4.8: Employee Send Shift Report To Manager via Telegram -->
+            <a href="{{ url_for('employee_close_shift') }}" class="bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-black text-xs px-3.5 py-2 rounded-2xl transition flex items-center gap-2 shadow-lg shadow-sky-500/20 active:scale-95 cursor-pointer" title="تسكير الوردية وإرسال تقرير الصندوق لتيليجرام المدير فوراً">
+                <i class="fa-brands fa-telegram text-sm"></i>
+                <span>تسكير الوردية وإرسال التقرير ✈️</span>
+            </a>
         </div>
 
         <div class="flex items-center gap-2 flex-wrap">

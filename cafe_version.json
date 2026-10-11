@@ -1,7 +1,7 @@
 {
-    "version": "5.8.0",
-    "changelog": "v5.8.0: خصم المخزون التلقائي الذكي 100% دون الحاجة لتحديد يدوي، دمج خبير الذكاء الاصطناعي لكشف الأخطاء وإرشاد الكاشير ومراقبة الصندوق فورياً، ربط بوت التيليجرام لإرسال التقارير المالية اليومية وتنبيهات الإغلاق مباشرة للهاتف.",
-    "download_url": "https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.8.0/Stargate_Cafe_Update.zip",
+    "version": "5.8.5",
+    "changelog": "v5.8.5: تفعيل إرسال تقارير الوردية والصندوق الذاتي للمدير عبر تيليجرام ✈️ بضغطة زر وتلقائياً عند تسليم الصندوق، خصم تلقائي ذكي 100% للمخزون، وتحديث شامل فوري لكاشير الموظف.",
+    "download_url": "https://raw.githubusercontent.com/mouhamadherzherz/stargate-cafe/master/Stargate_Cafe_Update.zip",
     "company": "STARGATE EXPERTS",
     "channel": "cafe",
     "name": "Stargate Cafe & Gaming System",

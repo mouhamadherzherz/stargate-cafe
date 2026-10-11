@@ -471,8 +471,18 @@ def csrf_protect():
 
 @app.before_request
 def ensure_default_session():
-    # If setup wizard is pending (virgin factory reset state), force setup wizard first
-    if not (request.path.startswith('/static/') or request.path == '/favicon.ico'):
+    # If setup wizard is pending (virgin factory reset state), force setup wizard first (except for update APIs and static files)
+    is_exempt_from_setup = (
+        request.path.startswith('/static/') or 
+        request.path == '/favicon.ico' or
+        request.path.startswith('/api/check_update') or
+        request.path.startswith('/api/force_check_update') or
+        request.path.startswith('/api/do_update') or
+        request.path.startswith('/api/manual_update') or
+        request.path.startswith('/download/') or
+        request.path in ('/update', '/update.zip')
+    )
+    if not is_exempt_from_setup:
         try:
             settings = accounting.get_settings()
             conn = database.get_db()
@@ -1490,6 +1500,37 @@ def telegram_send_daily_report():
     else:
         flash(f"تعذر إرسال التقرير إلى التيليجرام: {msg}", "warning")
     return redirect(request.referrer or url_for('admin_panel'))
+
+
+@app.route('/api/telegram/send-shift-report', methods=['POST'])
+@login_required
+def telegram_send_shift_report():
+    """إرسال تقرير وردية الموظف أو الكاشير إلى تيليجرام المدير فورياً بضغطة زر."""
+    emp_name = session.get('employee_name') or 'كاشير'
+    target_date = accounting.get_business_date()
+    
+    # استخراج مبالغ الوردية من الفورم أو الطلب
+    data = request.get_json(silent=True) or request.form or {}
+    actual_cash = float(data.get('actual_cash_lbp') or 0.0)
+    expected_cash = float(data.get('expected_cash_lbp') or 0.0)
+    diff = actual_cash - expected_cash if actual_cash > 0 else 0.0
+    diff_note = str(data.get('difference_note') or '').strip()
+    safe_deposit = float(data.get('safe_deposit_lbp') or 0.0)
+    drawer_remaining = max(0.0, actual_cash - safe_deposit)
+
+    ok, msg = accounting.send_shift_closing_telegram_report(
+        emp_name=emp_name,
+        actual_cash_lbp=actual_cash,
+        expected_cash_lbp=expected_cash,
+        diff_lbp=diff,
+        diff_note=diff_note,
+        safe_deposit_lbp=safe_deposit,
+        drawer_remaining_lbp=drawer_remaining,
+        target_date=target_date
+    )
+    if ok:
+        return jsonify({'success': True, 'message': 'تم إرسال تقرير الوردية إلى تيليجرام المدير بنجاح ✈️'})
+    return jsonify({'success': False, 'message': msg}), 400
 
 
 @app.route('/api/ai/audit', methods=['GET'])
@@ -2758,6 +2799,27 @@ def employee_close_shift():
         except Exception as be:
             logger.warning(f"Auto-backup on shift close: {be}")
 
+        # Automated Shift Telegram Dispatcher (إرسال إشعار فوري لتيليجرام المدير)
+        try:
+            settings_now = accounting.get_settings()
+            if settings_now.get('telegram_enabled'):
+                threading.Thread(
+                    target=accounting.send_shift_closing_telegram_report,
+                    kwargs={
+                        'emp_name': emp_name,
+                        'actual_cash_lbp': actual_cash,
+                        'expected_cash_lbp': expected_cash_lbp,
+                        'diff_lbp': diff,
+                        'diff_note': diff_reason,
+                        'safe_deposit_lbp': safe_deposit_lbp,
+                        'drawer_remaining_lbp': drawer_remaining_cash,
+                        'target_date': today_str
+                    },
+                    daemon=True
+                ).start()
+        except Exception as te:
+            logger.warning(f"Telegram shift alert warning: {te}")
+
         # Finalize shift closing & handover to next employee
         session.pop('employee_id', None)
         session.pop('employee_name', None)
@@ -2769,7 +2831,7 @@ def employee_close_shift():
         session['handover_actual_cash'] = drawer_remaining_cash
         session['handover_diff_note'] = f"{diff_note}{safe_transfer_note}"
         
-        flash(f"✅ تم تسكير وردية {emp_name} بنجاح ومقارنة الصندوق{diff_note}{safe_transfer_note}. تم أخذ نسخة احتياطية آمنة من النظام.", "success")
+        flash(f"✅ تم تسكير وردية {emp_name} بنجاح ومقارنة الصندوق{diff_note}{safe_transfer_note}. أُرسل إشعار للمدير وتم تأمين الحسابات.", "success")
         return redirect(url_for('employee_login'))
 
     is_manager = bool(session.get('admin_authenticated') or session.get('employee_role') in ('admin', 'manager') or session.get('is_admin'))

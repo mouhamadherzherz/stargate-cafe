@@ -7116,3 +7116,42 @@ def send_daily_closing_telegram_report(target_date=None):
     return send_telegram_message(msg)
 
 
+def send_shift_closing_telegram_report(emp_name, actual_cash_lbp, expected_cash_lbp, diff_lbp, diff_note="", safe_deposit_lbp=0.0, drawer_remaining_lbp=0.0, target_date=None):
+    """
+    إرسال تقرير إغلاق الوردية الخاص بالموظف فورياً إلى تيليجرام المدير.
+    """
+    if not target_date:
+        target_date = get_business_date()
+
+    settings = get_settings()
+    if not settings.get('telegram_enabled'):
+        return False, "إشعارات التيليجرام غير مفعلة في الإعدادات"
+
+    company = settings.get('company_name', 'STARGATE CAFE')
+    diff_status = "مطابق 100% ✓"
+    if diff_lbp > 0:
+        diff_status = f"زيادة في الصندوق (+{diff_lbp:,.0f} ل.ل) ⚠️"
+    elif diff_lbp < 0:
+        diff_status = f"عجز في الصندوق (-{abs(diff_lbp):,.0f} ل.ل) 🚨"
+
+    msg = f"<b>🔔 محضر تسليم الصندوق وإغلاق الوردية - {company}</b>\n"
+    msg += f"👤 <b>الموظف / الكاشير:</b> <b>{emp_name}</b>\n"
+    msg += f"📅 <b>التاريخ:</b> <code>{target_date}</code>\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    msg += f"🏧 <b>رصيد النظام المتوقع:</b> <code>{expected_cash_lbp:,.0f} ل.ل</code>\n"
+    msg += f"💵 <b>الكاش الفعلي المعدود:</b> <b>{actual_cash_lbp:,.0f} ل.ل</b>\n"
+    msg += f"⚖️ <b>حالة المطابقة:</b> <b>{diff_status}</b>\n"
+    if diff_note:
+        msg += f"📝 <b>ملاحظة الفارق:</b> <i>{diff_note}</i>\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    if safe_deposit_lbp > 0:
+        msg += f"🏦 <b>المُرحل إلى الخزنة الخاصة:</b> <b>{safe_deposit_lbp:,.0f} ل.ل</b>\n"
+        msg += f"🪙 <b>المتبقي بالدرج كعهدة:</b> <b>{drawer_remaining_lbp:,.0f} ل.ل</b>\n"
+    else:
+        msg += f"💼 <b>كامل الكاش باقٍ بالدرج كعهدة للموظف التالي:</b> <b>{drawer_remaining_lbp:,.0f} ل.ل</b>\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━\n"
+    msg += "🤖 <i>تم إرسال المحضر تلقائياً من شاشة كاشير الموظف (STARGATE CAFE)</i>"
+
+    return send_telegram_message(msg)
+
+

@@ -220,6 +220,12 @@
                         <i class="fa-solid fa-lock"></i>
                         <span id="submitCloseBtnText">ضع المبلغ أولاً لتأكيد تسكير الحساب</span>
                     </button>
+                    <!-- Telegram Direct Send Button for Employee -->
+                    <button type="button" onclick="sendShiftReportToTelegram()" id="btnSendTelegramReport" class="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-black py-2.5 rounded-xl text-xs transition shadow-md shadow-sky-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer border border-sky-400/40">
+                        <i class="fa-brands fa-telegram text-base"></i>
+                        <span>إرسال تقرير الوردية إلى تيليجرام المدير ✈️</span>
+                    </button>
+
                     <div class="flex gap-2">
                         <button type="button" onclick="printShiftSlip()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2.5 rounded-xl text-xs transition border border-slate-700 flex items-center justify-center gap-1.5">
                             <i class="fa-solid fa-print"></i>
@@ -455,6 +461,49 @@
 
         function printShiftSlip() {
             window.print();
+        }
+
+        async function sendShiftReportToTelegram() {
+            const btn = document.getElementById('btnSendTelegramReport');
+            const actualInput = document.getElementById('actualCashInput');
+            const diffReasonInput = document.getElementById('diffReasonInput');
+            const safeDepositInput = document.getElementById('safeDepositLBP');
+
+            const actualVal = parseFloat(actualInput ? actualInput.value : 0) || 0;
+            const safeVal = parseFloat(safeDepositInput ? safeDepositInput.value : 0) || 0;
+            const diffNote = diffReasonInput ? diffReasonInput.value : '';
+
+            const origHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>جاري الإرسال للمدير...</span>';
+
+            try {
+                const resp = await fetch('/api/telegram/send-shift-report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        actual_cash_lbp: actualVal,
+                        expected_cash_lbp: expectedCash,
+                        difference_note: diffNote,
+                        safe_deposit_lbp: safeVal
+                    })
+                });
+                const res = await resp.json();
+                if (res.success) {
+                    alert('✓ ' + res.message);
+                    btn.innerHTML = '<i class="fa-solid fa-check"></i> <span>تم إرسال التقرير للمدير بنجاح!</span>';
+                    btn.classList.remove('from-sky-500', 'to-blue-600');
+                    btn.classList.add('from-emerald-600', 'to-teal-600');
+                } else {
+                    alert('تنبيه: ' + (res.message || 'تعذر إرسال التقرير. تأكد من إعدادات التيليجرام في شاشة الإدارة.'));
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+            } catch (err) {
+                alert('خطأ أثناء إرسال التقرير: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
         }
 
         // Initialize state
