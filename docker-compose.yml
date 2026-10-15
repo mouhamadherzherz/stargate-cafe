@@ -10,15 +10,12 @@ services:
     environment:
       - STARGATE_SECRET_KEY=${STARGATE_SECRET_KEY}
       - FLASK_ENV=production
+      - STARGATE_COOKIE_SECURE=${STARGATE_COOKIE_SECURE:-0}
+      - ENABLE_OTA_CHECKS=${ENABLE_OTA_CHECKS:-0}
     volumes:
       - ./static:/opt/stargate/static:rw
       - ./data:/opt/stargate/data:rw
       - ./Stargate_Cafe_Update.zip:/opt/stargate/Stargate_Cafe_Update.zip:ro
-    depends_on:
-      - db
 
-  db:
-    image: nouchka/sqlite3:latest
-    # Note: SQLite in containers is a file-based DB; we mount ./data to persist the file.
-    volumes:
-      - ./data:/data
+# Note: SQLite database is stored locally inside ./data mounted volume.
+# No external database container is required for SQLite.

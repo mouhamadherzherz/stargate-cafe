@@ -130,6 +130,8 @@ def _periodic_update_checker():
 # ??? ????? ?????? ?? ??????? (??? ????? ??????? ??? ???? ?????? ???????? ????? ??????????)
 if os.environ.get('ENABLE_OTA_CHECKS', '0') in ('1', 'true', 'True'):
     threading.Thread(target=_periodic_update_checker, daemon=True).start()
+else:
+    logger.info("OTA background check is disabled (ENABLE_OTA_CHECKS != 1)")
 
 if getattr(sys, 'frozen', False):
     # In PyInstaller, check sys._MEIPASS, executable dir, and _internal
@@ -169,8 +171,13 @@ def inject_global_helpers():
     )
 
 @app.after_request
-def add_no_cache_headers(response):
-    # Only force no-cache on dynamic HTML/API pages; allow browser to cache static assets
+def add_security_and_cache_headers(response):
+    # Security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Cache headers: only force no-cache on dynamic HTML/API pages; allow browser to cache static assets
     if request.path.startswith('/static/'):
         response.headers["Cache-Control"] = "public, max-age=86400"
     else:
