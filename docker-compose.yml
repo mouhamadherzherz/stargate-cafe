@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    image: mouhamadherzherz/stargate-cafe:dev
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - STARGATE_SECRET_KEY=${STARGATE_SECRET_KEY}
+      - FLASK_ENV=production
+      - STARGATE_COOKIE_SECURE=${STARGATE_COOKIE_SECURE:-0}
+      - ENABLE_OTA_CHECKS=${ENABLE_OTA_CHECKS:-0}
+    volumes:
+      - ./static:/opt/stargate/static:rw
+      - ./data:/opt/stargate/data:rw
+      - ./Stargate_Cafe_Update.zip:/opt/stargate/Stargate_Cafe_Update.zip:ro
+
+# Note: SQLite database is stored locally inside ./data mounted volume.
+# No external database container is required for SQLite.

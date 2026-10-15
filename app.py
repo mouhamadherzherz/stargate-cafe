@@ -5,6 +5,7 @@ from werkzeug.utils import secure_filename
 import os
 import secrets
 import sys
+import re
 import json
 import threading
 from datetime import datetime, timedelta
@@ -19,7 +20,7 @@ import accounting
 from logger import app_logger as logger, log_audit
 
 # ============================================================
-# 🔄 نظام التحديث التلقائي عبر الإنترنت (OTA)
+# ?? ???? ??????? ???????? ??? ???????? (OTA)
 # ============================================================
 _update_cache = {'checked': False, 'available': False, 'version': None, 'download_url': None, 'message': ''}
 
@@ -47,7 +48,7 @@ def _version_tuple(v):
         return (0,)
 
 def _background_update_check():
-    """يتحقق من التحديثات في الخلفية - HTTPS verified."""
+    """????? ?? ????????? ?? ??????? - HTTPS verified."""
     import ssl, urllib.request as ur, json as js, base64 as b64
     # Use default SSL context with proper certificate verification
     ctx = ssl.create_default_context()
@@ -110,12 +111,12 @@ def _background_update_check():
             'version': best_remote,
             'download_url': best_data.get('download_url', ''),
             'changelog': best_data.get('changelog', ''),
-            'message': f'يوجد تحديث رسمي جديد v{best_remote} (حالياً v{current}) - إصلاح الحسابات والخزينة.'
+            'message': f'???? ????? ???? ???? v{best_remote} (?????? v{current}) - ????? ???????? ????????.'
         })
     elif best_remote:
-        _update_cache.update({'checked': True, 'available': False, 'version': current, 'message': f'البرنامج محدّث لآخر إصدار (v{current})'})
+        _update_cache.update({'checked': True, 'available': False, 'version': current, 'message': f'???????? ????? ???? ????? (v{current})'})
     else:
-        _update_cache.update({'checked': True, 'available': False, 'message': 'تعذّر الاتصال بخادم التحديثات'})
+        _update_cache.update({'checked': True, 'available': False, 'message': '????? ??????? ????? ?????????'})
 
 def _periodic_update_checker():
     import time
@@ -126,8 +127,11 @@ def _periodic_update_checker():
             pass
         time.sleep(300)
 
-# بدء الفحص الدوري في الخلفية
-threading.Thread(target=_periodic_update_checker, daemon=True).start()
+# ??? ????? ?????? ?? ??????? (??? ????? ??????? ??? ???? ?????? ???????? ????? ??????????)
+if os.environ.get('ENABLE_OTA_CHECKS', '0') in ('1', 'true', 'True'):
+    threading.Thread(target=_periodic_update_checker, daemon=True).start()
+else:
+    logger.info("OTA background check is disabled (ENABLE_OTA_CHECKS != 1)")
 
 if getattr(sys, 'frozen', False):
     # In PyInstaller, check sys._MEIPASS, executable dir, and _internal
@@ -167,8 +171,13 @@ def inject_global_helpers():
     )
 
 @app.after_request
-def add_no_cache_headers(response):
-    # Only force no-cache on dynamic HTML/API pages; allow browser to cache static assets
+def add_security_and_cache_headers(response):
+    # Security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Cache headers: only force no-cache on dynamic HTML/API pages; allow browser to cache static assets
     if request.path.startswith('/static/'):
         response.headers["Cache-Control"] = "public, max-age=86400"
     else:
@@ -252,18 +261,20 @@ def save_uploaded_item_image(file=None, data_url=None, item_id=None):
 
         content = out_buf.getvalue()
         
-        # Save to all target static/uploads directories
+        # Save to configured static/uploads directories (portable & configurable)
         base_exe = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
         folders = [
-            r"F:\caffe\static\uploads",
-            r"C:\STARGATE_CAFE\static\uploads",
-            r"C:\STARGATE\static\uploads",
-            os.path.join(app.static_folder, 'uploads'),
+            os.path.join(app.static_folder or base_exe, 'uploads'),
             os.path.join(base_exe, 'static', 'uploads'),
             os.path.join(base_exe, '_internal', 'static', 'uploads'),
-            r"F:\static\uploads",
-            r"F:\2 - نظام الكافيه (Stargate Cafe)\static\uploads"
         ]
+        extra_paths = os.environ.get('EXTRA_UPLOAD_PATHS', '')
+        if extra_paths:
+            for p in extra_paths.split(';'):
+                p = p.strip()
+                if p:
+                    folders.append(p)
+
         for fld in folders:
             try:
                 os.makedirs(fld, exist_ok=True)
@@ -282,14 +293,16 @@ def custom_serve_uploaded_file(filename):
     """Explicitly serves uploaded product images with correct MIME type across all possible paths."""
     base_exe = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
     folders = [
-        r"F:\caffe\static\uploads",
-        r"C:\STARGATE_CAFE\static\uploads",
-        os.path.join(app.static_folder, 'uploads'),
-        r"C:\STARGATE_CAFE\static\uploads",
-        r"C:\STARGATE\static\uploads",
+        os.path.join(app.static_folder or base_exe, 'uploads'),
         os.path.join(base_exe, 'static', 'uploads'),
         os.path.join(base_exe, '_internal', 'static', 'uploads'),
     ]
+    extra_paths = os.environ.get('EXTRA_UPLOAD_PATHS', '')
+    if extra_paths:
+        for p in extra_paths.split(';'):
+            p = p.strip()
+            if p:
+                folders.append(p)
     for fld in folders:
         fp = os.path.join(fld, filename)
         if os.path.isfile(fp):
@@ -298,7 +311,7 @@ def custom_serve_uploaded_file(filename):
     return abort(404)
 
 
-# ── Secret Key (from env var in production, random fallback in dev) ──
+# ?? Secret Key (from env var in production, random fallback in dev) ??
 _SECRET_KEY_FILE = os.path.join(database.DB_DIR, '.secret_key')
 
 def _load_or_create_secret_key() -> str:
@@ -322,7 +335,9 @@ def _load_or_create_secret_key() -> str:
 
 app.secret_key = _load_or_create_secret_key()
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SAMESITE'] = os.environ.get('STARGATE_COOKIE_SAMESITE', 'Lax')
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('STARGATE_COOKIE_SECURE', '0') in ('1', 'true', 'True')
+app.permanent_session_lifetime = timedelta(days=int(os.environ.get('STARGATE_SESSION_DAYS', '7')))
 
 # Custom Jinja filters
 @app.template_filter('format_currency')
@@ -362,7 +377,7 @@ def format_date(value):
         else:
             dt = value
         hour_12 = dt.strftime('%I:%M')
-        am_pm = 'م' if dt.strftime('%p') == 'PM' else 'ص'
+        am_pm = '?' if dt.strftime('%p') == 'PM' else '?'
         return f"{dt.strftime('%Y/%m/%d')} {hour_12} {am_pm}"
     except Exception:
         return str(value)[:19]
@@ -376,7 +391,7 @@ def format_time_only(value):
         else:
             dt = value
         hour_12 = dt.strftime('%I:%M')
-        am_pm = 'م' if dt.strftime('%p') == 'PM' else 'ص'
+        am_pm = '?' if dt.strftime('%p') == 'PM' else '?'
         return f"{hour_12} {am_pm}"
     except Exception:
         return str(value)[:16]
@@ -403,7 +418,7 @@ def login_required(f):
         if 'employee_id' not in session and not session.get('admin_authenticated'):
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Authentication required', 'code': 401}), 401
-            flash("⚠️ يرجى تسجيل الدخول أولاً", "warning")
+            flash("?? ???? ????? ?????? ?????", "warning")
             return redirect(url_for('employee_login', next=request.path))
         return f(*args, **kwargs)
     return decorated_function
@@ -420,15 +435,10 @@ def admin_required(f):
         if not is_admin:
             if request.is_json or request.path.startswith('/api/'):
                 return jsonify({'error': 'Admin access required', 'code': 403}), 403
-            flash("⚠️ عذراً، هذه الصفحة مخصصة لمدير النظام والإدارة فقط!", "danger")
+            flash("?? ?????? ??? ?????? ????? ????? ?????? ???????? ???!", "danger")
             return redirect(url_for('admin_login', next=request.path))
         return f(*args, **kwargs)
     return decorated_function
-
-def generate_csrf_token():
-    if '_csrf_token' not in session:
-        session['_csrf_token'] = secrets.token_hex(24)
-    return session['_csrf_token']
 
 app.jinja_env.globals['csrf_token'] = generate_csrf_token
 
@@ -466,7 +476,7 @@ def csrf_protect():
         # CSRF failed
         if request.is_json or request.path.startswith('/api/'):
             return jsonify({'error': 'CSRF verification failed', 'code': 403}), 403
-        flash("⚠️ انتهت صلاحية الجلسة أو تعذر التحقق من الأمان (CSRF).", "danger")
+        flash("?? ????? ?????? ?????? ?? ???? ?????? ?? ?????? (CSRF).", "danger")
         return redirect(request.referrer or url_for('index'))
 
 @app.before_request
@@ -520,7 +530,7 @@ def ensure_default_session():
     )
     if not is_authenticated:
         if request.is_json or request.path.startswith('/api/'):
-            return jsonify({'success': False, 'message': 'يرجى تسجيل الدخول وإدخال الرمز السري أولاً', 'code': 401}), 401
+            return jsonify({'success': False, 'message': '???? ????? ?????? ?????? ????? ????? ?????', 'code': 401}), 401
         return redirect(url_for('employee_login'))
 
 @app.context_processor
@@ -548,8 +558,8 @@ def inject_global_data():
     return {
         'settings': settings,
         'is_admin': is_user_admin,
-        'company_name': settings.get('company_name', 'محل القهوة و GAMING'),
-        'currency': settings.get('currency', 'ل.ل'),
+        'company_name': settings.get('company_name', '??? ?????? ? GAMING'),
+        'currency': settings.get('currency', '?.?'),
         'secondary_currency': settings.get('secondary_currency', '$'),
         'exchange_rate': rate,
         'pc_price_lbp': pc_price,
@@ -656,7 +666,7 @@ def order_create():
         if request.is_json:
             req_data = request.get_json()
             items_list = req_data.get('items', [])
-            customer_name = req_data.get('customer_name', 'زبون كاش')
+            customer_name = req_data.get('customer_name', '???? ???')
             notes = req_data.get('notes', '')
             tab_id = req_data.get('tab_id')
             payment_method = req_data.get('payment_method', 'cash')
@@ -668,7 +678,7 @@ def order_create():
         else:
             raw_items = request.form.get('items_json', '[]')
             items_list = json.loads(raw_items)
-            customer_name = request.form.get('customer_name', 'زبون كاش')
+            customer_name = request.form.get('customer_name', '???? ???')
             notes = request.form.get('notes', '')
             tab_id = request.form.get('tab_id')
             payment_method = request.form.get('payment_method', 'cash')
@@ -687,8 +697,8 @@ def order_create():
 
         if not items_list:
             if request.is_json:
-                return jsonify({'success': False, 'message': 'الفاتورة فارغة'}), 400
-            flash("⚠️ لا يمكن حفظ فاتورة فارغة بدون أصناف", "warning")
+                return jsonify({'success': False, 'message': '???????? ?????'}), 400
+            flash("?? ?? ???? ??? ?????? ????? ???? ?????", "warning")
             return redirect(url_for('index'))
 
         emp_id = session.get('employee_id')
@@ -705,10 +715,10 @@ def order_create():
                     emp_name = r_emp['name']
                 else:
                     emp_id = 1
-                    emp_name = 'كاشير'
+                    emp_name = '?????'
             except Exception:
                 emp_id = 1
-                emp_name = 'كاشير'
+                emp_name = '?????'
             session['employee_id'] = emp_id
             session['employee_name'] = emp_name
 
@@ -718,7 +728,7 @@ def order_create():
             'payment_method': payment_method,
             'phone': phone,
             'employee_id': emp_id,
-            'employee_name': emp_name or 'كاشير',
+            'employee_name': emp_name or '?????',
             'discount_percent': discount_percent,
             'discount_lbp': discount_lbp,
             'discount_usd': discount_usd,
@@ -729,42 +739,42 @@ def order_create():
         if success and (discount_percent > 0 or discount_lbp > 0 or discount_usd > 0):
             try:
                 database.write_audit_log(
-                    actor=emp_name or 'كاشير',
+                    actor=emp_name or '?????',
                     action='APPLY_DISCOUNT',
                     table_name='cafe_orders',
                     record_id=result.get('order_id'),
-                    reason=f"حسم نقدي بمبلغ {result.get('discount_lbp', 0):,.0f} ل.ل (${result.get('discount_usd', 0):.2f}) - {discount_reason or 'بدون سبب'}"
+                    reason=f"??? ???? ????? {result.get('discount_lbp', 0):,.0f} ?.? (${result.get('discount_usd', 0):.2f}) - {discount_reason or '???? ???'}"
                 )
             except Exception:
                 pass
 
         if request.is_json:
             if success:
-                return jsonify({'success': True, 'data': result, 'message': 'تم حفظ الفاتورة بنجاح'})
+                return jsonify({'success': True, 'data': result, 'message': '?? ??? ???????? ?????'})
             return jsonify({'success': False, 'message': str(result)}), 400
 
         if success:
-            flash(f"تم تسجيل الفاتورة بنجاح بمبلغ {result['total_lbp']:,.0f} ل.ل ☕", "success")
+            flash(f"?? ????? ???????? ????? ????? {result['total_lbp']:,.0f} ?.? ?", "success")
             return redirect(url_for('order_receipt', order_id=result['order_id']))
         else:
-            flash(f"خطأ: {result}", "danger")
+            flash(f"???: {result}", "danger")
             return redirect(url_for('index'))
     except Exception as e:
         logger.exception("Error in order_create: %s", e)
         if request.is_json:
             return jsonify({'success': False, 'message': str(e)}), 500
-        flash(f"خطأ: {str(e)}", "danger")
+        flash(f"???: {str(e)}", "danger")
         return redirect(url_for('index'))
 
 @app.route('/tab/save', methods=['POST'])
 @login_required
 def tab_save():
-    """Save or update an open customer tab (الزبائن الجالسون)."""
+    """Save or update an open customer tab (??????? ????????)."""
     try:
         if request.is_json:
             req_data = request.get_json()
             items_list = req_data.get('items', [])
-            customer_name = req_data.get('customer_name', 'زبون في المحل')
+            customer_name = req_data.get('customer_name', '???? ?? ?????')
             notes = req_data.get('notes', '')
             tab_id = req_data.get('tab_id')
             discount_percent = req_data.get('discount_percent', 0)
@@ -774,7 +784,7 @@ def tab_save():
         else:
             raw_items = request.form.get('items_json', '[]')
             items_list = json.loads(raw_items)
-            customer_name = request.form.get('customer_name', 'زبون في المحل')
+            customer_name = request.form.get('customer_name', '???? ?? ?????')
             notes = request.form.get('notes', '')
             tab_id = request.form.get('tab_id')
             discount_percent = request.form.get('discount_percent', 0)
@@ -796,19 +806,19 @@ def tab_save():
         )
         if request.is_json:
             if success:
-                return jsonify({'success': True, 'data': result, 'message': f"تم حفظ حساب {customer_name} بنجاح 📌"})
+                return jsonify({'success': True, 'data': result, 'message': f"?? ??? ???? {customer_name} ????? ??"})
             return jsonify({'success': False, 'message': str(result)}), 400
 
         if success:
-            flash(f"تم حفظ حساب الزبون {customer_name} بنجاح 📌", "success")
+            flash(f"?? ??? ???? ?????? {customer_name} ????? ??", "success")
         else:
-            flash(f"خطأ: {result}", "danger")
+            flash(f"???: {result}", "danger")
         return redirect(url_for('index'))
     except Exception as e:
         logger.exception("Error in tab_save: %s", e)
         if request.is_json:
             return jsonify({'success': False, 'message': str(e)}), 500
-        flash(f"خطأ: {str(e)}", "danger")
+        flash(f"???: {str(e)}", "danger")
         return redirect(url_for('index'))
 
 @app.route('/tab/<int:tab_id>/delete', methods=['POST'])
@@ -830,47 +840,47 @@ def tab_delete(tab_id):
     # Security check: if not admin session, manager PIN is required
     if not is_admin:
         if not admin_pin or not accounting.verify_manager_or_admin_pin(admin_pin):
-            msg = "رمز مشرف الصالة / المدير غير صحيح! لا يمكن إلغاء الحساب بدون إذن المدير لمنع التلاعب."
+            msg = "??? ???? ?????? / ?????? ??? ????! ?? ???? ????? ?????? ???? ??? ?????? ???? ???????."
             if request.is_json:
                 return jsonify({'success': False, 'message': msg}), 403
-            flash(f"⚠️ {msg}", "danger")
+            flash(f"?? {msg}", "danger")
             return redirect(url_for('index'))
 
-    emp_name = session.get('employee_name') or 'كاشير'
+    emp_name = session.get('employee_name') or '?????'
     if not reason:
-        reason = 'إلغاء حساب زبون معلق'
+        reason = '????? ???? ???? ????'
 
     ok, msg = accounting.delete_tab(tab_id, cancelled_by=emp_name, reason=reason, is_waste=is_waste)
     if request.is_json:
         return jsonify({'success': ok, 'message': msg})
     if ok:
-        flash(f"✓ {msg}", "info")
+        flash(f"? {msg}", "info")
     else:
-        flash(f"⚠️ {msg}", "danger")
+        flash(f"?? {msg}", "danger")
     return redirect(url_for('index'))
 
 @app.route('/api/spoilage/record', methods=['POST'])
 @app.route('/spoilage/add', methods=['POST'])
 @login_required
 def api_spoilage_record():
-    """تسجيل تالف / هدر لمادة أو منتج مع توثيق السبب والموظف وخصم المخزون."""
+    """????? ???? / ??? ????? ?? ???? ?? ????? ????? ??????? ???? ???????."""
     if request.is_json:
         data = request.get_json(silent=True) or {}
         item_id = data.get('item_id')
         item_name = str(data.get('item_name') or '').strip()
         qty = float(data.get('qty') or 1.0)
-        unit = str(data.get('unit') or 'قطعة').strip()
-        reason = str(data.get('reason') or 'تلف أثناء العمل').strip()
+        unit = str(data.get('unit') or '????').strip()
+        reason = str(data.get('reason') or '??? ????? ?????').strip()
         notes = str(data.get('notes') or '').strip()
     else:
         item_id = request.form.get('item_id')
         item_name = str(request.form.get('item_name') or '').strip()
         qty = float(request.form.get('qty') or 1.0)
-        unit = str(request.form.get('unit') or 'قطعة').strip()
-        reason = str(request.form.get('reason') or 'تلف أثناء العمل').strip()
+        unit = str(request.form.get('unit') or '????').strip()
+        reason = str(request.form.get('reason') or '??? ????? ?????').strip()
         notes = str(request.form.get('notes') or '').strip()
 
-    emp_name = session.get('employee_name') or 'كاشير'
+    emp_name = session.get('employee_name') or '?????'
     ok, msg = accounting.record_spoilage_waste(
         item_id=item_id, item_name=item_name, qty=qty, unit=unit,
         reason=reason, employee_name=emp_name, notes=notes
@@ -878,9 +888,9 @@ def api_spoilage_record():
     if request.is_json:
         return jsonify({'success': ok, 'message': msg})
     if ok:
-        flash(f"✓ {msg}", "success")
+        flash(f"? {msg}", "success")
     else:
-        flash(f"⚠️ {msg}", "danger")
+        flash(f"?? {msg}", "danger")
     return redirect(url_for('index'))
 
 @app.route('/pc/click', methods=['POST'])
@@ -888,38 +898,38 @@ def api_spoilage_record():
 def pc_single_click():
     """1-Click Recording for Single Gaming PC."""
     custom_price = request.form.get('price_lbp')
-    note = request.form.get('note', 'استخدام كمبيوتر GAMING')
+    note = request.form.get('note', '??????? ??????? GAMING')
 
     success, res = accounting.log_single_pc_click(price_lbp=custom_price, note=note)
     if success:
         amount = res.get('total_lbp', res.get('price_lbp', 100000.0))
-        flash(f"تم تسجيل استخدام GAMING بنجاح (+1) بمبلغ {amount:,.0f} ل.ل 🎮", "success")
+        flash(f"?? ????? ??????? GAMING ????? (+1) ????? {amount:,.0f} ?.? ??", "success")
     else:
-        flash(f"خطأ: {res}", "danger")
+        flash(f"???: {res}", "danger")
     return redirect(url_for('index'))
 
 @app.route('/sale/quick', methods=['POST'])
 @login_required
 def quick_custom_sale():
     """Instant manual sale with typed name and price."""
-    name = request.form.get('item_name', 'مبيعات يدوية').strip() or 'مبيعات يدوية'
+    name = request.form.get('item_name', '?????? ?????').strip() or '?????? ?????'
     price_lbp = float(request.form.get('price_lbp') or 0)
     qty = int(request.form.get('quantity') or 1)
 
     if price_lbp <= 0:
-        flash("يرجى إدخال سعر صحيح", "danger")
+        flash("???? ????? ??? ????", "danger")
         return redirect(url_for('index'))
 
     items_list = [{'name': name, 'price_lbp': price_lbp, 'quantity': qty, 'item_id': None}]
     success, res = accounting.create_order({
-        'customer_name': 'زبون كاش',
+        'customer_name': '???? ???',
         'employee_id': session.get('employee_id'),
-        'employee_name': session.get('employee_name', 'كاشير')
+        'employee_name': session.get('employee_name', '?????')
     }, items_list)
     if success:
-        flash(f"تم تسجيل {name} بمبلغ {price_lbp * qty:,.0f} ل.ل بنجاح 💰", "success")
+        flash(f"?? ????? {name} ????? {price_lbp * qty:,.0f} ?.? ????? ??", "success")
     else:
-        flash(f"خطأ: {res}", "danger")
+        flash(f"???: {res}", "danger")
     return redirect(url_for('index'))
 
 @app.route('/order/<int:order_id>/receipt', endpoint='order_receipt')
@@ -929,11 +939,11 @@ def order_receipt(order_id):
     """Printable Thermal Receipt for Cafe."""
     order = accounting.get_order_details(order_id)
     if not order:
-        flash("الفاتورة غير موجودة", "danger")
+        flash("???????? ??? ??????", "danger")
         return redirect(url_for('index'))
     return render_template('print_receipt.html', order=order)
 
-# ----------------- 3. CUSTOMER DEBTS LEDGER (سجل ديون الزبائن والآجل) -----------------
+# ----------------- 3. CUSTOMER DEBTS LEDGER (??? ???? ??????? ??????) -----------------
 
 @app.route('/debts')
 @login_required
@@ -963,9 +973,9 @@ def debt_create_manual():
 
     success, res = accounting.add_manual_debt(customer_name, amount_lbp, phone=phone, notes=notes)
     if success:
-        flash(f"تم تسجيل دين جديد على الزبون ({customer_name}) بمبلغ {float(amount_lbp):,.0f} ل.ل بنجاح 📝", "success")
+        flash(f"?? ????? ??? ???? ??? ?????? ({customer_name}) ????? {float(amount_lbp):,.0f} ?.? ????? ??", "success")
     else:
-        flash(f"خطأ أثناء تسجيل الدين: {res}", "danger")
+        flash(f"??? ????? ????? ?????: {res}", "danger")
     return redirect(url_for('debts_page'))
 
 @app.route('/debt/pay/customer', methods=['POST'])
@@ -978,9 +988,9 @@ def debt_pay_customer():
 
     success, res = accounting.pay_customer_balance(customer_name, amount_lbp, notes=notes)
     if success:
-        flash(f"تم تسجيل دفعة سداد من الزبون ({customer_name}) بمبلغ {float(amount_lbp):,.0f} ل.ل بنجاح 💰", "success")
+        flash(f"?? ????? ???? ???? ?? ?????? ({customer_name}) ????? {float(amount_lbp):,.0f} ?.? ????? ??", "success")
     else:
-        flash(f"خطأ أثناء تسجيل السداد: {res}", "danger")
+        flash(f"??? ????? ????? ??????: {res}", "danger")
     return redirect(url_for('debts_page'))
 
 @app.route('/debt/pay/single', methods=['POST'])
@@ -993,9 +1003,9 @@ def debt_pay_single():
 
     success, res = accounting.pay_debt(debt_id, amount_lbp, notes=notes)
     if success:
-        flash(f"تم تسجيل سداد بمبلغ {float(amount_lbp):,.0f} ل.ل بنجاح 💰", "success")
+        flash(f"?? ????? ???? ????? {float(amount_lbp):,.0f} ?.? ????? ??", "success")
     else:
-        flash(f"خطأ: {res}", "danger")
+        flash(f"???: {res}", "danger")
     return redirect(url_for('debts_page'))
 
 @app.route('/debt/<int:debt_id>/delete', methods=['POST'])
@@ -1003,13 +1013,13 @@ def debt_pay_single():
 @admin_required
 def debt_delete(debt_id):
     """Delete / Cancel a debt record safely with full audit trail."""
-    reason = request.form.get('cancel_reason', '').strip() or 'إلغاء من لوحة الديون'
-    cancelled_by = session.get('employee_name') or 'المدير'
+    reason = request.form.get('cancel_reason', '').strip() or '????? ?? ???? ??????'
+    cancelled_by = session.get('employee_name') or '??????'
     ok, msg = accounting.delete_debt(debt_id, cancelled_by=cancelled_by, reason=reason)
     if ok:
-        flash(f"✓ {msg}", "success")
+        flash(f"? {msg}", "success")
     else:
-        flash(f"⚠️ {msg}", "danger")
+        flash(f"?? {msg}", "danger")
     return redirect(url_for('debts_page'))
 
 # ----------------- 2. ADMIN AUTHENTICATION & DASHBOARD -----------------
@@ -1054,7 +1064,7 @@ def admin_login():
                 if entered_secret and len(entered_secret) >= 4:
                     accounting.update_admin_password(entered_secret)
                     authenticated = True
-                    flash("✅ تم إنشاء وتعيين كلمة سر الإدارة لأول مرة بنجاح!", "success")
+                    flash("? ?? ????? ?????? ???? ?? ??????? ???? ??? ?????!", "success")
 
         if authenticated:
             session['admin_authenticated'] = True
@@ -1064,12 +1074,12 @@ def admin_login():
                 session['employee_name'] = emp_match['name']
                 session['employee_role'] = emp_match['role']
             next_target = request.args.get('next') or request.form.get('next')
-            flash('تم تسجيل الدخول لصفحة الإدارة بصلاحية المدير 🔓', 'success')
+            flash('?? ????? ?????? ????? ??????? ??????? ?????? ??', 'success')
             if next_target and next_target.startswith('/'):
                 return redirect(next_target)
             return redirect(url_for('admin_panel'))
         else:
-            flash('⚠️ كلمة المرور غير صحيحة! تأكد من إدخال كلمة السر أو الـ PIN الخاص بك كمدير', 'danger')
+            flash('?? ???? ?????? ??? ?????! ???? ?? ????? ???? ???? ?? ??? PIN ????? ?? ?????', 'danger')
             return render_template('admin_login.html', active_page='admin')
     if session.get('admin_authenticated'):
         return redirect(url_for('admin_panel'))
@@ -1080,7 +1090,7 @@ def admin_logout():
     """Admin Logout."""
     session.pop('admin_authenticated', None)
     session.pop('admin_logged_in', None)
-    flash("تم تسجيل الخروج من صفحة الإدارة بنجاح", "info")
+    flash("?? ????? ?????? ?? ???? ??????? ?????", "info")
     return redirect(url_for('index'))
 
 @app.route('/admin/change-password', methods=['POST'])
@@ -1092,23 +1102,23 @@ def admin_change_password():
     confirm_pin = request.form.get('confirm_pin', '').strip()
 
     if not accounting.verify_admin_password(current_pin):
-        flash("⚠️ كلمة المرور الحالية غير صحيحة! لم يتم تغيير كلمة السر", "danger")
+        flash("?? ???? ?????? ??????? ??? ?????! ?? ??? ????? ???? ????", "danger")
         return redirect(url_for('admin_panel'))
     
     if not new_pin or len(new_pin) < 4:
-        flash("⚠️ يرجى إدخال كلمة سر جديدة لا تقل عن 4 أرقام أو حروف", "danger")
+        flash("?? ???? ????? ???? ?? ????? ?? ??? ?? 4 ????? ?? ????", "danger")
         return redirect(url_for('admin_panel'))
     
     if new_pin != confirm_pin:
-        flash("⚠️ تأكيد كلمة السر الجديدة غير متطابق! يرجى إعادة المحاولة", "danger")
+        flash("?? ????? ???? ???? ??????? ??? ??????! ???? ????? ????????", "danger")
         return redirect(url_for('admin_panel'))
     
     success, msg = accounting.update_admin_password(new_pin)
     if success:
         write_audit_log(session.get('employee_name', 'Admin'), 'CHANGE_ADMIN_PASSWORD', 'settings', 1)
-        flash(f"✅ {msg}", "success")
+        flash(f"? {msg}", "success")
     else:
-        flash(f"❌ {msg}", "danger")
+        flash(f"? {msg}", "danger")
     return redirect(url_for('admin_panel'))
 
 @app.route('/admin', endpoint='admin')
@@ -1183,16 +1193,16 @@ def print_daily():
 def expense_add():
     title = request.form.get('title')
     amount = float(request.form.get('amount_lbp') or 0)
-    category = request.form.get('category', 'مصاريف عامة')
+    category = request.form.get('category', '?????? ????')
     notes = request.form.get('notes', '')
     source = request.form.get('source', 'drawer')
 
     if not title or amount <= 0:
-        flash("يرجى إدخال بيان المصروف والمبلغ", "danger")
+        flash("???? ????? ???? ??????? ???????", "danger")
         return redirect(url_for('admin_panel'))
 
     emp_id = session.get('employee_id')
-    emp_name = session.get('employee_name', 'المدير')
+    emp_name = session.get('employee_name', '??????')
     success, res = accounting.add_expense(
         title=title,
         amount_lbp=amount,
@@ -1203,45 +1213,45 @@ def expense_add():
         employee_name=emp_name
     )
     if success:
-        src_label = 'الخزنة الخاصة 🏦' if source == 'safe' else 'درج الصندوق 💵'
-        flash(f"✅ تم تسجيل مصروف [{title}] بمبلغ {amount:,.0f} ل.ل بنجاح ({src_label})", "success")
+        src_label = '?????? ?????? ??' if source == 'safe' else '??? ??????? ??'
+        flash(f"? ?? ????? ????? [{title}] ????? {amount:,.0f} ?.? ????? ({src_label})", "success")
     else:
-        flash(f"خطأ: {res}", "danger")
+        flash(f"???: {res}", "danger")
     return redirect(url_for('admin_panel'))
 
 @app.route('/expense/quick-add', methods=['POST'])
 @login_required
 def expense_quick_add():
-    """تسجيل مصروف سريع من درج الكاشير بواسطة الموظف أو الإدارة."""
+    """????? ????? ???? ?? ??? ??????? ?????? ?????? ?? ???????."""
     emp_id = session.get('employee_id')
-    emp_name = session.get('employee_name', 'كاشير')
+    emp_name = session.get('employee_name', '?????')
     is_admin = session.get('is_admin') or session.get('admin_authenticated')
 
     if request.is_json:
         data = request.get_json(silent=True) or {}
         title = data.get('title', '').strip()
         amount = float(data.get('amount_lbp') or 0)
-        category = data.get('category', 'مصاريف تشغيلية')
+        category = data.get('category', '?????? ???????')
         notes = data.get('notes', '')
         source = data.get('source', 'drawer')
     else:
         title = request.form.get('title', '').strip()
         amount = float(request.form.get('amount_lbp') or 0)
-        category = request.form.get('category', 'مصاريف تشغيلية')
+        category = request.form.get('category', '?????? ???????')
         notes = request.form.get('notes', '')
         source = request.form.get('source', 'drawer')
 
-    # الدفع من الخزنة محصور بالإدارة فقط
+    # ????? ?? ?????? ????? ???????? ???
     if source == 'safe' and not is_admin:
         if request.is_json:
-            return jsonify({'success': False, 'message': '⚠️ الصرف من الخزنة مخصص للإدارة فقط'}), 403
-        flash("⚠️ الصرف من الخزنة الخاصة مخصص للإدارة فقط", "danger")
+            return jsonify({'success': False, 'message': '?? ????? ?? ?????? ???? ??????? ???'}), 403
+        flash("?? ????? ?? ?????? ?????? ???? ??????? ???", "danger")
         return redirect(request.referrer or url_for('index'))
 
     if not title or amount <= 0:
         if request.is_json:
-            return jsonify({'success': False, 'message': '⚠️ يرجى إدخال بيان المصروف والمبلغ بشكل صحيح'}), 400
-        flash("⚠️ يرجى إدخال بيان المصروف والمبلغ بشكل صحيح", "danger")
+            return jsonify({'success': False, 'message': '?? ???? ????? ???? ??????? ??????? ???? ????'}), 400
+        flash("?? ???? ????? ???? ??????? ??????? ???? ????", "danger")
         return redirect(request.referrer or url_for('index'))
 
     success, res = accounting.add_expense(
@@ -1254,25 +1264,25 @@ def expense_quick_add():
         employee_name=emp_name
     )
     if success:
-        src_label = 'الخزنة الخاصة 🏦' if source == 'safe' else 'درج الصندوق 💵'
-        msg = f"✅ تم تسجيل مصروف [{title}] بقيمة {amount:,.0f} ل.ل بنجاح من {src_label}"
+        src_label = '?????? ?????? ??' if source == 'safe' else '??? ??????? ??'
+        msg = f"? ?? ????? ????? [{title}] ????? {amount:,.0f} ?.? ????? ?? {src_label}"
         if request.is_json:
             return jsonify({'success': True, 'message': msg, 'expense_id': res})
         flash(msg, "success")
     else:
-        err_msg = f"خطأ في تسجيل المصروف: {res}"
+        err_msg = f"??? ?? ????? ???????: {res}"
         if request.is_json:
             return jsonify({'success': False, 'message': err_msg}), 400
         flash(err_msg, "danger")
     return redirect(request.referrer or url_for('index'))
 
-# ----------------- ☕ COFFEE BEANS & CUP YIELD MANAGEMENT -----------------
+# ----------------- ? COFFEE BEANS & CUP YIELD MANAGEMENT -----------------
 
 @app.route('/coffee/hub', endpoint='coffee_hub')
 @app.route('/coffee-hub', endpoint='coffee_hub_page')
 @login_required
 def coffee_hub():
-    """لوحة تتبع وإدارة حبوب القهوة، الفناجين المبيعة، التالف، ورسمال الفنجان."""
+    """???? ???? ?????? ???? ??????? ???????? ???????? ??????? ?????? ???????."""
     summary = accounting.get_coffee_dashboard_summary()
     settings = accounting.get_settings()
     return render_template(
@@ -1285,8 +1295,8 @@ def coffee_hub():
 @app.route('/coffee/open-bag', methods=['POST'])
 @login_required
 def coffee_open_bag():
-    """فتح كيلو قهوة جديد للاستعمال مع إغلاق الكيلو السابق تلقائياً واحتساب إنتاجيته وأرباحه والتالف."""
-    emp_name = session.get('employee_name', 'كاشير')
+    """??? ???? ???? ???? ????????? ?? ????? ?????? ?????? ???????? ??????? ???????? ??????? ???????."""
+    emp_name = session.get('employee_name', '?????')
     if request.is_json:
         data = request.get_json(silent=True) or {}
         cost_lbp = data.get('cost_per_kg_lbp')
@@ -1306,31 +1316,31 @@ def coffee_open_bag():
             prev = res.get('closed_previous')
             prev_msg = ""
             if prev:
-                prev_msg = f" (تم إغلاق الكيلو السابق [{prev['batch_code']}] تلقائياً: أنتج {prev['total_cups']} فنجان - صافي ربح {prev['net_profit_lbp']:,.0f} ل.ل)"
-            return jsonify({'success': True, 'message': f"تم فتح كيلو قهوة جديد بنجاح [{res['batch_code']}]{prev_msg}", 'data': res})
+                prev_msg = f" (?? ????? ?????? ?????? [{prev['batch_code']}] ????????: ???? {prev['total_cups']} ????? - ???? ??? {prev['net_profit_lbp']:,.0f} ?.?)"
+            return jsonify({'success': True, 'message': f"?? ??? ???? ???? ???? ????? [{res['batch_code']}]{prev_msg}", 'data': res})
         return jsonify({'success': False, 'message': str(res)}), 400
 
     if ok:
         prev = res.get('closed_previous')
         if prev:
             msg = (
-                f"☕ تم فتح كيلو جديد برقم [{res['batch_code']}] بنجاح! "
-                f"(تم إغلاق الكيلو السابق [{prev['batch_code']}] تلقائياً: "
-                f"أنتج {prev['total_cups']} فنجان | المبيعة: {prev['cups_sold']} | التالفة: {prev['cups_damaged']} "
-                f"| تكلفة الفنجان: {prev['cost_per_cup_lbp']:,.0f} ل.ل | صافي الربح: {prev['net_profit_lbp']:,.0f} ل.ل | خسارة التلف: {prev.get('loss_damaged_lbp', 0):,.0f} ل.ل)"
+                f"? ?? ??? ???? ???? ???? [{res['batch_code']}] ?????! "
+                f"(?? ????? ?????? ?????? [{prev['batch_code']}] ????????: "
+                f"???? {prev['total_cups']} ????? | ???????: {prev['cups_sold']} | ???????: {prev['cups_damaged']} "
+                f"| ????? ???????: {prev['cost_per_cup_lbp']:,.0f} ?.? | ???? ?????: {prev['net_profit_lbp']:,.0f} ?.? | ????? ?????: {prev.get('loss_damaged_lbp', 0):,.0f} ?.?)"
             )
         else:
-            msg = f"☕ تم فتح كيلو قهوة جديد بنجاح برقم [{res['batch_code']}] وبدء احتساب الفناجين المبيعة والتالفة تلقائياً من 0!"
+            msg = f"? ?? ??? ???? ???? ???? ????? ???? [{res['batch_code']}] ???? ?????? ???????? ??????? ???????? ???????? ?? 0!"
         flash(msg, "success")
     else:
-        flash(f"⚠️ {res}", "danger")
+        flash(f"?? {res}", "danger")
     return redirect(request.referrer or url_for('coffee_hub'))
 
 @app.route('/coffee/close-bag', methods=['POST'])
 @login_required
 def coffee_close_bag():
-    """إنهاء وإغلاق الكيلو المفتوح وحساب الإنتاجية ورسمال الفنجان الدقيق وصافي الربح والتالف."""
-    emp_name = session.get('employee_name', 'كاشير')
+    """????? ?????? ?????? ??????? ????? ????????? ?????? ??????? ?????? ????? ????? ???????."""
+    emp_name = session.get('employee_name', '?????')
     batch_id = request.form.get('batch_id')
     notes = request.form.get('notes', '')
 
@@ -1338,49 +1348,49 @@ def coffee_close_bag():
     ok, res = accounting.close_coffee_bag(batch_id=batch_id, employee_name=emp_name, notes=notes)
     if ok:
         flash(
-            f"✅ تم إغلاق الكيلو [{res['batch_code']}] بنجاح! "
-            f"أنتج الكيلو {res['total_cups']} فنجان "
-            f"(المبيعة: {res['cups_sold']} | التالفة: {res['cups_damaged']}) - "
-            f"تكلفة الفنجان: {res['cost_per_cup_lbp']:,.0f} ل.ل - "
-            f"صافي الربح: {res['net_profit_lbp']:,.0f} ل.ل - "
-            f"خسارة التلف: {res.get('loss_damaged_lbp', 0):,.0f} ل.ل",
+            f"? ?? ????? ?????? [{res['batch_code']}] ?????! "
+            f"???? ?????? {res['total_cups']} ????? "
+            f"(???????: {res['cups_sold']} | ???????: {res['cups_damaged']}) - "
+            f"????? ???????: {res['cost_per_cup_lbp']:,.0f} ?.? - "
+            f"???? ?????: {res['net_profit_lbp']:,.0f} ?.? - "
+            f"????? ?????: {res.get('loss_damaged_lbp', 0):,.0f} ?.?",
             "success"
         )
     else:
-        flash(f"⚠️ {res}", "danger")
+        flash(f"?? {res}", "danger")
     return redirect(request.referrer or url_for('coffee_hub'))
 
 @app.route('/coffee/log-waste', methods=['POST'])
 @login_required
 def coffee_log_waste():
-    """تسجيل فنجان تالف أثناء التحضير أو سكب."""
-    emp_name = session.get('employee_name', 'كاشير')
+    """????? ????? ???? ????? ??????? ?? ???."""
+    emp_name = session.get('employee_name', '?????')
     if request.is_json:
         data = request.get_json(silent=True) or {}
         qty = int(data.get('qty') or 1)
-        reason = data.get('reason', 'تلف أثناء التحضير')
+        reason = data.get('reason', '??? ????? ???????')
         notes = data.get('notes', '')
     else:
         qty = int(request.form.get('qty') or 1)
-        reason = request.form.get('reason', 'تلف أثناء التحضير')
+        reason = request.form.get('reason', '??? ????? ???????')
         notes = request.form.get('notes', '')
 
     ok, res = accounting.record_coffee_waste(qty=qty, reason=reason, employee_name=emp_name, notes=notes)
     if request.is_json:
         if ok:
-            return jsonify({'success': True, 'message': f"تم تسجيل {qty} فنجان تالف كخسارة على الكيلو بنجاح", 'data': res})
+            return jsonify({'success': True, 'message': f"?? ????? {qty} ????? ???? ?????? ??? ?????? ?????", 'data': res})
         return jsonify({'success': False, 'message': str(res)}), 400
 
     if ok:
-        flash(f"⚠️ تم تسجيل {qty} فنجان تالف كخسارة على الكيلو بنجاح (خسارة التكلفة: {res['loss_lbp']:,.0f} ل.ل دون احتساب ربح)", "warning")
+        flash(f"?? ?? ????? {qty} ????? ???? ?????? ??? ?????? ????? (????? ???????: {res['loss_lbp']:,.0f} ?.? ??? ?????? ???)", "warning")
     else:
-        flash(f"خطأ: {res}", "danger")
+        flash(f"???: {res}", "danger")
     return redirect(request.referrer or url_for('coffee_hub'))
 
 @app.route('/coffee/update-stock', methods=['POST'])
 @login_required
 def coffee_update_stock():
-    """تعديل رصيد حبوب القهوة (كم كيلو بن متوفر بالمخزن مع السعر الموحد بالدولار واللبناني)."""
+    """????? ???? ???? ?????? (?? ???? ?? ????? ??????? ?? ????? ?????? ???????? ?????????)."""
     if request.is_json:
         data = request.get_json(silent=True) or {}
         stock_kg = float(data.get('stock_kg') or 0.0)
@@ -1408,15 +1418,15 @@ def coffee_update_stock():
         return jsonify({'success': False, 'message': msg}), 400
 
     if ok:
-        flash(f"✅ {msg}", "success")
+        flash(f"? {msg}", "success")
     else:
-        flash(f"خطأ: {msg}", "danger")
+        flash(f"???: {msg}", "danger")
     return redirect(request.referrer or url_for('coffee_hub'))
 
 @app.route('/api/coffee/status', methods=['GET'])
 @login_required
 def api_coffee_status():
-    """API لحظي للحصول على حالة الكيلو المفتوح ورصيد البن."""
+    """API ???? ?????? ??? ???? ?????? ??????? ????? ????."""
     summary = accounting.get_coffee_dashboard_summary()
     return jsonify({
         'success': True,
@@ -1428,14 +1438,14 @@ def api_coffee_status():
 @app.route('/expense/<int:expense_id>/delete', methods=['POST'])
 @admin_required
 def expense_delete(expense_id):
-    """إلغاء مصروف بطريقة غير مدمرة (Non-Destructive) مع توثيق السبب."""
-    reason = request.form.get('cancel_reason', '').strip() or 'إلغاء من لوحة الإدارة'
-    cancelled_by = session.get('employee_name') or 'المدير'
+    """????? ????? ?????? ??? ????? (Non-Destructive) ?? ????? ?????."""
+    reason = request.form.get('cancel_reason', '').strip() or '????? ?? ???? ???????'
+    cancelled_by = session.get('employee_name') or '??????'
     ok, msg = accounting.cancel_expense(expense_id, cancelled_by=cancelled_by, reason=reason)
     if ok:
-        flash(f'✓ {msg}', 'success')
+        flash(f'? {msg}', 'success')
     else:
-        flash(f'⚠️ {msg}', 'warning')
+        flash(f'?? {msg}', 'warning')
     return redirect(url_for('admin_panel'))
 
 
@@ -1450,21 +1460,21 @@ def pc_log_delete(log_id):
         record_id=log_id,
         reason='Gaming log deleted by admin'
     )
-    flash("تم حذف سجل GAMING", "info")
+    flash("?? ??? ??? GAMING", "info")
     return redirect(url_for('admin_panel'))
 
 @app.route('/order/<int:order_id>/cancel', methods=['POST'])
 @app.route('/order/<int:order_id>/delete', methods=['POST'])
 @admin_required
 def order_delete(order_id):
-    """إلغاء فاتورة مع توثيق السبب واستعادة المخزون بشكل تدقيقي آمن."""
-    reason = request.form.get('cancel_reason', '').strip() or 'إلغاء من لوحة الإدارة'
-    cancelled_by = session.get('employee_name') or 'المدير'
+    """????? ?????? ?? ????? ????? ???????? ??????? ???? ?????? ???."""
+    reason = request.form.get('cancel_reason', '').strip() or '????? ?? ???? ???????'
+    cancelled_by = session.get('employee_name') or '??????'
     ok, msg = accounting.cancel_order(order_id, cancelled_by=cancelled_by, reason=reason)
     if ok:
-        flash(f'✓ {msg}', 'success')
+        flash(f'? {msg}', 'success')
     else:
-        flash(f'⚠️ {msg}', 'warning')
+        flash(f'?? {msg}', 'warning')
     return redirect(url_for('admin_panel'))
 
 
@@ -1474,48 +1484,48 @@ def settings_update():
     if not session.get('admin_authenticated'):
         return redirect(url_for('admin_login'))
     accounting.update_settings(request.form)
-    flash("تم حفظ الإعدادات وربط تيليجرام وسعر الصرف بنجاح ✅", "success")
+    flash("?? ??? ????????? ???? ???????? ???? ????? ????? ?", "success")
     return redirect(url_for('admin_panel'))
 
 
 @app.route('/api/telegram/test', methods=['POST'])
 @admin_required
 def telegram_test():
-    """اختبار فوري لاتصال بوت التيليجرام وإرسال رسالة تجريبية."""
+    """?????? ???? ?????? ??? ?????????? ?????? ????? ???????."""
     data = request.get_json(silent=True) or request.form
     token = data.get('telegram_bot_token')
     chat_id = data.get('telegram_chat_id')
     settings = accounting.get_settings()
     comp = settings.get('company_name', 'STARGATE CAFE')
 
-    test_msg = f"<b>🚀 تجربة اتصال ناجحة - {comp}</b>\n\nنظام STARGATE POS الذكي متصل الآن بحساب التيليجرام الخاص بك وسيقوم بإرسال التقارير اليومية وتنبيهات الصندوق والمخزون مباشرة إلى هنا."
+    test_msg = f"<b>?? ????? ????? ????? - {comp}</b>\n\n???? STARGATE POS ????? ???? ???? ????? ?????????? ????? ?? ?????? ?????? ???????? ??????? ???????? ??????? ???????? ?????? ??? ???."
     ok, msg = accounting.send_telegram_message(test_msg, bot_token=token, chat_id=chat_id)
     if ok:
-        return jsonify({'success': True, 'message': 'تم إرسال رسالة الاختبار بنجاح إلى التيليجرام! ✈️'})
+        return jsonify({'success': True, 'message': '?? ????? ????? ???????? ????? ??? ??????????! ??'})
     return jsonify({'success': False, 'message': msg}), 400
 
 
 @app.route('/api/telegram/send-daily-report', methods=['POST'])
 @admin_required
 def telegram_send_daily_report():
-    """إرسال تقرير الإغلاق المالي الحالي إلى التيليجرام بضغطة زر واحدة."""
+    """????? ????? ??????? ?????? ?????? ??? ?????????? ????? ?? ?????."""
     target_date = request.form.get('target_date') or request.args.get('target_date') or accounting.get_business_date()
     ok, msg = accounting.send_daily_closing_telegram_report(target_date)
     if ok:
-        flash(f"تم إرسال التقرير المالي لتاريخ {target_date} إلى التيليجرام بنجاح 🚀", "success")
+        flash(f"?? ????? ??????? ?????? ?????? {target_date} ??? ?????????? ????? ??", "success")
     else:
-        flash(f"تعذر إرسال التقرير إلى التيليجرام: {msg}", "warning")
+        flash(f"???? ????? ??????? ??? ??????????: {msg}", "warning")
     return redirect(request.referrer or url_for('admin_panel'))
 
 
 @app.route('/api/telegram/send-shift-report', methods=['POST'])
 @login_required
 def telegram_send_shift_report():
-    """إرسال تقرير وردية الموظف أو الكاشير إلى تيليجرام المدير فورياً بضغطة زر."""
-    emp_name = session.get('employee_name') or 'كاشير'
+    """????? ????? ????? ?????? ?? ??????? ??? ???????? ?????? ?????? ????? ??."""
+    emp_name = session.get('employee_name') or '?????'
     target_date = accounting.get_business_date()
     
-    # استخراج مبالغ الوردية من الفورم أو الطلب
+    # ??????? ????? ??????? ?? ?????? ?? ?????
     data = request.get_json(silent=True) or request.form or {}
     actual_cash = float(data.get('actual_cash_lbp') or 0.0)
     expected_cash = float(data.get('expected_cash_lbp') or 0.0)
@@ -1535,14 +1545,14 @@ def telegram_send_shift_report():
         target_date=target_date
     )
     if ok:
-        return jsonify({'success': True, 'message': 'تم إرسال تقرير الوردية إلى تيليجرام المدير بنجاح ✈️'})
+        return jsonify({'success': True, 'message': '?? ????? ????? ??????? ??? ???????? ?????? ????? ??'})
     return jsonify({'success': False, 'message': msg}), 400
 
 
 @app.route('/api/ai/audit', methods=['GET'])
 @login_required
 def ai_audit_api():
-    """فحص الذكاء الاصطناعي الشامل للعمليات والمخزون والصندوق والأخطاء."""
+    """??? ?????? ????????? ?????? ???????? ???????? ???????? ????????."""
     target_date = request.args.get('date', accounting.get_business_date())
     report = accounting.ai_audit_system(target_date)
     return jsonify({'success': True, 'audit': report})
@@ -1552,7 +1562,7 @@ def ai_audit_api():
 @app.route('/categories')
 @admin_required
 def categories_page():
-    """صفحة إدارة الأقسام والتصنيفات وتنظيم شاشة الكاشير والربط بالبن."""
+    """???? ????? ??????? ?????????? ?????? ???? ??????? ?????? ?????."""
     categories = accounting.get_categories_with_items()
     settings = accounting.get_settings()
     return render_template(
@@ -1567,13 +1577,13 @@ def categories_page():
 @admin_required
 def menu_category_add():
     name = request.form.get('name', '').strip()
-    icon = request.form.get('icon', '☕').strip() or '☕'
+    icon = request.form.get('icon', '?').strip() or '?'
     sort_order = request.form.get('sort_order', 0)
     success, res = accounting.add_category(name, icon, sort_order)
     if success:
-        flash(f"تمت إضافة القسم [{name}] بنجاح 🏷️", "success")
+        flash(f"??? ????? ????? [{name}] ????? ???", "success")
     else:
-        flash(f"خطأ: {res}", "danger")
+        flash(f"???: {res}", "danger")
     return redirect(request.referrer or url_for('categories_page'))
 
 @app.route('/menu/category/<int:cat_id>/edit', methods=['POST'])
@@ -1581,13 +1591,13 @@ def menu_category_add():
 @admin_required
 def menu_category_edit(cat_id):
     name = request.form.get('name', '').strip()
-    icon = request.form.get('icon', '☕').strip() or '☕'
+    icon = request.form.get('icon', '?').strip() or '?'
     sort_order = request.form.get('sort_order', 0)
     success, res = accounting.update_category(cat_id, name, icon, sort_order)
     if success:
-        flash("تم تعديل القسم بنجاح", "success")
+        flash("?? ????? ????? ?????", "success")
     else:
-        flash(f"خطأ: {res}", "danger")
+        flash(f"???: {res}", "danger")
     return redirect(request.referrer or url_for('categories_page'))
 
 @app.route('/menu/category/<int:cat_id>/delete', methods=['POST'])
@@ -1596,13 +1606,13 @@ def menu_category_edit(cat_id):
 def menu_category_delete(cat_id):
     accounting.delete_category(cat_id)
     write_audit_log(session.get('employee_name', 'Admin'), 'DELETE_CATEGORY', 'cafe_categories', cat_id)
-    flash("تم حذف القسم وجميع أصنافه بنجاح", "info")
+    flash("?? ??? ????? ????? ?????? ?????", "info")
     return redirect(request.referrer or url_for('categories_page'))
 
 @app.route('/categories/reorder/<int:cat_id>/<direction>', methods=['POST'])
 @admin_required
 def category_reorder(cat_id, direction):
-    """تحريك القسم لأعلى أو لأسفل لترتيب الأزرار في شاشة الكاشير."""
+    """????? ????? ????? ?? ????? ?????? ??????? ?? ???? ???????."""
     ok, msg = accounting.reorder_category(cat_id, direction)
     if request.is_json:
         return jsonify({'success': ok, 'message': msg})
@@ -1615,7 +1625,7 @@ def category_reorder(cat_id, direction):
 @app.route('/categories/reorder-all', methods=['POST'])
 @admin_required
 def categories_reorder_all():
-    """حفظ ترتيب جميع الأقسام المحددة بالترتيب الجديد."""
+    """??? ????? ???? ??????? ??????? ???????? ??????."""
     data = request.get_json(silent=True) or {}
     order_ids = data.get('category_ids') or request.form.getlist('category_ids[]')
     ok, msg = accounting.save_categories_order(order_ids)
@@ -1627,7 +1637,7 @@ def categories_reorder_all():
 @app.route('/item/<int:item_id>/move-category', methods=['POST'])
 @admin_required
 def item_move_category(item_id):
-    """نقل الصنف إلى قسم وتصنيف آخر."""
+    """??? ????? ??? ??? ?????? ???."""
     if request.is_json:
         data = request.get_json(silent=True) or {}
         new_cat_id = data.get('category_id')
@@ -1640,32 +1650,32 @@ def item_move_category(item_id):
         
     if not new_cat_id:
         if request.is_json:
-            return jsonify({'success': False, 'message': 'القسم المستهدف غير صالح'}), 400
-        flash('يرجى اختيار القسم المستهدف', 'warning')
+            return jsonify({'success': False, 'message': '????? ???????? ??? ????'}), 400
+        flash('???? ?????? ????? ????????', 'warning')
         return redirect(request.referrer or url_for('categories_page'))
         
     ok, msg = accounting.move_item_to_category(item_id, new_cat_id)
     if request.is_json:
         return jsonify({'success': ok, 'message': msg})
     if ok:
-        flash(f"✅ {msg}", "success")
+        flash(f"? {msg}", "success")
     else:
-        flash(f"⚠️ {msg}", "danger")
+        flash(f"?? {msg}", "danger")
     return redirect(request.referrer or url_for('categories_page'))
 
 @app.route('/item/<int:item_id>/toggle-coffee-link', methods=['POST'])
 @admin_required
 def item_toggle_coffee_link(item_id):
-    """تفعيل أو إلغاء ربط الصنف بخصم كيلو البن (كيس القهوة)."""
+    """????? ?? ????? ??? ????? ???? ???? ???? (??? ??????)."""
     ok, val = accounting.toggle_coffee_bean_link(item_id)
     if ok:
-        state_txt = "يخصم من كيلو البن ☕" if val == 1 else "لا يخصم من كيلو البن (مشروب عادي)"
-        msg = f"تم تحديث الصنف: الآن {state_txt}"
+        state_txt = "???? ?? ???? ???? ?" if val == 1 else "?? ???? ?? ???? ???? (????? ????)"
+        msg = f"?? ????? ?????: ???? {state_txt}"
         if request.is_json:
             return jsonify({'success': True, 'is_coffee_bean_linked': val, 'message': msg})
-        flash(f"✅ {msg}", "success")
+        flash(f"? {msg}", "success")
     else:
-        msg = f"خطأ: {val}"
+        msg = f"???: {val}"
         if request.is_json:
             return jsonify({'success': False, 'message': msg}), 400
         flash(msg, "danger")
@@ -1674,21 +1684,21 @@ def item_toggle_coffee_link(item_id):
 @app.route('/item/<int:item_id>/reorder/<direction>', methods=['POST'])
 @login_required
 def item_reorder(item_id, direction):
-    """تحريك الصنف للأمام أو للخلف على شاشة الكاشير لترتيب أماكن المنتجات."""
+    """????? ????? ?????? ?? ????? ??? ???? ??????? ?????? ????? ????????."""
     cat_id = request.args.get('category_id', type=int) or (request.get_json(silent=True) or {}).get('category_id')
     ok, msg = accounting.reorder_item(item_id, direction, category_id=cat_id)
     if request.is_json:
         return jsonify({'success': ok, 'message': msg})
     if ok:
-        flash(f"✅ {msg}", "success")
+        flash(f"? {msg}", "success")
     else:
-        flash(f"⚠️ {msg}", "warning")
+        flash(f"?? {msg}", "warning")
     return redirect(request.referrer or url_for('index'))
 
 @app.route('/item/<int:item_id>/set-order', methods=['POST'])
 @login_required
 def item_set_order(item_id):
-    """تحديد رقم ترتيب الصنف مباشرة."""
+    """????? ??? ????? ????? ??????."""
     if request.is_json:
         data = request.get_json(silent=True) or {}
         sort_order = data.get('sort_order', 0)
@@ -1697,30 +1707,30 @@ def item_set_order(item_id):
     ok, msg = accounting.set_item_sort_order(item_id, sort_order)
     if request.is_json:
         return jsonify({'success': ok, 'message': msg})
-    flash(f"✅ {msg}", "success" if ok else "danger")
+    flash(f"? {msg}", "success" if ok else "danger")
     return redirect(request.referrer or url_for('index'))
 
 @app.route('/item/<int:item_id>/pin-top', methods=['POST'])
 @login_required
 def item_pin_top(item_id):
-    """تثبيت الصنف في مقدمة شاشة الكاشير كأول صنف."""
+    """????? ????? ?? ????? ???? ??????? ???? ???."""
     ok, msg = accounting.pin_item_to_top(item_id)
     if request.is_json:
         return jsonify({'success': ok, 'message': msg})
-    flash(f"✅ {msg}", "success" if ok else "danger")
+    flash(f"? {msg}", "success" if ok else "danger")
     return redirect(request.referrer or url_for('index'))
 
 @app.route('/api/items/auto-sort-sales', methods=['POST'])
 @login_required
 def api_items_auto_sort_sales():
-    """ترتيب أصناف الكاشير تلقائياً حسب الأكثر طلباً ومبيعاً."""
+    """????? ????? ??????? ???????? ??? ?????? ????? ???????."""
     ok, msg = accounting.auto_sort_items_by_sales()
     return jsonify({'success': ok, 'message': msg})
 
 @app.route('/api/items/set-position', methods=['POST'])
 @login_required
 def api_items_set_position():
-    """نقل الصنف مباشرة لموضع محدد (مثل الموضع 1 أو 2 أو 5)."""
+    """??? ????? ?????? ????? ???? (??? ?????? 1 ?? 2 ?? 5)."""
     data = request.get_json(silent=True) or request.form
     item_id = int(data.get('item_id', 0))
     pos = int(data.get('position', 1))
@@ -1729,7 +1739,7 @@ def api_items_set_position():
 
 @app.route('/api/items/top-selling', methods=['GET'])
 def api_top_selling_items():
-    """واجهة برمجية لجلب أكثر الأصناف مبيعاً وطلباً لشاشة الكاشير."""
+    """????? ?????? ???? ???? ??????? ?????? ?????? ????? ???????."""
     limit = request.args.get('limit', 12, type=int)
     top_items = accounting.get_top_selling_items(limit=limit)
     return jsonify({'success': True, 'items': top_items})
@@ -1751,9 +1761,9 @@ def menu_item_add():
 
     success, res = accounting.add_item(data)
     if success:
-        flash("تمت إضافة الصنف إلى المنيو بنجاح! ☕", "success")
+        flash("??? ????? ????? ??? ?????? ?????! ?", "success")
     else:
-        flash(f"خطأ: {res}", "danger")
+        flash(f"???: {res}", "danger")
     return redirect(request.referrer or url_for('admin_panel'))
 
 @app.route('/menu/item/<int:item_id>/edit', methods=['POST'])
@@ -1785,9 +1795,9 @@ def menu_item_edit(item_id):
 
     success, res = accounting.update_item(item_id, data)
     if success:
-        flash("تم تعديل الصنف والأسعار بنجاح", "success")
+        flash("?? ????? ????? ???????? ?????", "success")
     else:
-        flash(f"خطأ: {res}", "danger")
+        flash(f"???: {res}", "danger")
     return redirect(request.referrer or url_for('admin_panel'))
 
 @app.route('/menu/<int:item_id>/delete', methods=['POST'])
@@ -1796,10 +1806,10 @@ def menu_item_edit(item_id):
 def menu_item_delete(item_id):
     accounting.delete_item(item_id)
     write_audit_log(session.get('employee_name', 'Admin'), 'DELETE_ITEM', 'cafe_items', item_id)
-    flash("تم حذف الصنف من المنيو والمخزون", "info")
+    flash("?? ??? ????? ?? ?????? ????????", "info")
     return redirect(request.referrer or url_for('admin_panel'))
 
-# ----------------- BACKUP, EXPORT & RESTORE (النسخ الاحتياطي واستيراد وتصدير البيانات) -----------------
+# ----------------- BACKUP, EXPORT & RESTORE (????? ????????? ???????? ?????? ????????) -----------------
 
 @app.route('/backup/download')
 @admin_required
@@ -1810,7 +1820,7 @@ def backup_download():
         return send_file(backup_path, as_attachment=True, download_name=backup_filename, mimetype='application/x-sqlite3')
     except Exception as e:
         logger.exception("Backup download failed: %s", e)
-        flash(f"خطأ أثناء تصدير النسخة الاحتياطية: {str(e)}", "danger")
+        flash(f"??? ????? ????? ?????? ??????????: {str(e)}", "danger")
         return redirect(url_for('admin_panel'))
 
 @app.route('/backup/restore', methods=['POST'])
@@ -1818,12 +1828,12 @@ def backup_download():
 def backup_restore():
     """Upload and restore database from a user backup file."""
     if 'backup_file' not in request.files:
-        flash("يرجى اختيار ملف النسخة الاحتياطية أولاً", "danger")
+        flash("???? ?????? ??? ?????? ?????????? ?????", "danger")
         return redirect(url_for('admin_panel'))
 
     file = request.files['backup_file']
     if not file or file.filename == '':
-        flash("لم يتم اختيار أي ملف", "danger")
+        flash("?? ??? ?????? ?? ???", "danger")
         return redirect(url_for('admin_panel'))
 
     success, msg = database.restore_from_backup(file)
@@ -1850,11 +1860,11 @@ def export_menu_json():
 def import_menu():
     """Import menu items & categories from uploaded JSON file."""
     if 'menu_file' not in request.files:
-        flash("يرجى اختيار ملف المنيو (JSON)", "danger")
+        flash("???? ?????? ??? ?????? (JSON)", "danger")
         return redirect(url_for('admin_panel'))
     file = request.files['menu_file']
     if not file or file.filename == '':
-        flash("لم يتم اختيار أي ملف", "danger")
+        flash("?? ??? ?????? ?? ???", "danger")
         return redirect(url_for('admin_panel'))
     try:
         content = file.read().decode('utf-8')
@@ -1867,7 +1877,7 @@ def import_menu():
             flash(msg, "danger")
     except Exception as e:
         logger.exception("Error in import_menu: %s", e)
-        flash(f"خطأ في قراءة ملف المنيو: {str(e)}", "danger")
+        flash(f"??? ?? ????? ??? ??????: {str(e)}", "danger")
     return redirect(url_for('admin_panel'))
 
 @app.route('/export/sales/csv')
@@ -1897,11 +1907,11 @@ def export_system_json():
 def import_system_json():
     """Import full system backup from uploaded JSON file."""
     if 'system_file' not in request.files:
-        flash("يرجى اختيار ملف النسخة الاحتياطية (JSON)", "danger")
+        flash("???? ?????? ??? ?????? ?????????? (JSON)", "danger")
         return redirect(url_for('admin_panel'))
     file = request.files['system_file']
     if not file or file.filename == '':
-        flash("لم يتم اختيار أي ملف", "danger")
+        flash("?? ??? ?????? ?? ???", "danger")
         return redirect(url_for('admin_panel'))
     try:
         content = file.read().decode('utf-8')
@@ -1914,7 +1924,7 @@ def import_system_json():
             flash(msg, "danger")
     except Exception as e:
         logger.exception("Error in import_system_json: %s", e)
-        flash(f"خطأ أثناء استيراد البيانات: {str(e)}", "danger")
+        flash(f"??? ????? ??????? ????????: {str(e)}", "danger")
     return redirect(url_for('admin_panel'))
 
 @app.route('/admin/factory-reset', methods=['POST'])
@@ -1932,7 +1942,7 @@ def admin_factory_reset():
             is_valid_auth = True
 
     if not is_valid_auth:
-        flash("⚠️ كلمة المرور أو رمز PIN غير صحيح! يرجى إدخال كلمة سر الإدارة لتنفيذ العملية", "danger")
+        flash("?? ???? ?????? ?? ??? PIN ??? ????! ???? ????? ???? ?? ??????? ?????? ???????", "danger")
         return redirect(url_for('admin_panel'))
 
     reset_type = request.form.get('reset_type', 'transactions_only')
@@ -1940,7 +1950,7 @@ def admin_factory_reset():
     # If full reset, optionally check confirmation if sent by form
     confirm_text = (request.form.get('confirm_text') or '').strip().upper()
     if reset_type == 'full' and request.form.get('require_confirm') and confirm_text != 'RESET':
-        flash("⚠️ للتأكيد على ضبط المصنع الشامل يرجى كتابة كلمة RESET في حقل التأكيد", "danger")
+        flash("?? ??????? ??? ??? ?????? ?????? ???? ????? ???? RESET ?? ??? ???????", "danger")
         return redirect(url_for('admin_panel'))
 
     # Auto backup current DB before performing any reset
@@ -1949,7 +1959,7 @@ def admin_factory_reset():
     except Exception as e:
         logger.exception("Pre-reset backup: %s", e)
 
-    actor_name = session.get('employee_name', 'المدير العام')
+    actor_name = session.get('employee_name', '?????? ?????')
     success, msg = accounting.factory_reset(reset_type, admin_pin=entered_pin, actor=actor_name)
     if success:
         write_audit_log(
@@ -1963,7 +1973,7 @@ def admin_factory_reset():
         flash(msg, "warning" if reset_type == 'transactions_only' else "danger")
         return redirect(url_for('index') if reset_type == 'full' else url_for('admin_panel'))
     else:
-        flash(f"خطأ: {msg}", "danger")
+        flash(f"???: {msg}", "danger")
         return redirect(url_for('admin_panel'))
 
 # ----------------- APP START -----------------
@@ -2090,7 +2100,7 @@ def export_inventory_csv_route():
     timestamp = datetime.now().strftime('%Y%m%d_%H%M')
     
     # Generate CSV with UTF-8 BOM for Arabic Excel support (Strictly no wholesale)
-    lines = ["\ufeffمعرف الصنف,اسم الصنف,التصنيف,سعر البيع (ل.ل),سعر البيع ($),سعر التكلفة (ل.ل),سعر التكلفة ($),ربح القطعة (ل.ل),الكمية بالمستودع,حد التنبيه,إجمالي رأس مال التكلفة (ل.ل),إجمالي القيمة البيعية (ل.ل),حالة المخزون"]
+    lines = ["\ufeff???? ?????,??? ?????,???????,??? ????? (?.?),??? ????? ($),??? ??????? (?.?),??? ??????? ($),??? ?????? (?.?),?????? ?????????,?? ???????,?????? ??? ??? ??????? (?.?),?????? ?????? ??????? (?.?),???? ???????"]
     for it in items:
         qty = float(it.get('stock_qty') or 0.0)
         track = bool(it.get('track_stock'))
@@ -2104,15 +2114,15 @@ def export_inventory_csv_route():
         tot_sale = qty * p_lbp
 
         if not track:
-            status_text = "بدون تتبع كميات"
+            status_text = "???? ???? ?????"
         elif it.get('is_coffee_bean_linked') == 1:
-            status_text = "مربوط بكيلو البن"
+            status_text = "????? ????? ????"
         elif qty > low_limit:
-            status_text = "متوفر بالمستودع"
+            status_text = "????? ?????????"
         elif qty > 0:
-            status_text = "كمية منخفضة ⚠️"
+            status_text = "???? ?????? ??"
         else:
-            status_text = "نفد من المخزون ❌"
+            status_text = "??? ?? ??????? ?"
 
         line = f"{it.get('id')},\"{it.get('name')}\",\"{it.get('category_name') or '-'}\",{p_lbp},{p_usd},{c_lbp},{c_usd},{profit_unit},{qty},{low_limit},{tot_cost},{tot_sale},{status_text}"
         lines.append(line)
@@ -2128,14 +2138,14 @@ def export_inventory_csv_route():
 def download_inventory_sample_template():
     """Download clean Arabic CSV template for bulk importing products without wholesale."""
     sample_lines = [
-        "\ufeffاسم الصنف,التصنيف,سعر البيع (ل.ل),سعر البيع ($),سعر التكلفة (ل.ل),الكمية بالمخزن,حد التنبيه",
-        "قهوة اسبريسو إيطالي,مشروبات ساخنة,150000,1.67,80000,50,10",
-        "كابتشينو دوبل,مشروبات ساخنة,220000,2.45,110000,40,10",
-        "شاي كرك مميز,مشروبات ساخنة,120000,1.34,50000,60,15",
-        "ريد بول أصلي,مشروبات باردة,250000,2.79,160000,100,20",
-        "مياه معدنية 500 مل,مشروبات باردة,40000,0.45,20000,200,30",
-        "سناك كوكيز شوكولا,سناكس وحلويات,180000,2.00,90000,35,5",
-        "معسل تفاحتين نخلة,أراجيل وشيشة,350000,3.91,180000,25,5"
+        "\ufeff??? ?????,???????,??? ????? (?.?),??? ????? ($),??? ??????? (?.?),?????? ???????,?? ???????",
+        "???? ??????? ??????,??????? ?????,150000,1.67,80000,50,10",
+        "???????? ????,??????? ?????,220000,2.45,110000,40,10",
+        "??? ??? ????,??????? ?????,120000,1.34,50000,60,15",
+        "??? ??? ????,??????? ?????,250000,2.79,160000,100,20",
+        "???? ?????? 500 ??,??????? ?????,40000,0.45,20000,200,30",
+        "???? ????? ??????,????? ???????,180000,2.00,90000,35,5",
+        "???? ??????? ????,?????? ?????,350000,3.91,180000,25,5"
     ]
     csv_data = "\n".join(sample_lines)
     response = Response(csv_data, mimetype='text/csv; charset=utf-8')
@@ -2147,12 +2157,12 @@ def download_inventory_sample_template():
 def import_inventory_csv_route():
     """Bulk import products and costs from uploaded CSV file."""
     if 'csv_file' not in request.files:
-        flash("⚠️ يرجى اختيار ملف CSV أولاً", "warning")
+        flash("?? ???? ?????? ??? CSV ?????", "warning")
         return redirect(url_for('inventory_page'))
     
     file = request.files['csv_file']
     if not file or file.filename == '':
-        flash("⚠️ لم يتم اختيار أي ملف للتحميل", "warning")
+        flash("?? ?? ??? ?????? ?? ??? ???????", "warning")
         return redirect(url_for('inventory_page'))
         
     try:
@@ -2164,12 +2174,12 @@ def import_inventory_csv_route():
                 table_name='cafe_items',
                 reason=f"Uploaded file: {file.filename}"
             )
-            flash(f"✓ {msg}", "success")
+            flash(f"? {msg}", "success")
         else:
-            flash(f"⚠️ {msg}", "danger")
+            flash(f"?? {msg}", "danger")
     except Exception as e:
         logger.exception("Error importing CSV: %s", e)
-        flash(f"خطأ أثناء معالجة ملف المنتجات: {str(e)}", "danger")
+        flash(f"??? ????? ?????? ??? ????????: {str(e)}", "danger")
         
     return redirect(url_for('inventory_page'))
 
@@ -2185,10 +2195,10 @@ def api_inventory_adjust():
         notes = (data.get('notes') or '').strip()
         new_cost_lbp = data.get('cost_price_lbp')
         supplier_id = data.get('supplier_id')
-        user_name = session.get('employee_name') or 'المدير'
+        user_name = session.get('employee_name') or '??????'
 
         if qty <= 0 and action != 'ADJUST_COUNT':
-            return jsonify({'success': False, 'message': 'الكمية يجب أن تكون أكبر من صفر'}), 400
+            return jsonify({'success': False, 'message': '?????? ??? ?? ???? ???? ?? ???'}), 400
 
         conn = get_db()
         cursor = conn.cursor()
@@ -2196,7 +2206,7 @@ def api_inventory_adjust():
         item = cursor.fetchone()
         if not item:
             conn.close()
-            return jsonify({'success': False, 'message': 'الصنف غير موجود'}), 404
+            return jsonify({'success': False, 'message': '????? ??? ?????'}), 404
 
         old_qty = float(item['stock_qty'] or 0.0)
         cost_lbp = float(item['cost_price_lbp'] or 0.0)
@@ -2217,30 +2227,30 @@ def api_inventory_adjust():
             new_qty = old_qty + qty
             movement_type = 'PURCHASE_IN'
             ref_type = 'DIRECT_RESTOCK'
-            default_note = 'توريد بضاعة جديدة للمخزن'
+            default_note = '????? ????? ????? ??????'
             actual_diff = qty
         elif action == 'ADJUST_COUNT':
             new_qty = qty
             actual_diff = new_qty - old_qty
             movement_type = 'INVENTORY_ADJUST_IN' if actual_diff >= 0 else 'INVENTORY_ADJUST_OUT'
             ref_type = 'AUDIT_COUNT'
-            default_note = f'تسوية جرد فعلي (الفارق: {actual_diff:+g})'
+            default_note = f'????? ??? ???? (??????: {actual_diff:+g})'
             qty = abs(actual_diff)
         elif action == 'RECORD_WASTE':
             new_qty = max(0.0, old_qty - qty)
             movement_type = 'WASTE'
             ref_type = 'SPOILAGE_DAMAGE'
-            default_note = 'إتلاف وهدر مواد منتهية الصلاحية أو تالفة'
+            default_note = '????? ???? ???? ?????? ???????? ?? ?????'
             actual_diff = -qty
         elif action == 'HOSPITALITY':
             new_qty = max(0.0, old_qty - qty)
             movement_type = 'INTERNAL_USE'
             ref_type = 'HOSPITALITY'
-            default_note = 'ضيافة واستهلاك داخلي'
+            default_note = '????? ???????? ?????'
             actual_diff = -qty
         else:
             conn.close()
-            return jsonify({'success': False, 'message': 'نوع الحركة غير معتمد'}), 400
+            return jsonify({'success': False, 'message': '??? ?????? ??? ?????'}), 400
 
         # Update stock
         cursor.execute("UPDATE cafe_items SET stock_qty = ?, track_stock = 1 WHERE id = ?", (new_qty, item_id))
@@ -2268,16 +2278,16 @@ def api_inventory_adjust():
         cursor.execute("""
             INSERT INTO audit_log (actor, action, table_name, record_id, reason, created_at)
             VALUES (?, ?, 'cafe_items', ?, ?, datetime('now', 'localtime'))
-        """, (user_name, f"STOCK_{movement_type}", item_id, f"الكمية: {old_qty:g} -> {new_qty:g} ({full_notes})"))
+        """, (user_name, f"STOCK_{movement_type}", item_id, f"??????: {old_qty:g} -> {new_qty:g} ({full_notes})"))
 
         conn.commit()
         conn.close()
 
-        status_text = "متوفر بالمستودع" if new_qty > float(item['low_stock_limit'] or 5.0) else ("كمية منخفضة ⚠️" if new_qty > 0 else "نفد من المخزون ❌")
+        status_text = "????? ?????????" if new_qty > float(item['low_stock_limit'] or 5.0) else ("???? ?????? ??" if new_qty > 0 else "??? ?? ??????? ?")
 
         return jsonify({
             'success': True,
-            'message': f'تم تحديث رصيد ({item["name"]}) بنجاح إلى {new_qty:g}',
+            'message': f'?? ????? ???? ({item["name"]}) ????? ??? {new_qty:g}',
             'data': {
                 'item_id': item_id,
                 'old_qty': old_qty,
@@ -2301,11 +2311,11 @@ def quick_update_item():
         field = data.get('field')
         value = data.get('value')
         if not field or field not in ('price_lbp', 'price_usd', 'cost_price_lbp', 'cost_price_usd', 'stock_qty', 'name'):
-            return jsonify({'success': False, 'message': 'حقل غير صالح'}), 400
+            return jsonify({'success': False, 'message': '??? ??? ????'}), 400
             
         success, res = accounting.quick_update_item_field(item_id, field, value)
         if success:
-            return jsonify({'success': True, 'data': res, 'message': 'تم التعديل الفوري بنجاح'})
+            return jsonify({'success': True, 'data': res, 'message': '?? ??????? ?????? ?????'})
         else:
             return jsonify({'success': False, 'message': str(res)})
     except Exception as e:
@@ -2327,11 +2337,11 @@ def quick_add_item_inline():
                 data['icon'] = img_url
         success, res = accounting.add_item(data)
         if success:
-            flash("تمت إضافة الصنف بنجاح إلى المنيو والمخزون", "success")
+            flash("??? ????? ????? ????? ??? ?????? ????????", "success")
         else:
-            flash(f"تعذر إضافة الصنف: {res}", "danger")
+            flash(f"???? ????? ?????: {res}", "danger")
     except Exception as e:
-        flash(f"خطأ: {str(e)}", "danger")
+        flash(f"???: {str(e)}", "danger")
     return redirect(request.referrer or url_for('index'))
 
 
@@ -2369,9 +2379,9 @@ def add_employee_route():
     """Create new employee."""
     success, res = accounting.add_employee(request.form.to_dict())
     if success:
-        flash("تمت إضافة الموظف بنجاح", "success")
+        flash("??? ????? ?????? ?????", "success")
     else:
-        flash(f"تعذر إضافة الموظف: {res}", "danger")
+        flash(f"???? ????? ??????: {res}", "danger")
     return redirect(url_for('employees_page'))
 
 @app.route('/employee/<int:emp_id>/edit', methods=['POST'])
@@ -2380,9 +2390,9 @@ def edit_employee_route(emp_id):
     """Update employee details."""
     success, res = accounting.update_employee(emp_id, request.form.to_dict())
     if success:
-        flash("تم تعديل بيانات الموظف بنجاح", "success")
+        flash("?? ????? ?????? ?????? ?????", "success")
     else:
-        flash(f"تعذر التعديل: {res}", "danger")
+        flash(f"???? ???????: {res}", "danger")
     return redirect(url_for('employees_page'))
 
 @app.route('/employee/<int:emp_id>/delete', methods=['POST'])
@@ -2390,7 +2400,7 @@ def edit_employee_route(emp_id):
 def delete_employee_route(emp_id):
     """Permanently delete employee account."""
     if session.get('employee_id') == emp_id:
-        flash("لا يمكنك حذف حسابك الشخصي الذي تستخدمه حالياً!", "warning")
+        flash("?? ????? ??? ????? ?????? ???? ??????? ??????!", "warning")
         return redirect(url_for('employees_page'))
     success, res = accounting.delete_employee(emp_id)
     if success:
@@ -2401,9 +2411,9 @@ def delete_employee_route(emp_id):
             details=f"Deleted employee ID {emp_id}",
             ip_address=request.remote_addr
         )
-        flash("تم حذف الموظف نهائياً بنجاح", "success")
+        flash("?? ??? ?????? ??????? ?????", "success")
     else:
-        flash(f"خطأ: {res}", "danger")
+        flash(f"???: {res}", "danger")
     return redirect(url_for('employees_page'))
 
 @app.route('/employee/switch', methods=['POST'])
@@ -2440,7 +2450,7 @@ def switch_active_employee():
             'is_admin': emp.get('role') == 'admin'
         })
     else:
-        return jsonify({'success': False, 'message': 'رمز الـ PIN أو كلمة المرور غير صحيحة'}), 401
+        return jsonify({'success': False, 'message': '??? ??? PIN ?? ???? ?????? ??? ?????'}), 401
 
 @app.route('/employee/current')
 def get_current_employee():
@@ -2459,7 +2469,7 @@ def get_current_employee():
             emp_name = first_cashier['name']
         else:
             emp_id = 1
-            emp_name = 'كاشير'
+            emp_name = '?????'
             session['employee_id'] = emp_id
             session['employee_name'] = emp_name
             session['employee_role'] = 'cashier'
@@ -2496,11 +2506,11 @@ def setup_wizard():
         pc_price_lbp = float(request.form.get('pc_price_lbp') or 100000.0)
 
         if not admin_name or not admin_username or not admin_password or not admin_pin:
-            flash("⚠️ يرجى ملء كافة الحقول الأساسية لإنشاء حساب المدير العام!", "danger")
+            flash("?? ???? ??? ???? ?????? ???????? ?????? ???? ?????? ?????!", "danger")
             return render_template('setup_wizard.html')
 
         if len(admin_pin) < 4:
-            flash("⚠️ رمز الـ PIN يجب أن يتكون من 4 أرقام على الأقل!", "danger")
+            flash("?? ??? ??? PIN ??? ?? ????? ?? 4 ????? ??? ?????!", "danger")
             return render_template('setup_wizard.html')
 
         # Hash passwords securely
@@ -2544,16 +2554,16 @@ def setup_wizard():
                 actor=admin_name,
                 action='SYSTEM_SETUP',
                 table_name='settings',
-                reason='اكتمال الإعداد الأولي للنظام وتعيين حساب المدير العام'
+                reason='?????? ??????? ?????? ?????? ?????? ???? ?????? ?????'
             )
 
-            flash(f"🎉 مرحباً بك يا {admin_name}! تم إعداد وتأمين النظام بنجاح، يمكنك الآن بدء العمل وإضافة الأصناف أو البيع.", "success")
+            flash(f"?? ?????? ?? ?? {admin_name}! ?? ????? ?????? ?????? ?????? ????? ???? ??? ????? ?????? ??????? ?? ?????.", "success")
             return redirect(url_for('index'))
         except Exception as e:
             conn.rollback()
             conn.close()
             logger.exception("Error in setup_wizard: %s", e)
-            flash(f"حدث خطأ أثناء حفظ الإعداد: {str(e)}", "danger")
+            flash(f"??? ??? ????? ??? ???????: {str(e)}", "danger")
             return render_template('setup_wizard.html')
 
     return render_template('setup_wizard.html')
@@ -2585,10 +2595,10 @@ def employee_login():
                 session['admin_logged_in'] = True
                 session['is_admin'] = True
             session['shift_start_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            flash(f"أهلاً بك {emp['name']}، تم بدء ورديتك بنجاح ☕", "success")
+            flash(f"????? ?? {emp['name']}? ?? ??? ?????? ????? ?", "success")
             return redirect(url_for('index'))
         else:
-            flash("رمز الدخول (PIN) أو كلمة المرور غير صحيحة!", "danger")
+            flash("??? ?????? (PIN) ?? ???? ?????? ??? ?????!", "danger")
             return redirect(url_for('employee_login'))
 
     return render_template('employee_login.html', company_name=accounting.get_settings().get('company_name', 'STARGATE CAFE'))
@@ -2596,12 +2606,12 @@ def employee_login():
 @app.route('/employee/logout')
 def employee_logout():
     """Logout current employee and lock POS screen."""
-    emp_name = session.get('employee_name', 'الموظف')
+    emp_name = session.get('employee_name', '??????')
     session.pop('employee_id', None)
     session.pop('employee_name', None)
     session.pop('employee_role', None)
     session.pop('shift_start_time', None)
-    flash(f"تم قفل الحساب وتسجيل خروج {emp_name} بنجاح.", "info")
+    flash(f"?? ??? ?????? ?????? ???? {emp_name} ?????.", "info")
     return redirect(url_for('employee_login'))
 
 @app.route('/employee/close-shift', methods=['GET', 'POST'])
@@ -2611,14 +2621,14 @@ def employee_close_shift():
     emp_id = session.get('employee_id')
     emp_name = session.get('employee_name')
     if not emp_name:
-        emp_name = 'كاشير'
+        emp_name = '?????'
 
     today_str = accounting.get_business_date()
     settings = accounting.get_settings()
     exchange_rate = float(settings.get('exchange_rate') or 89500.0)
     company_name = settings.get('company_name', 'STARGATE CAFE')
 
-    # 1. مبيعات الموظف والدرج لليوم (شاملة كل الطلبات بدون استثناء وبدون أي حد)
+    # 1. ?????? ?????? ?????? ????? (????? ?? ??????? ???? ??????? ????? ?? ??)
     conn = accounting.get_db()
     c = conn.cursor()
 
@@ -2633,7 +2643,7 @@ def employee_close_shift():
         """, (today_str, today_str, emp_id))
         emp_orders = [dict(r) for r in c.fetchall()]
         if not emp_orders:
-            # Fallback: إذا لم تكن هناك طلبات برقم هذا الموظف، جلب طلبات المحل لليوم لضمان احتساب كاش الدرج الفعلي
+            # Fallback: ??? ?? ??? ???? ????? ???? ??? ??????? ??? ????? ????? ????? ????? ?????? ??? ????? ??????
             c.execute("""
                 SELECT o.* 
                 FROM cafe_orders o
@@ -2657,8 +2667,8 @@ def employee_close_shift():
     cash_sales_lbp = sum(float(o.get('total_lbp', 0)) for o in emp_orders if o.get('payment_method') == 'cash')
     debt_sales_lbp = sum(float(o.get('total_lbp', 0)) for o in emp_orders if o.get('payment_method') == 'debt')
 
-    # 2. حركة الكاش الشاملة للصندوق (تحصيل ديون، مصاريف الدرج، تحويلات الخزنة السابقة، عهدة افتتاحية)
-    # سدادات ديون مستلمة اليوم
+    # 2. ???? ????? ??????? ??????? (????? ????? ?????? ?????? ??????? ?????? ???????? ???? ????????)
+    # ?????? ???? ?????? ?????
     c.execute("""
         SELECT COALESCE(SUM(amount_lbp), 0)
         FROM debt_payments
@@ -2666,7 +2676,7 @@ def employee_close_shift():
     """, (today_str, today_str))
     debt_collected_lbp = float(c.fetchone()[0] or 0.0)
 
-    # مصاريف مدفوعة من الدرج اليوم
+    # ?????? ?????? ?? ????? ?????
     c.execute("""
         SELECT COALESCE(SUM(amount_lbp), 0)
         FROM expenses
@@ -2675,7 +2685,7 @@ def employee_close_shift():
     """, (today_str, today_str))
     shift_expenses_lbp = float(c.fetchone()[0] or 0.0)
 
-    # مبالغ تم توريدها للخزنة مسبقاً خلال الوردية
+    # ????? ?? ??????? ?????? ?????? ???? ???????
     c.execute("""
         SELECT COALESCE(SUM(amount_lbp), 0)
         FROM safe_transfers
@@ -2686,19 +2696,19 @@ def employee_close_shift():
     prior_safe_transfers_lbp = float(c.fetchone()[0] or 0.0)
     conn.close()
 
-    # عهدة افتتاحية للدرج إن وجدت (أو المتبقي النقدي من الأمس في الصندوق تلقائياً)
+    # ???? ???????? ????? ?? ???? (?? ??????? ?????? ?? ????? ?? ??????? ????????)
     drawer_stat = accounting.get_drawer_cash_status()
     past_untransferred = float(drawer_stat.get('past_untransferred_lbp') or 0.0)
     opening_float = float(session.get('opening_cash_lbp') or session.get('handover_actual_cash') or past_untransferred or 0.0)
 
-    # رصيد الكاش المتوقع في الدرج بدقة متناهية
-    # الكاش المتوقع = (عهدة افتتاحية + مبيعات كاش + تحصيل ديون) - (مصاريف الصندوق + توريدات الخزنة السابقة)
+    # ???? ????? ??????? ?? ????? ???? ???????
+    # ????? ??????? = (???? ???????? + ?????? ??? + ????? ????) - (?????? ??????? + ??????? ?????? ???????)
     expected_cash_lbp = max(0.0, opening_float + cash_sales_lbp + debt_collected_lbp - shift_expenses_lbp - prior_safe_transfers_lbp)
 
     if request.method == 'POST':
         actual_cash_val = request.form.get('actual_cash_lbp', '').strip()
         if not actual_cash_val:
-            flash("⚠️ يجب وضع مبلغ الكاش الفعلي في الصندوق قبل تسكير الوردية!", "danger")
+            flash("?? ??? ??? ???? ????? ?????? ?? ??????? ??? ????? ???????!", "danger")
             return render_template(
                 'employee_close_shift.html',
                 emp_name=emp_name,
@@ -2722,13 +2732,13 @@ def employee_close_shift():
         
         diff_note = ""
         if diff > 0:
-            diff_note = f" (زيادة نقدية: +{diff:,.0f} ل.ل)"
+            diff_note = f" (????? ?????: +{diff:,.0f} ?.?)"
         elif diff < 0:
-            diff_note = f" (عجز نقدي: -{abs(diff):,.0f} ل.ل)"
+            diff_note = f" (??? ????: -{abs(diff):,.0f} ?.?)"
         else:
-            diff_note = " (مطابق 100% بدون أي عجز)"
+            diff_note = " (????? 100% ???? ?? ???)"
 
-        # فحص هل اختار الموظف أو الإدارة توريد الكاش للخزنة الخاصة عند تسكير الوردية
+        # ??? ?? ????? ?????? ?? ??????? ????? ????? ?????? ?????? ??? ????? ???????
         transfer_to_safe = request.form.get('transfer_to_safe') in ('yes', '1', 'true', 'on')
         safe_deposit_val = request.form.get('safe_deposit_lbp', '').strip()
         safe_deposit_lbp = float(safe_deposit_val) if safe_deposit_val and float(safe_deposit_val) > 0 else 0.0
@@ -2737,10 +2747,10 @@ def employee_close_shift():
         drawer_remaining_cash = actual_cash
         if transfer_to_safe and safe_deposit_lbp > 0:
             try:
-                # تسجيل إيداع بالخزنة الخاصة من الدرج
+                # ????? ????? ??????? ?????? ?? ?????
                 transfer_id = accounting.add_safe_transfer(
                     amount_lbp=safe_deposit_lbp,
-                    note=f"توريد كاش تسكير وردية ({emp_name})",
+                    note=f"????? ??? ????? ????? ({emp_name})",
                     transferred_by=emp_name,
                     operation_type='deposit',
                     source='drawer',
@@ -2749,11 +2759,11 @@ def employee_close_shift():
                     employee_name=emp_name
                 )
                 drawer_remaining_cash = max(0.0, actual_cash - safe_deposit_lbp)
-                safe_transfer_note = f" (تم ترحيل {safe_deposit_lbp:,.0f} ل.ل إلى الخزنة الخاصة 🏦 والمتبقي بالصندوق {drawer_remaining_cash:,.0f} ل.ل)"
+                safe_transfer_note = f" (?? ????? {safe_deposit_lbp:,.0f} ?.? ??? ?????? ?????? ?? ???????? ???????? {drawer_remaining_cash:,.0f} ?.?)"
             except Exception as e:
-                safe_transfer_note = f" (تنبيه: تعذر إيداع الكاش بالخزنة: {e})"
+                safe_transfer_note = f" (?????: ???? ????? ????? ???????: {e})"
 
-        # تسجيل المطابقة وإغلاق الوردية في سجل shift_closings المحاسبي
+        # ????? ???????? ?????? ??????? ?? ??? shift_closings ????????
         diff_reason = request.form.get('difference_reason', '').strip() or diff_note
         handover_next = request.form.get('handover_to', '').strip()
         try:
@@ -2777,7 +2787,7 @@ def employee_close_shift():
                 handover_to_employee_name=handover_next
             )
 
-            # إذا وُجد فرق (عجز أو زيادة) نوثقه كقيد تسوية في سجل الحركة المالية
+            # ??? ???? ??? (??? ?? ?????) ????? ???? ????? ?? ??? ?????? ???????
             if abs(diff) > 0:
                 adj_type = 'adjustment'
                 adj_src = 'external' if diff > 0 else 'drawer'
@@ -2792,20 +2802,20 @@ def employee_close_shift():
                     reference_id=emp_id,
                     user_id=emp_id,
                     user_name=emp_name,
-                    notes=f"تسوية كاش الوردية: {diff_reason}",
+                    notes=f"????? ??? ???????: {diff_reason}",
                     exchange_rate=exchange_rate,
                     business_date=today_str
                 )
         except Exception as ce:
             logger.warning(f"Error in record_shift_closing: {ce}")
         
-        # Automated Daily / End-of-Shift Backup (تأمين الحسابات آلياً عند كل تسكير وردية)
+        # Automated Daily / End-of-Shift Backup (????? ???????? ????? ??? ?? ????? ?????)
         try:
             database.create_backup_copy()
         except Exception as be:
             logger.warning(f"Auto-backup on shift close: {be}")
 
-        # Automated Shift Telegram Dispatcher (إرسال إشعار فوري لتيليجرام المدير)
+        # Automated Shift Telegram Dispatcher (????? ????? ???? ????????? ??????)
         try:
             settings_now = accounting.get_settings()
             if settings_now.get('telegram_enabled'):
@@ -2837,7 +2847,7 @@ def employee_close_shift():
         session['handover_actual_cash'] = drawer_remaining_cash
         session['handover_diff_note'] = f"{diff_note}{safe_transfer_note}"
         
-        flash(f"✅ تم تسكير وردية {emp_name} بنجاح ومقارنة الصندوق{diff_note}{safe_transfer_note}. أُرسل إشعار للمدير وتم تأمين الحسابات.", "success")
+        flash(f"? ?? ????? ????? {emp_name} ????? ??????? ???????{diff_note}{safe_transfer_note}. ????? ????? ?????? ??? ????? ????????.", "success")
         return redirect(url_for('employee_login'))
 
     is_manager = bool(session.get('admin_authenticated') or session.get('employee_role') in ('admin', 'manager') or session.get('is_admin'))
@@ -2865,11 +2875,11 @@ def employee_close_shift():
 @app.route('/shift/<int:shift_id>/approve', methods=['POST'])
 @admin_required
 def approve_shift_route(shift_id):
-    """اعتماد رسمي لإغلاق الوردية ومطابقة الصندوق من قبل الإدارة."""
-    notes = request.form.get('notes', '').strip() or 'اعتماد رسمي ومطابقة تامة'
-    approver = session.get('employee_name') or 'المالك'
+    """?????? ???? ?????? ??????? ??????? ??????? ?? ??? ???????."""
+    notes = request.form.get('notes', '').strip() or '?????? ???? ??????? ????'
+    approver = session.get('employee_name') or '??????'
     accounting.approve_shift_closing(shift_id, approved_by=approver, notes=notes)
-    flash(f"✓ تم اعتماد ومطابقة إغلاق الوردية #{shift_id} بنجاح بواسطة {approver}.", "success")
+    flash(f"? ?? ?????? ??????? ????? ??????? #{shift_id} ????? ?????? {approver}.", "success")
     return redirect(request.referrer or url_for('reports_page'))
 
     return render_template(
@@ -2909,13 +2919,13 @@ def internal_server_error_handler(e):
     <html lang="ar" dir="rtl">
     <head>
         <meta charset="UTF-8">
-        <title>خطأ في النظام</title>
+        <title>??? ?? ??????</title>
         <style>body { font-family: sans-serif; background: #0f172a; color: #fff; text-align: center; padding: 50px; }</style>
     </head>
     <body>
-        <h1 style="color: #f43f5e;">⚠️ حدث خطأ في النظام</h1>
-        <p>يرجى العودة والضغط على الزر مرة أخرى أو إعادة تشغيل البرنامج.</p>
-        <a href="/" style="display: inline-block; background: #3b82f6; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-top: 15px;">العودة للرئيسية</a>
+        <h1 style="color: #f43f5e;">?? ??? ??? ?? ??????</h1>
+        <p>???? ?????? ?????? ??? ???? ??? ???? ?? ????? ????? ????????.</p>
+        <a href="/" style="display: inline-block; background: #3b82f6; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-top: 15px;">?????? ????????</a>
         <div style="margin-top: 30px; text-align: left; background: #1e293b; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 11px; max-width: 700px; margin-left: auto; margin-right: auto; overflow: auto; color: #fca5a5;">
             {{ err_detail }}
         </div>
@@ -2927,17 +2937,17 @@ def internal_server_error_handler(e):
 
 
 # ============================================================
-# 🏦 routes الخزنة الخاصة (Safe/Vault)
+# ?? routes ?????? ?????? (Safe/Vault)
 # ============================================================
 
 # -------------------------------------------------------------------------
-# 🏦 CENTRAL VAULT & SAFE ROUTES (الخزنة الخاصة وإدارة النقدية)
+# ?? CENTRAL VAULT & SAFE ROUTES (?????? ?????? ?????? ???????)
 # -------------------------------------------------------------------------
 
 @app.route('/safe', endpoint='safe_page')
 @admin_required
 def safe_page():
-    """صفحة الخزنة الخاصة مع البحث المتقدم عبر التاريخ ودعم الإيداع والسحب."""
+    """???? ?????? ?????? ?? ????? ??????? ??? ??????? ???? ??????? ??????."""
     if 'employee_id' not in session and not session.get('is_admin') and not session.get('admin_authenticated'):
         return redirect(url_for('employee_login'))
 
@@ -2956,13 +2966,13 @@ def safe_page():
         is_range = True
         is_filtered = True
         target_date = start_date
-        display_period = f"من {start_date} إلى {end_date}"
+        display_period = f"?? {start_date} ??? {end_date}"
     elif raw_date == 'all':
         target_date = 'all'
         start_date = None
         end_date = None
         is_filtered = True
-        display_period = "كافة التاريخ"
+        display_period = "???? ???????"
     elif raw_date:
         target_date = raw_date
         start_date = raw_date
@@ -2978,7 +2988,7 @@ def safe_page():
         target_date = today_str
         start_date = today_str
         end_date = today_str
-        display_period = f"اليوم ({today_str})"
+        display_period = f"????? ({today_str})"
 
     settings = accounting.get_settings()
     rate = float(settings.get('exchange_rate') or 89500.0)
@@ -3022,25 +3032,25 @@ def safe_page():
 @app.route('/safe/transfer', methods=['POST'])
 @login_required
 def safe_transfer():
-    """إضافة عملية إيداع أو سحب للخزنة مع دعم الليرة والدولار والتحقق من الصلاحيات."""
+    """????? ????? ????? ?? ??? ?????? ?? ??? ?????? ???????? ??????? ?? ?????????."""
     op_type = request.form.get('operation_type', 'deposit').strip()
-    # عمليات السحب فقط محصورة بالمدير:
+    # ?????? ????? ??? ?????? ???????:
     if op_type == 'withdraw' and not session.get('is_admin') and not session.get('admin_authenticated') and session.get('employee_role') != 'admin':
-        flash('⚠️ عذراً، عمليات السحب من الخزنة مخصصة لمدير النظام فقط!', 'danger')
+        flash('?? ?????? ?????? ????? ?? ?????? ????? ????? ?????? ???!', 'danger')
         return redirect(url_for('safe_page'))
 
     try:
         amount_lbp = float(request.form.get('amount_lbp') or 0)
         amount_usd = float(request.form.get('amount_usd') or 0)
         note = request.form.get('note', '').strip()
-        transferred_by = request.form.get('transferred_by', session.get('employee_name', 'المدير')).strip()
+        transferred_by = request.form.get('transferred_by', session.get('employee_name', '??????')).strip()
 
         if amount_lbp <= 0 and amount_usd <= 0:
-            flash('يرجى إدخال مبلغ صحيح أكبر من صفر بالليرة أو الدولار', 'warning')
+            flash('???? ????? ???? ???? ???? ?? ??? ??????? ?? ???????', 'warning')
             return redirect(url_for('safe_page'))
 
         if not note:
-            note = 'إيداع نقدي في الخزنة' if op_type == 'deposit' else 'سحب نقدي من الخزنة'
+            note = '????? ???? ?? ??????' if op_type == 'deposit' else '??? ???? ?? ??????'
 
         settings = accounting.get_settings()
         rate = float(settings.get('exchange_rate') or 89500.0)
@@ -3054,10 +3064,10 @@ def safe_transfer():
             operation_type=op_type,
             employee_id=session.get('employee_id')
         )
-        op_title = "إيداع" if op_type == 'deposit' else "سحب"
-        flash(f'تم تسجيل عملية {op_title} بنجاح في الخزنة الخاصة ✓', 'success')
+        op_title = "?????" if op_type == 'deposit' else "???"
+        flash(f'?? ????? ????? {op_title} ????? ?? ?????? ?????? ?', 'success')
     except Exception as e:
-        flash(f'خطأ أثناء الحفظ في الخزنة: {str(e)}', 'danger')
+        flash(f'??? ????? ????? ?? ??????: {str(e)}', 'danger')
 
     return redirect(url_for('safe_page'))
 
@@ -3066,14 +3076,14 @@ def safe_transfer():
 @app.route('/safe/transfer/<int:transfer_id>/delete', methods=['POST'])
 @admin_required
 def cancel_safe_transfer_route(transfer_id):
-    """إلغاء حركة من الخزنة مع توثيق السبب وتحديث الأرصدة دون حذف فيزيائي."""
-    reason = request.form.get('cancel_reason', '').strip() or 'إلغاء حركة خزنة بواسطة الإدارة'
-    cancelled_by = session.get('employee_name') or 'المدير'
+    """????? ???? ?? ?????? ?? ????? ????? ?????? ??????? ??? ??? ???????."""
+    reason = request.form.get('cancel_reason', '').strip() or '????? ???? ???? ?????? ???????'
+    cancelled_by = session.get('employee_name') or '??????'
     ok, msg = accounting.cancel_safe_transfer(transfer_id, cancelled_by=cancelled_by, reason=reason)
     if ok:
-        flash(f'✓ {msg}', 'success')
+        flash(f'? {msg}', 'success')
     else:
-        flash(f'⚠️ {msg}', 'warning')
+        flash(f'?? {msg}', 'warning')
     return redirect(url_for('safe_page'))
 
 
@@ -3081,7 +3091,7 @@ def cancel_safe_transfer_route(transfer_id):
 @app.route('/financial-ledger')
 @admin_required
 def financial_ledger_page():
-    """عرض سجل الحركة المالية المركزي (Audit Ledger) لمدير النظام."""
+    """??? ??? ?????? ??????? ??????? (Audit Ledger) ????? ??????."""
     start_date = request.args.get('start_date', '').strip()
     end_date = request.args.get('end_date', '').strip()
     entry_type = request.args.get('entry_type', '').strip()
@@ -3115,14 +3125,14 @@ def financial_ledger_page():
 @app.route('/financial/ledger/<int:ledger_id>/cancel', methods=['POST'])
 @admin_required
 def cancel_financial_ledger_route(ledger_id):
-    """إلغاء قيد مالي محدد من السجل المركزي وتوثيق السبب في سجل التدقيق."""
-    reason = request.form.get('cancel_reason', '').strip() or 'إلغاء يدوي من قبل الإدارة'
-    cancelled_by = session.get('employee_name') or 'المدير'
+    """????? ??? ???? ???? ?? ????? ??????? ?????? ????? ?? ??? ???????."""
+    reason = request.form.get('cancel_reason', '').strip() or '????? ???? ?? ??? ???????'
+    cancelled_by = session.get('employee_name') or '??????'
     ok, msg = accounting.cancel_financial_ledger_entry(ledger_id, cancelled_by=cancelled_by, reason=reason)
     if ok:
-        flash(f'✓ {msg}', 'success')
+        flash(f'? {msg}', 'success')
     else:
-        flash(f'⚠️ {msg}', 'warning')
+        flash(f'?? {msg}', 'warning')
     return redirect(url_for('financial_ledger_page'))
 
 
@@ -3130,7 +3140,7 @@ def cancel_financial_ledger_route(ledger_id):
 @app.route('/financial-statements')
 @admin_required
 def financial_statements_page():
-    """مركز القوائم المالية الختامية وإقفال السنة (ERP Financial Hub)."""
+    """???? ??????? ??????? ???????? ?????? ????? (ERP Financial Hub)."""
     today_str = accounting.get_business_date()
     start_date = request.args.get('start_date', '').strip()
     end_date = request.args.get('end_date', '').strip()
@@ -3140,26 +3150,26 @@ def financial_statements_page():
     if period == 'today':
         start_date = today_str
         end_date = today_str
-        display_period = f"اليوم ({today_str})"
+        display_period = f"????? ({today_str})"
     elif period == 'week':
         start_date = (now_dt - timedelta(days=6)).strftime('%Y-%m-%d')
         end_date = today_str
-        display_period = f"هذا الأسبوع ({start_date} إلى {end_date})"
+        display_period = f"??? ??????? ({start_date} ??? {end_date})"
     elif period == 'month':
         start_date = now_dt.strftime('%Y-%m-01')
         end_date = today_str
-        display_period = f"هذا الشهر ({start_date} إلى {end_date})"
+        display_period = f"??? ????? ({start_date} ??? {end_date})"
     elif period == 'year':
         start_date = now_dt.strftime('%Y-01-01')
         end_date = today_str
-        display_period = f"هذه السنة ({now_dt.year})"
+        display_period = f"??? ????? ({now_dt.year})"
     elif start_date and end_date:
-        display_period = f"من {start_date} إلى {end_date}"
+        display_period = f"?? {start_date} ??? {end_date}"
     else:
         # Default: Full current year
         start_date = now_dt.strftime('%Y-01-01')
         end_date = today_str
-        display_period = f"كامل السنة المالية ({now_dt.year})"
+        display_period = f"???? ????? ??????? ({now_dt.year})"
 
     # Statements
     trial_balance = accounting.get_trial_balance(as_of_date=end_date)
@@ -3192,47 +3202,47 @@ def financial_statements_page():
 @app.route('/financial/recalculate', methods=['POST'])
 @admin_required
 def financial_recalculate_route():
-    """إعادة احتساب وتزامن كافة أرصدة شجرة الحسابات والمالية من واقع قيود اليومية."""
+    """????? ?????? ?????? ???? ????? ???? ???????? ???????? ?? ???? ???? ???????."""
     try:
         accounting.recalculate_all_account_balances()
-        flash("✓ تم إعادة احتساب ومزامنة كافة الأرصدة المالية بنجاح 100%.", "success")
+        flash("? ?? ????? ?????? ??????? ???? ??????? ??????? ????? 100%.", "success")
     except Exception as e:
-        flash(f"⚠️ خطأ أثناء إعادة الاحتساب: {e}", "danger")
+        flash(f"?? ??? ????? ????? ????????: {e}", "danger")
     return redirect(request.referrer or url_for('financial_statements_page'))
 
 
 @app.route('/financial/year-end-close', methods=['POST'])
 @admin_required
 def financial_year_end_close_route():
-    """إقفال السنة المالية رسمياً وتدوير الأرباح."""
+    """????? ????? ??????? ?????? ?????? ???????."""
     year_val = request.form.get('fiscal_year', '').strip()
     notes = request.form.get('notes', '').strip()
-    closed_by = session.get('employee_name') or 'المدير'
+    closed_by = session.get('employee_name') or '??????'
     try:
         year_num = int(year_val)
         ok, res = accounting.close_fiscal_year(year_num, closed_by=closed_by, notes=notes)
         if ok:
-            flash(f"✓ تم إقفال السنة المالية {year_num} بنجاح وترحيل صافي الربح إلى الأرباح المدورة.", "success")
+            flash(f"? ?? ????? ????? ??????? {year_num} ????? ?????? ???? ????? ??? ??????? ???????.", "success")
         else:
-            flash(f"⚠️ {res}", "warning")
+            flash(f"?? {res}", "warning")
     except Exception as e:
-        flash(f"⚠️ تعذر إقفال السنة المالية: {e}", "danger")
+        flash(f"?? ???? ????? ????? ???????: {e}", "danger")
     return redirect(url_for('financial_statements_page'))
 
 
 @app.route('/shift/open-float', methods=['POST'])
 @login_required
 def shift_open_float_route():
-    """تسجيل فكة وعهدة بداية الدوام للصندوق بقيد رسمي."""
+    """????? ??? ????? ????? ?????? ??????? ???? ????."""
     emp_id = session.get('employee_id')
-    emp_name = session.get('employee_name') or 'الكاشير'
+    emp_name = session.get('employee_name') or '???????'
     amount_lbp = float(request.form.get('amount_lbp') or 0.0)
     amount_usd = float(request.form.get('amount_usd') or 0.0)
     source = request.form.get('source', 'safe').strip()
     notes = request.form.get('notes', '').strip()
 
     if amount_lbp <= 0 and amount_usd <= 0:
-        flash("⚠️ يجب تحديد مبلغ أكبر من صفر للعهدة الافتتاحية!", "warning")
+        flash("?? ??? ????? ???? ???? ?? ??? ?????? ??????????!", "warning")
         return redirect(request.referrer or url_for('index'))
 
     ok, res = accounting.record_shift_opening_float(
@@ -3244,9 +3254,9 @@ def shift_open_float_route():
         notes=notes
     )
     if ok:
-        flash(f"✓ تم تسجيل عهدة بداية الدوام بنجاح ({amount_lbp:,.0f} ل.ل) وإيداعها في الصندوق.", "success")
+        flash(f"? ?? ????? ???? ????? ?????? ????? ({amount_lbp:,.0f} ?.?) ???????? ?? ???????.", "success")
     else:
-        flash(f"⚠️ {res}", "danger")
+        flash(f"?? {res}", "danger")
     return redirect(request.referrer or url_for('index'))
 
 
@@ -3254,7 +3264,7 @@ def shift_open_float_route():
 @app.route('/print/safe-statement')
 @admin_required
 def print_safe_statement():
-    """طباعة كشف حساب الخزنة للفترة المحددة."""
+    """????? ??? ???? ?????? ?????? ???????."""
     raw_date = request.args.get('date', '').strip()
     start_date = request.args.get('start_date', '').strip()
     end_date = request.args.get('end_date', '').strip()
@@ -3276,7 +3286,7 @@ def print_safe_statement():
     settings = accounting.get_settings()
     rate = float(settings.get('exchange_rate') or 89500.0)
 
-    display_period = f"من {start_date} إلى {end_date}" if is_range else (raw_date or "كامل التاريخ")
+    display_period = f"?? {start_date} ??? {end_date}" if is_range else (raw_date or "???? ???????")
 
     return render_template('print_safe_statement.html',
         transfers=transfers,
@@ -3293,7 +3303,7 @@ def print_safe_statement():
 
 @app.route('/api/inventory/alerts')
 def api_inventory_alerts():
-    """API: جلب عدد المنتجات المنخفضة أو النافدة من المخزون."""
+    """API: ??? ??? ???????? ???????? ?? ??????? ?? ???????."""
     try:
         alerts = accounting.get_inventory_alerts_count()
         return jsonify(alerts)
@@ -3310,13 +3320,13 @@ def api_item_quick_edit():
         data = request.form if request.form else (request.get_json() or {})
         item_id_raw = data.get('item_id')
         if not item_id_raw:
-            return jsonify({'success': False, 'error': 'معرف الصنف غير موجود'}), 400
+            return jsonify({'success': False, 'error': '???? ????? ??? ?????'}), 400
         item_id = int(item_id_raw)
         
         name = str(data.get('name') or '').strip()
         if not name:
             existing = accounting.get_item(item_id)
-            name = existing.get('name', 'صنف') if existing else 'صنف'
+            name = existing.get('name', '???') if existing else '???'
             
         try:
             price_lbp = float(data.get('price_lbp') or 0)
@@ -3376,7 +3386,7 @@ def api_item_quick_edit():
             if existing and existing.get('icon'):
                 icon = existing['icon']
             else:
-                icon = '☕'
+                icon = '?'
 
         settings = accounting.get_settings()
         rate = float(settings.get('exchange_rate') or 89500.0)
@@ -3397,7 +3407,7 @@ def api_item_quick_edit():
         conn.commit()
         return jsonify({
             'success': True,
-            'message': 'تم تحديث بيانات وصورة الصنف بنجاح',
+            'message': '?? ????? ?????? ????? ????? ?????',
             'item': {
                 'id': item_id,
                 'name': name,
@@ -3436,7 +3446,7 @@ def api_item_quick_add():
             'price_usd': price_usd,
             'category_id': category_id,
             'item_type': item_type,
-            'icon': '☕' if item_type == 'cafe' else ('🎮' if item_type in ('gaming', 'computer') else '✍️')
+            'icon': '?' if item_type == 'cafe' else ('??' if item_type in ('gaming', 'computer') else '??')
         })
         return jsonify({'success': True, 'item_id': new_id, 'name': name, 'price_lbp': price_lbp, 'price_usd': price_usd})
     except Exception as e:
@@ -3453,18 +3463,18 @@ def safe_quick_transfer():
 
         amount_lbp = float(data.get('amount_lbp') or 0)
         amount_usd = float(data.get('amount_usd') or 0)
-        emp_name = data.get('employee_name') or session.get('employee_name', 'الكاشير')
-        note = (data.get('note') or 'توريد نقدي إلى الخزنة الخاصة').strip()
+        emp_name = data.get('employee_name') or session.get('employee_name', '???????')
+        note = (data.get('note') or '????? ???? ??? ?????? ??????').strip()
 
         settings = accounting.get_settings()
         rate = float(settings.get('exchange_rate') or 89500.0)
 
-        # إذا طُلب نقل كامل الكاش أو لم يدخل مبلغ وكان في الدرج كاش
+        # ??? ???? ??? ???? ????? ?? ?? ???? ???? ???? ?? ????? ???
         if transfer_all or (amount_lbp <= 0 and amount_usd <= 0 and drawer_rem_lbp > 0):
             amount_lbp = drawer_rem_lbp
             amount_usd = round(amount_lbp / rate, 2) if rate > 0 else 0.0
-            if not note or note == 'توريد نقدي إلى الخزنة الخاصة':
-                note = 'ترحيل كامل كاش الدرج وتصفير رصيد الدرج'
+            if not note or note == '????? ???? ??? ?????? ??????':
+                note = '????? ???? ??? ????? ?????? ???? ?????'
 
         if amount_usd > 0 and amount_lbp <= 0:
             amount_lbp = round(amount_usd * rate, 0)
@@ -3472,12 +3482,12 @@ def safe_quick_transfer():
             amount_usd = round(amount_lbp / rate, 2)
 
         if amount_lbp <= 0 and amount_usd <= 0:
-            return jsonify({'success': False, 'error': 'درج الكاشير فارغ حالياً (0 ل.ل) أو لم يتم إدخال مبلغ'}), 400
+            return jsonify({'success': False, 'error': '??? ??????? ???? ?????? (0 ?.?) ?? ?? ??? ????? ????'}), 400
 
         transfer_id = accounting.add_safe_transfer(
             amount_lbp=amount_lbp,
             amount_usd=amount_usd,
-            note=f"{note} (المسلّم: {emp_name})",
+            note=f"{note} (???????: {emp_name})",
             transferred_by=emp_name,
             rate=rate,
             operation_type='deposit',
@@ -3487,11 +3497,11 @@ def safe_quick_transfer():
         new_drawer_stat = accounting.get_drawer_cash_status()
         new_rem_lbp = float(new_drawer_stat.get('total_untransferred_lbp') or 0.0)
 
-        msg = f"تم ترحيل {amount_lbp:,.0f} ل.ل إلى الخزنة بنجاح"
+        msg = f"?? ????? {amount_lbp:,.0f} ?.? ??? ?????? ?????"
         if new_rem_lbp == 0:
-            msg += " وأصبح رصيد كاش الدرج مصفراً (0 ل.ل) ✅"
+            msg += " ????? ???? ??? ????? ?????? (0 ?.?) ?"
         else:
-            msg += f" (المتبقي بالدرج: {new_rem_lbp:,.0f} ل.ل)"
+            msg += f" (??????? ??????: {new_rem_lbp:,.0f} ?.?)"
 
         return jsonify({
             'success': True,
@@ -3505,13 +3515,13 @@ def safe_quick_transfer():
 
 
 # -------------------------------------------------------------------------
-# 📊 COMPREHENSIVE DAILY & PERIOD FINANCIAL REPORTS (التقارير اليومية وحركة الأصناف)
+# ?? COMPREHENSIVE DAILY & PERIOD FINANCIAL REPORTS (???????? ??????? ????? ???????)
 # -------------------------------------------------------------------------
 
 @app.route('/reports', endpoint='reports_page')
 @admin_required
 def reports_page():
-    """صفحة التقارير اليومية وتفاصيل حركة المنتجات والأصناف."""
+    """???? ???????? ??????? ??????? ???? ???????? ????????."""
     today_str = accounting.get_business_date()
     yesterday_str = accounting.get_business_date(dt=(datetime.now() - timedelta(days=1)))
     before_yesterday_str = accounting.get_business_date(dt=(datetime.now() - timedelta(days=2)))
@@ -3528,28 +3538,28 @@ def reports_page():
         start_date = (now_dt - timedelta(days=6)).strftime('%Y-%m-%d')
         end_date = today_str
         target_date = start_date
-        display_period = f"هذا الأسبوع ({start_date} إلى {end_date})"
+        display_period = f"??? ??????? ({start_date} ??? {end_date})"
     elif period == 'month':
         is_range = True
         start_date = now_dt.strftime('%Y-%m-01')
         end_date = today_str
         target_date = start_date
-        display_period = f"هذا الشهر ({start_date} إلى {end_date})"
+        display_period = f"??? ????? ({start_date} ??? {end_date})"
     elif period == 'year':
         is_range = True
         start_date = now_dt.strftime('%Y-01-01')
         end_date = today_str
         target_date = start_date
-        display_period = f"هذه السنة ({start_date} إلى {end_date})"
+        display_period = f"??? ????? ({start_date} ??? {end_date})"
     elif start_date and end_date and start_date != end_date:
         is_range = True
         target_date = start_date
-        display_period = f"من {start_date} إلى {end_date}"
+        display_period = f"?? {start_date} ??? {end_date}"
     elif raw_date == 'all':
         target_date = 'all'
         start_date = None
         end_date = None
-        display_period = "كافة التاريخ المسجل"
+        display_period = "???? ??????? ??????"
     elif raw_date:
         target_date = raw_date
         start_date = raw_date
@@ -3563,7 +3573,7 @@ def reports_page():
         target_date = today_str
         start_date = today_str
         end_date = today_str
-        display_period = f"اليوم ({today_str})"
+        display_period = f"????? ({today_str})"
 
     # Fetch Data
     summary = accounting.get_daily_summary(target_date=target_date if target_date != 'all' else None)
@@ -3642,7 +3652,7 @@ def reports_page():
 @app.route('/reports/print', endpoint='print_reports_page')
 @admin_required
 def print_reports_page():
-    """طباعة التقرير المالي وحركة الأصناف A4."""
+    """????? ??????? ?????? ????? ??????? A4."""
     today_str = accounting.get_business_date()
     raw_date = request.args.get('date', '').strip()
     start_date = request.args.get('start_date', '').strip()
@@ -3652,10 +3662,10 @@ def print_reports_page():
     if start_date and end_date and start_date != end_date:
         is_range = True
         target_date = start_date
-        display_period = f"من {start_date} إلى {end_date}"
+        display_period = f"?? {start_date} ??? {end_date}"
     elif raw_date == 'all':
         target_date = 'all'
-        display_period = "كافة التاريخ المسجل"
+        display_period = "???? ??????? ??????"
     elif raw_date:
         target_date = raw_date
         display_period = raw_date
@@ -3687,7 +3697,7 @@ def print_reports_page():
 @app.route('/reports/export-csv', endpoint='export_reports_csv')
 @admin_required
 def export_reports_csv():
-    """تصدير تقرير مبيعات الأصناف لملف CSV / Excel."""
+    """????? ????? ?????? ??????? ???? CSV / Excel."""
     import io, csv
     from flask import Response
     target_date = request.args.get('date', accounting.get_business_date())
@@ -3700,7 +3710,7 @@ def export_reports_csv():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["#", "اسم الصنف", "القسم", "الكمية المباعة", "متوسط السعر (ل.ل)", "إجمالي المبيعات (ل.ل)", "المقابل بالدولار ($)", "نسبة المساهمة %"])
+    writer.writerow(["#", "??? ?????", "?????", "?????? ???????", "????? ????? (?.?)", "?????? ???????? (?.?)", "??????? ???????? ($)", "???? ???????? %"])
 
     for i, it in enumerate(report['products_list'], 1):
         writer.writerow([
@@ -3715,7 +3725,7 @@ def export_reports_csv():
         ])
 
     writer.writerow([])
-    writer.writerow(["المجموع", "", "", report['grand_total_qty'], "", report['grand_total_lbp'], round(report['grand_total_lbp'] / rate, 2), "100%"])
+    writer.writerow(["???????", "", "", report['grand_total_qty'], "", report['grand_total_lbp'], round(report['grand_total_lbp'] / rate, 2), "100%"])
 
     csv_data = output.getvalue().encode('utf-8-sig')
     return Response(
@@ -3731,9 +3741,9 @@ def export_reports_csv():
 @app.route('/safe/transfer_daily', methods=['POST'])
 @admin_required
 def safe_transfer_daily():
-    """نقل وترحيل صافي نقدية اليوم إلى الخزنة الخاصة مباشرة بنقرة واحدة."""
+    """??? ?????? ???? ????? ????? ??? ?????? ?????? ?????? ????? ?????."""
     target_date = request.form.get('target_date', '').strip() or accounting.get_business_date()
-    transferred_by = session.get('employee_name') or session.get('admin_name') or 'المدير'
+    transferred_by = session.get('employee_name') or session.get('admin_name') or '??????'
     
     amount_lbp_str = request.form.get('amount_lbp', '').strip()
     amount_usd_str = request.form.get('amount_usd', '').strip()
@@ -3750,9 +3760,9 @@ def safe_transfer_daily():
             custom_amount_usd=custom_amount_usd,
             note=note
         )
-        flash(f"✓ تم ترحيل مبلغ {res['amount_lbp']:,.0f} ل.ل بنجاح إلى الخزنة الخاصة ليوم {target_date}!", "success")
+        flash(f"? ?? ????? ???? {res['amount_lbp']:,.0f} ?.? ????? ??? ?????? ?????? ???? {target_date}!", "success")
     except Exception as e:
-        flash(f"تنبيه أثناء الترحيل للخزنة: {e}", "warning")
+        flash(f"????? ????? ??????? ??????: {e}", "warning")
 
     next_url = request.form.get('next') or request.referrer or url_for('safe_page')
     return redirect(next_url)
@@ -3760,19 +3770,19 @@ def safe_transfer_daily():
 @app.route('/safe/transfer_drawer_total', methods=['POST'])
 @login_required
 def safe_transfer_drawer_total():
-    """ترحيل كامل الرصيد النقدي المتراكم بالدرج إلى الخزنة الخاصة وتصفير رصيد الدرج إلى 0 ل.ل."""
-    transferred_by = session.get('employee_name') or session.get('admin_name') or 'الكاشير'
-    note = (request.form.get('note') if not request.is_json else (request.get_json(silent=True) or {}).get('note')) or "ترحيل كامل كاش الدرج وتصفير رصيد الصندوق"
+    """????? ???? ?????? ?????? ???????? ?????? ??? ?????? ?????? ?????? ???? ????? ??? 0 ?.?."""
+    transferred_by = session.get('employee_name') or session.get('admin_name') or '???????'
+    note = (request.form.get('note') if not request.is_json else (request.get_json(silent=True) or {}).get('note')) or "????? ???? ??? ????? ?????? ???? ???????"
     try:
         res = accounting.transfer_drawer_total_to_safe(transferred_by=transferred_by, note=note)
-        msg = f"تم ترحيل كامل كاش الدرج ({res['amount_lbp']:,.0f} ل.ل) بنجاح وأصبح رصيد الدرج مصفراً (0 ل.ل) 🔒"
+        msg = f"?? ????? ???? ??? ????? ({res['amount_lbp']:,.0f} ?.?) ????? ????? ???? ????? ?????? (0 ?.?) ??"
         if request.is_json:
             return jsonify({'success': True, 'message': msg, 'amount_lbp': res['amount_lbp'], 'drawer_remaining_lbp': 0.0})
-        flash(f"✓ {msg}", "success")
+        flash(f"? {msg}", "success")
     except Exception as e:
         if request.is_json:
             return jsonify({'success': False, 'message': str(e)}), 400
-        flash(f"تنبيه: {e}", "warning")
+        flash(f"?????: {e}", "warning")
 
     next_url = request.form.get('next') or request.referrer or url_for('safe_page')
     return redirect(next_url)
@@ -3780,20 +3790,20 @@ def safe_transfer_drawer_total():
 @app.route('/api/safe/daily_status')
 @admin_required
 def api_safe_daily_status():
-    """API لفحص حالة ترحيل اليوم والمبالغ المتبقية للترحيل."""
+    """API ???? ???? ????? ????? ???????? ???????? ???????."""
     target_date = request.args.get('date', '').strip() or accounting.get_business_date()
     status = accounting.check_daily_safe_transfer_status(target_date)
     return jsonify(status)
 
 
 # ============================================================
-# 🔄 API مسارات التحديث التلقائي OTA
+# ?? API ?????? ??????? ???????? OTA
 # ============================================================
 
 @app.route('/api/check_update', methods=['GET', 'POST'])
 def api_check_update():
-    """يُعيد حالة التحديث المتاح (JSON) مع الإصدار الحالي المثبت."""
-    # إعادة الفحص إذا لم يتم الفحص بعد
+    """????? ???? ??????? ?????? (JSON) ?? ??????? ?????? ??????."""
+    # ????? ????? ??? ?? ??? ????? ???
     if not _update_cache.get('checked'):
         threading.Thread(target=_background_update_check, daemon=True).start()
     result = dict(_update_cache)
@@ -3803,7 +3813,7 @@ def api_check_update():
 
 @app.route('/api/force_check_update', methods=['GET', 'POST'])
 def api_force_check_update():
-    """إعادة الفحص الفوري من GitHub."""
+    """????? ????? ?????? ?? GitHub."""
     _update_cache['checked'] = False
     _background_update_check()
     result = dict(_update_cache)
@@ -3813,7 +3823,7 @@ def api_force_check_update():
 
 @app.route('/api/do_update', methods=['GET', 'POST'])
 def api_do_update():
-    """تنزيل وتثبيت التحديث مع التحقق الأمني والنسخ الاحتياطي."""
+    """????? ?????? ??????? ?? ?????? ?????? ?????? ?????????."""
     import subprocess, shutil, zipfile as zf, tempfile, ssl
     import urllib.request as ur
     base_dir = _get_base_dir()
@@ -3822,7 +3832,7 @@ def api_do_update():
     tmp_dir  = os.path.join(tmp_base, 'stargate_cafe_update_tmp')
 
     try:
-        # 1. أولاً: التحقق مما إذا كانت حزمة التحديث موجودة محلياً أو على فلاشة أو سطح المكتب
+        # 1. ?????: ?????? ??? ??? ???? ???? ??????? ?????? ?????? ?? ??? ????? ?? ??? ??????
         local_candidates = [
             os.path.join(base_dir, 'Stargate_Cafe_Update.zip'),
             r'C:\STARGATE_CAFE\Stargate_Cafe_Update.zip',
@@ -3849,10 +3859,10 @@ def api_do_update():
         if found_local:
             shutil.copy2(found_local, zip_path)
         else:
-            # 2. ثانياً: التنزيل من السيرفر المحلي أو السحابة
+            # 2. ??????: ??????? ?? ??????? ?????? ?? ???????
             download_urls = []
             
-            # أ) تجربة السيرفر المحلي في حال وجود اتصال شبكة
+            # ?) ????? ??????? ?????? ?? ??? ???? ????? ????
             try:
                 host_ip = request.host.split(':')[0]
                 if host_ip and host_ip not in ('127.0.0.1', 'localhost', '::1'):
@@ -3861,12 +3871,12 @@ def api_do_update():
                 pass
             download_urls.append("http://192.168.10.27:5000/download/update.zip")
 
-            # ب) الرابط المخزن في الكاش
+            # ?) ?????? ?????? ?? ?????
             cached_url = _update_cache.get('download_url') or ''
             if cached_url and cached_url.startswith('http'):
                 download_urls.append(cached_url)
 
-            # ج) فحص Firebase
+            # ?) ??? Firebase
             try:
                 import urllib.request as ur_fb, json as js_fb
                 fb_req = ur_fb.Request('https://stargate-experts-default-rtdb.firebaseio.com/cafe_updates/latest.json', headers={'User-Agent': 'StargateCafe-OTA'})
@@ -3878,7 +3888,7 @@ def api_do_update():
             except Exception:
                 pass
 
-            # د) الروابط المباشرة لـ GitHub Releases
+            # ?) ??????? ???????? ?? GitHub Releases
             download_urls.append('https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.7.0/Stargate_Cafe_Update.zip')
             download_urls.append('https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.6.0/Stargate_Cafe_Update.zip')
             download_urls.append('https://github.com/mouhamadherzherz/stargate-cafe/releases/download/v5.4.0/Stargate_Cafe_Update.zip')
@@ -3887,8 +3897,6 @@ def api_do_update():
             download_success = False
             last_download_err = None
             ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
 
             for dl_url in download_urls:
                 try:
@@ -3907,16 +3915,16 @@ def api_do_update():
                         except Exception: pass
 
             if not download_success:
-                raise Exception(f"تعذر تنزيل حزمة التحديث ({last_download_err}). يرجى التأكد من الاتصال أو وضع ملف التحديث يدوياً.")
+                raise Exception(f"???? ????? ???? ??????? ({last_download_err}). ???? ?????? ?? ??????? ?? ??? ??? ??????? ??????.")
 
-        # إنشاء نسخة احتياطية فورية قبل أي تعديل
+        # ????? ???? ???????? ????? ??? ?? ?????
         try:
             database.create_backup_copy()
         except Exception as e:
             try: logger.warning(f"Pre-update backup warning: {e}")
             except Exception: pass
 
-        # فحص سلامة ملف الـ ZIP وتجنب ثغرات Directory Traversal (Zip Slip)
+        # ??? ????? ??? ??? ZIP ????? ????? Directory Traversal (Zip Slip)
         if os.path.exists(tmp_dir):
             shutil.rmtree(tmp_dir, ignore_errors=True)
         os.makedirs(tmp_dir, exist_ok=True)
@@ -3924,7 +3932,7 @@ def api_do_update():
         with zf.ZipFile(zip_path, 'r') as z:
             bad_file = z.testzip()
             if bad_file:
-                raise Exception(f"ملف التحديث تالف عند الملف: {bad_file}")
+                raise Exception(f"??? ??????? ???? ??? ?????: {bad_file}")
             abs_tmp = os.path.abspath(tmp_dir)
             for m in z.namelist():
                 dest = os.path.abspath(os.path.join(abs_tmp, m))
@@ -3932,16 +3940,16 @@ def api_do_update():
                     continue  # Block zip slip attempts
                 z.extract(m, abs_tmp)
 
-        # التأكد من وجود ملفات النظام
+        # ?????? ?? ???? ????? ??????
         if not (os.path.exists(os.path.join(tmp_dir, 'app.py')) or os.path.exists(os.path.join(tmp_dir, 'cafe_version.json'))):
-            raise Exception("حزمة التحديث لا تحتوي على ملفات النظام الأساسية.")
+            raise Exception("???? ??????? ?? ????? ??? ????? ?????? ????????.")
 
-        # إنشاء BAT يُطبّق التحديث بعد إغلاق البرنامج
+        # ????? BAT ?????? ??????? ??? ????? ????????
         bat = os.path.join(base_dir, 'apply_update_now.bat')
         bat_content = f"""@echo off
 chcp 65001 >nul
-title تطبيق تحديث STARGATE CAFE
-echo جاري تطبيق التحديث... يرجى الانتظار بضع ثوانٍ...
+title ????? ????? STARGATE CAFE
+echo ???? ????? ???????... ???? ???????? ??? ?????...
 timeout /t 3 /nobreak >nul
 taskkill /F /IM STARGATE.exe >nul 2>&1
 taskkill /F /IM python.exe >nul 2>&1
@@ -3955,7 +3963,7 @@ if exist "{base_dir}\\_internal" (
 )
 rmdir /S /Q "{tmp_dir}" >nul 2>&1
 del /F /Q "{zip_path}" >nul 2>&1
-echo اكتمل التحديث! جاري إعادة التشغيل...
+echo ????? ???????! ???? ????? ???????...
 cd /d "{base_dir}"
 if exist "STARGATE.exe" ( start "" "STARGATE.exe" ) else ( start "" "{sys.executable}" app.py )
 del "%~f0"
@@ -3964,7 +3972,7 @@ del "%~f0"
             f.write(bat_content)
 
         subprocess.Popen([bat], shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
-        return jsonify({'success': True, 'message': 'جاري تطبيق التحديث... سيُعاد تشغيل البرنامج تلقائياً!'})
+        return jsonify({'success': True, 'message': '???? ????? ???????... ?????? ????? ???????? ????????!'})
 
     except Exception as e:
         import traceback
@@ -3973,14 +3981,14 @@ del "%~f0"
             logger.error(f"OTA Update error: {err_msg}\n{traceback.format_exc()}")
         except Exception:
             pass
-        return jsonify({'success': False, 'error': f'فشل التحديث: {err_msg}'}), 200
+        return jsonify({'success': False, 'error': f'??? ???????: {err_msg}'}), 200
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 200
 
 
 @app.route('/api/manual_update', methods=['POST'])
 def api_manual_update():
-    """تطبيق تحديث يدوي إما برفع ملف ZIP أو من ملف موجود على سطح المكتب أو مجلد البرنامج."""
+    """????? ????? ???? ??? ???? ??? ZIP ?? ?? ??? ????? ??? ??? ?????? ?? ???? ????????."""
     import subprocess, shutil, zipfile as zf, tempfile
     try:
         base_dir = _get_base_dir()
@@ -3988,12 +3996,12 @@ def api_manual_update():
         zip_path = os.path.join(tmp_base, 'manual_stargate_update.zip')
         tmp_dir = os.path.join(tmp_base, 'manual_stargate_tmp')
 
-        # 1. فحص هل تم رفع ملف عبر الـ Form
+        # 1. ??? ?? ?? ??? ??? ??? ??? Form
         uploaded_file = request.files.get('update_zip') or request.files.get('file')
         if uploaded_file and uploaded_file.filename:
             uploaded_file.save(zip_path)
         else:
-            # البحث عن ملف Stargate_Cafe_Update.zip في الأماكن المعروفة تلقائياً
+            # ????? ?? ??? Stargate_Cafe_Update.zip ?? ??????? ???????? ????????
             candidates = [
                 os.path.join(base_dir, 'Stargate_Cafe_Update.zip'),
                 r'C:\STARGATE_CAFE\Stargate_Cafe_Update.zip',
@@ -4014,16 +4022,16 @@ def api_manual_update():
             if found_cand:
                 shutil.copy2(found_cand, zip_path)
             else:
-                return jsonify({'success': False, 'error': 'لم يتم العثور على ملف تحديث. يرجى اختيار ملف Stargate_Cafe_Update.zip أو وضعه على سطح المكتب أو فلاشة F:.'}), 200
+                return jsonify({'success': False, 'error': '?? ??? ?????? ??? ??? ?????. ???? ?????? ??? Stargate_Cafe_Update.zip ?? ???? ??? ??? ?????? ?? ????? F:.'}), 200
 
-        # إنشاء نسخة احتياطية فورية لقاعدة البيانات قبل أي تعديل
+        # ????? ???? ???????? ????? ?????? ???????? ??? ?? ?????
         try:
             database.create_backup_copy()
         except Exception as e:
             try: logger.warning(f"Pre-update backup warning: {e}")
             except Exception: pass
 
-        # فحص سلامة ملف الـ ZIP وتجنب ثغرات Directory Traversal (Zip Slip)
+        # ??? ????? ??? ??? ZIP ????? ????? Directory Traversal (Zip Slip)
         if os.path.exists(tmp_dir):
             shutil.rmtree(tmp_dir, ignore_errors=True)
         os.makedirs(tmp_dir, exist_ok=True)
@@ -4031,7 +4039,7 @@ def api_manual_update():
         with zf.ZipFile(zip_path, 'r') as z:
             bad_file = z.testzip()
             if bad_file:
-                raise Exception(f"ملف التحديث تالف عند الملف: {bad_file}")
+                raise Exception(f"??? ??????? ???? ??? ?????: {bad_file}")
             abs_tmp = os.path.abspath(tmp_dir)
             for m in z.namelist():
                 dest = os.path.abspath(os.path.join(abs_tmp, m))
@@ -4039,16 +4047,16 @@ def api_manual_update():
                     continue  # Block zip slip attempts
                 z.extract(m, abs_tmp)
 
-        # التأكد من احتواء الملف على ملفات النظام الأساسية
+        # ?????? ?? ?????? ????? ??? ????? ?????? ????????
         if not (os.path.exists(os.path.join(tmp_dir, 'app.py')) or os.path.exists(os.path.join(tmp_dir, 'cafe_version.json'))):
-            return jsonify({'success': False, 'error': 'ملف الـ ZIP المرفوع ليس حزمة تحديث صالحة لبرنامج STARGATE (لا يحتوي على app.py).'}), 200
+            return jsonify({'success': False, 'error': '??? ??? ZIP ??????? ??? ???? ????? ????? ??????? STARGATE (?? ????? ??? app.py).'}), 200
 
-        # إنشاء BAT يُطبّق التحديث بعد إغلاق البرنامج
+        # ????? BAT ?????? ??????? ??? ????? ????????
         bat = os.path.join(base_dir, 'apply_manual_update.bat')
         bat_content = f"""@echo off
 chcp 65001 >nul
-title تطبيق تحديث STARGATE CAFE اليدوي
-echo جاري تطبيق حزمة التحديث... يرجى الانتظار...
+title ????? ????? STARGATE CAFE ??????
+echo ???? ????? ???? ???????... ???? ????????...
 timeout /t 3 /nobreak >nul
 taskkill /F /IM STARGATE.exe >nul 2>&1
 taskkill /F /IM python.exe >nul 2>&1
@@ -4062,7 +4070,7 @@ if exist "{base_dir}\\_internal" (
 )
 rmdir /S /Q "{tmp_dir}" >nul 2>&1
 del /F /Q "{zip_path}" >nul 2>&1
-echo اكتمل التحديث بنجاح! جاري إعادة تشغيل النظام...
+echo ????? ??????? ?????! ???? ????? ????? ??????...
 cd /d "{base_dir}"
 if exist "STARGATE.exe" ( start "" "STARGATE.exe" ) else ( start "" "{sys.executable}" app.py )
 del "%~f0"
@@ -4071,7 +4079,7 @@ del "%~f0"
             f.write(bat_content)
 
         subprocess.Popen([bat], shell=True, creationflags=subprocess.CREATE_NEW_CONSOLE)
-        return jsonify({'success': True, 'message': 'تم استلام وتثبيت حزمة التحديث بنجاح! سيتم إعادة تشغيل البرنامج فوراً.'})
+        return jsonify({'success': True, 'message': '?? ?????? ?????? ???? ??????? ?????! ???? ????? ????? ???????? ?????.'})
 
     except Exception as e:
         import traceback
@@ -4079,14 +4087,14 @@ del "%~f0"
             logger.error(f"Manual Update error: {e}\n{traceback.format_exc()}")
         except Exception:
             pass
-        return jsonify({'success': False, 'error': f'فشل التحديث اليدوي: {str(e)}'}), 200
+        return jsonify({'success': False, 'error': f'??? ??????? ??????: {str(e)}'}), 200
 
 
 @app.route('/download')
 @app.route('/download/')
 @app.route('/download/hub')
 def download_hub_page():
-    """صفحة مركز التحميل والتحديثات المباشرة لجهاز الموظف."""
+    """???? ???? ??????? ?????????? ???????? ????? ??????."""
     return render_template('download_hub.html')
 
 
@@ -4106,7 +4114,7 @@ def pos_redirect():
 @app.route('/update.zip')
 @app.route('/update')
 def download_update_zip():
-    """تنزيل مباشر لحزمة التحديث من السيرفر المحلي بسرعة الشبكة المحلية."""
+    """????? ????? ????? ??????? ?? ??????? ?????? ????? ?????? ???????."""
     from flask import send_file
     base_dir = _get_base_dir()
     zip_candidates = [
@@ -4120,7 +4128,7 @@ def download_update_zip():
     for cand in zip_candidates:
         if os.path.exists(cand):
             return send_file(cand, as_attachment=True, download_name='Stargate_Cafe_Update.zip')
-    return "حزمة التحديث غير موجودة على الخادم", 404
+    return "???? ??????? ??? ?????? ??? ??????", 404
 
 
 @app.route('/download/installer.exe')
@@ -4130,7 +4138,7 @@ def download_update_zip():
 @app.route('/setup.exe')
 @app.route('/setup')
 def download_installer_exe():
-    """تنزيل ملف التثبيت الرسمي الكامل v5.3.1 مباشرة لجهاز الموظف."""
+    """????? ??? ??????? ?????? ?????? v5.3.1 ?????? ????? ??????."""
     from flask import send_file
     candidates = [
         r'C:\STARGATE_CAFE\StargateCafe_Setup_v5.3.1.exe',
@@ -4141,12 +4149,12 @@ def download_installer_exe():
     for cand in candidates:
         if os.path.exists(cand):
             return send_file(cand, as_attachment=True, download_name='StargateCafe_Setup_v5.3.1.exe')
-    return "ملف التثبيت غير موجود على الخادم", 404
+    return "??? ??????? ??? ????? ??? ??????", 404
 
 
 @app.route('/download/update_employee.bat')
 def download_employee_update_bat():
-    """ملف BAT ديناميكي يُحدّث جهاز الموظف مباشرة من سيرفر الكافيه المحلي."""
+    """??? BAT ???????? ?????? ???? ?????? ?????? ?? ????? ??????? ??????."""
     from flask import Response
     try:
         server_ip = request.host.split(':')[0]
@@ -4156,28 +4164,28 @@ def download_employee_update_bat():
     bat_script = f"""@echo off
 chcp 65001 >nul
 color 0B
-title STARGATE CAFE - تحديث جهاز الموظف الفوري v5.3.1
+title STARGATE CAFE - ????? ???? ?????? ?????? v5.3.1
 echo ======================================================================
-echo         STARGATE CAFE - تحديث نظام الكافيه للموظف (v5.3.1)
-echo         التحديث من السيرفر المباشر: http://{server_ip}:5000
+echo         STARGATE CAFE - ????? ???? ??????? ?????? (v5.3.1)
+echo         ??????? ?? ??????? ???????: http://{server_ip}:5000
 echo ======================================================================
 echo.
 
 set "CAFE_DIR=C:\\STARGATE_CAFE"
 if not exist "%CAFE_DIR%" (
-    echo [!] مجلد البرنامج %CAFE_DIR% غير موجود.
+    echo [!] ???? ???????? %CAFE_DIR% ??? ?????.
     pause
     exit /b 1
 )
 
-echo [1/4] إيقاف البرنامج القديم وفك قفل الملفات...
+echo [1/4] ????? ???????? ?????? ??? ??? ???????...
 taskkill /F /IM STARGATE.exe >nul 2>&1
 taskkill /F /IM python.exe /T >nul 2>&1
 taskkill /F /IM pythonw.exe /T >nul 2>&1
 taskkill /F /IM msedge.exe >nul 2>&1
 timeout /t 2 /nobreak >nul
 
-echo [2/4] جاري تنزيل التحديث من السيرفر المحلي بسرعة الشبكة...
+echo [2/4] ???? ????? ??????? ?? ??????? ?????? ????? ??????...
 set "TEMP_ZIP=%CAFE_DIR%\\local_update_v531.zip"
 set "TEMP_DIR=%CAFE_DIR%\\local_update_extracted"
 
@@ -4191,13 +4199,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
 
 if not exist "%TEMP_DIR%\\app.py" (
     echo.
-    echo [!] فشل التنزيل من السيرفر http://{server_ip}:5000
-    echo يرجى التأكد من اتصال الشبكة وإعادة المحاولة.
+    echo [!] ??? ??????? ?? ??????? http://{server_ip}:5000
+    echo ???? ?????? ?? ????? ?????? ?????? ????????.
     pause
     exit /b 1
 )
 
-echo [3/4] تثبيت التحديث وتحديث الحسابات مع حماية المبيعات وقواعد البيانات...
+echo [3/4] ????? ??????? ?????? ???????? ?? ????? ???????? ?????? ????????...
 robocopy "%TEMP_DIR%" "%CAFE_DIR%" /E /IS /IT /XF "*.db" "*.sqlite" "cafe_accounting.db" /XD "data" "Safe_Backups" >nul
 if exist "%CAFE_DIR%\\_internal" (
     robocopy "%TEMP_DIR%\\templates" "%CAFE_DIR%\\_internal\\templates" /E /IS >nul 2>&1
@@ -4213,10 +4221,10 @@ if exist "%CAFE_DIR%\\data\\app_profile\\Default\\Cache" (
     rmdir /S /Q "%CAFE_DIR%\\data\\app_profile\\Default\\Cache" >nul 2>&1
 )
 
-echo [4/4] جاري تشغيل البرنامج بالإصدار الجديد v5.3.1...
+echo [4/4] ???? ????? ???????? ???????? ?????? v5.3.1...
 echo ======================================================================
 color 0A
-echo   🎉 تم تحديث برنامج الموظف بنجاح تام إلى v5.3.1!
+echo   ?? ?? ????? ?????? ?????? ????? ??? ??? v5.3.1!
 echo ======================================================================
 cd /d "%CAFE_DIR%"
 if exist "STARGATE.exe" (
@@ -4232,14 +4240,14 @@ exit
 
 @app.route('/update-tool')
 def update_tool_page():
-    """صفحة ويب مباشرة ومبسطة لجهاز الموظف لتنزيل وتطبيق التحديث بنقرة واحدة مع إمكانية التحديث اليدوي برفع الملف."""
+    """???? ??? ?????? ?????? ????? ?????? ?????? ?????? ??????? ????? ????? ?? ??????? ??????? ?????? ???? ?????."""
     from flask import render_template_string
     html = """<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>تحديث برنامج STARGATE CAFE v5.3.2</title>
+    <title>????? ?????? STARGATE CAFE v5.3.2</title>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -4279,28 +4287,28 @@ def update_tool_page():
             <i class="fa-solid fa-cloud-arrow-down"></i>
             STARGATE CAFE OTA v5.3.2
         </div>
-        <h1>مركز تحديث برنامج الكافيه</h1>
-        <p>تحديث النظام تلقائياً عن بعد أو يدوياً عبر رفع ملف التحديث المباشر:</p>
+        <h1>???? ????? ?????? ???????</h1>
+        <p>????? ?????? ???????? ?? ??? ?? ?????? ??? ??? ??? ??????? ???????:</p>
 
-        <!-- 📦 خانة التحديث اليدوي -->
+        <!-- ?? ???? ??????? ?????? -->
         <div class="manual-box">
             <div class="manual-title">
-                <span><i class="fa-solid fa-box-open"></i> وضع وتثبيت التحديث يدوياً (ملف ZIP)</span>
-                <span style="font-size: 11px; color: #fbbf24;">بضغطة زر</span>
+                <span><i class="fa-solid fa-box-open"></i> ??? ?????? ??????? ?????? (??? ZIP)</span>
+                <span style="font-size: 11px; color: #fbbf24;">????? ??</span>
             </div>
             <div class="file-upload-row">
                 <input type="file" id="toolManualZip" accept=".zip" class="file-input" onchange="onToolFileChange(this)">
                 <label for="toolManualZip" id="toolFileLbl" class="file-label">
                     <i class="fa-solid fa-file-zipper" style="color: #fbbf24; margin-left: 6px;"></i>
-                    اضغط لاختيار ملف Stargate_Cafe_Update.zip
+                    ???? ??????? ??? Stargate_Cafe_Update.zip
                 </label>
                 <button type="button" id="toolUploadBtn" onclick="submitToolManualUpdate()" disabled class="btn-upload">
-                    تثبيت التحديث 🚀
+                    ????? ??????? ??
                 </button>
             </div>
             <div style="margin-top: 8px; font-size: 11px; text-align: left;">
                 <button type="button" onclick="submitToolDesktopScan()" style="background: none; border: none; color: #818cf8; cursor: pointer; text-decoration: underline; font-weight: bold;">
-                    ⚡ أو التثبيت التلقائي للملف الموجود على سطح المكتب
+                    ? ?? ??????? ???????? ????? ??????? ??? ??? ??????
                 </button>
             </div>
             <div id="toolStatusMsg" class="status-msg"></div>
@@ -4309,28 +4317,28 @@ def update_tool_page():
         <div style="margin-top: 20px;" class="btn-group">
             <button type="button" onclick="triggerCloudRemoteUpdate()" id="btnRemoteCloud" class="btn btn-primary">
                 <i class="fa-solid fa-globe"></i>
-                1. تحديث عن بعد بنقرة واحدة (سحابي مباشر من الإنترنت)
+                1. ????? ?? ??? ????? ????? (????? ????? ?? ????????)
             </button>
             <a href="/download/update_employee.bat" class="btn btn-success">
                 <i class="fa-solid fa-bolt"></i>
-                2. تنزيل ملف التحديث السريع بنقرة واحدة (update_employee.bat)
+                2. ????? ??? ??????? ?????? ????? ????? (update_employee.bat)
             </a>
             <a href="/download/update.zip" class="btn btn-secondary">
                 <i class="fa-solid fa-download"></i>
-                3. تنزيل حزمة التحديث ZIP مباشرة
+                3. ????? ???? ??????? ZIP ??????
             </a>
             <a href="/download/installer.exe" class="btn btn-secondary" style="background: #1e1b4b; color: #c7d2fe; border: 1px solid #4338ca;">
                 <i class="fa-solid fa-shield-halved"></i>
-                4. تنزيل ملف التثبيت الكامل (Setup.exe)
+                4. ????? ??? ??????? ?????? (Setup.exe)
             </a>
         </div>
 
         <div class="steps">
-            <h3><i class="fa-solid fa-circle-info"></i> مسارات البرنامج والتحديث:</h3>
+            <h3><i class="fa-solid fa-circle-info"></i> ?????? ???????? ????????:</h3>
             <ol>
-                <li><b>مسار البرنامج على الكمبيوتر:</b> <span style="font-family: monospace; color: #fbbf24;">C:\\STARGATE_CAFE</span></li>
-                <li><b>مسار حزمة التحديث:</b> تجدها على سطح المكتب باسم <span style="font-family: monospace; color: #a5b4fc;">Stargate_Cafe_Update.zip</span></li>
-                <li>كافة المبيعات والفواتير وقواعد البيانات محمية ومؤمنة 100% ولا تتأثر بالتحديث.</li>
+                <li><b>???? ???????? ??? ?????????:</b> <span style="font-family: monospace; color: #fbbf24;">C:\\STARGATE_CAFE</span></li>
+                <li><b>???? ???? ???????:</b> ????? ??? ??? ?????? ???? <span style="font-family: monospace; color: #a5b4fc;">Stargate_Cafe_Update.zip</span></li>
+                <li>???? ???????? ????????? ?????? ???????? ????? ?????? 100% ??? ????? ????????.</li>
             </ol>
         </div>
     </div>
@@ -4344,7 +4352,7 @@ def update_tool_page():
                 lbl.innerText = file.name + ' (' + (file.size / (1024*1024)).toFixed(1) + ' MB)';
                 btn.disabled = false;
             } else {
-                lbl.innerText = 'اضغط لاختيار ملف Stargate_Cafe_Update.zip';
+                lbl.innerText = '???? ??????? ??? Stargate_Cafe_Update.zip';
                 btn.disabled = true;
             }
         }
@@ -4352,7 +4360,7 @@ def update_tool_page():
         function submitToolManualUpdate() {
             const input = document.getElementById('toolManualZip');
             const file = input.files[0];
-            if (!file) return alert('يرجى اختيار ملف التحديث أولاً');
+            if (!file) return alert('???? ?????? ??? ??????? ?????');
 
             const btn = document.getElementById('toolUploadBtn');
             const status = document.getElementById('toolStatusMsg');
@@ -4360,7 +4368,7 @@ def update_tool_page():
             status.style.display = 'block';
             status.style.background = '#1e1b4b';
             status.style.color = '#c7d2fe';
-            status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري رفع وتطبيق التحديث...';
+            status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ???? ??? ?????? ???????...';
 
             const formData = new FormData();
             formData.append('update_zip', file);
@@ -4371,16 +4379,16 @@ def update_tool_page():
                     if (res.success) {
                         status.style.background = '#064e3b';
                         status.style.color = '#6ee7b7';
-                        status.innerHTML = '✅ ' + res.message;
+                        status.innerHTML = '? ' + res.message;
                         setTimeout(() => location.reload(), 4000);
                     } else {
-                        alert('تعذر التحديث: ' + (res.error || ''));
+                        alert('???? ???????: ' + (res.error || ''));
                         status.style.display = 'none';
                         btn.disabled = false;
                     }
                 })
                 .catch(err => {
-                    alert('خطأ أثناء التحديث: ' + err);
+                    alert('??? ????? ???????: ' + err);
                     status.style.display = 'none';
                     btn.disabled = false;
                 });
@@ -4391,7 +4399,7 @@ def update_tool_page():
             status.style.display = 'block';
             status.style.background = '#1e1b4b';
             status.style.color = '#c7d2fe';
-            status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري فحص ملفات التحديث على سطح المكتب...';
+            status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ???? ??? ????? ??????? ??? ??? ??????...';
 
             fetch('/api/manual_update', {
                 method: 'POST',
@@ -4403,15 +4411,15 @@ def update_tool_page():
                 if (res.success) {
                     status.style.background = '#064e3b';
                     status.style.color = '#6ee7b7';
-                    status.innerHTML = '✅ ' + res.message;
+                    status.innerHTML = '? ' + res.message;
                     setTimeout(() => location.reload(), 4000);
                 } else {
-                    alert(res.error || 'لم يتم العثور على الملف');
+                    alert(res.error || '?? ??? ?????? ??? ?????');
                     status.style.display = 'none';
                 }
             })
             .catch(err => {
-                alert('خطأ: ' + err);
+                alert('???: ' + err);
                 status.style.display = 'none';
             });
         }
@@ -4419,25 +4427,25 @@ def update_tool_page():
         function triggerCloudRemoteUpdate() {
             const btn = document.getElementById('btnRemoteCloud');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الاتصال وتنزيل التحديث عن بعد...';
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ???? ??????? ?????? ??????? ?? ???...';
 
             fetch('/api/do_update', { method: 'POST' })
                 .then(r => r.json())
                 .then(res => {
                     if (res.success) {
                         btn.style.background = '#15803d';
-                        btn.innerHTML = '✅ تم التنزيل والتثبيت! سيُعاد تشغيل البرنامج تلقائياً...';
+                        btn.innerHTML = '? ?? ??????? ????????! ?????? ????? ???????? ????????...';
                         setTimeout(() => location.reload(), 4000);
                     } else {
-                        alert('تعذر التحديث عن بعد: ' + (res.error || ''));
+                        alert('???? ??????? ?? ???: ' + (res.error || ''));
                         btn.disabled = false;
-                        btn.innerHTML = '<i class="fa-solid fa-globe"></i> 1. تحديث عن بعد بنقرة واحدة (سحابي مباشر من الإنترنت)';
+                        btn.innerHTML = '<i class="fa-solid fa-globe"></i> 1. ????? ?? ??? ????? ????? (????? ????? ?? ????????)';
                     }
                 })
                 .catch(err => {
-                    alert('خطأ في الاتصال: ' + err);
+                    alert('??? ?? ???????: ' + err);
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="fa-solid fa-globe"></i> 1. تحديث عن بعد بنقرة واحدة (سحابي مباشر من الإنترنت)';
+                    btn.innerHTML = '<i class="fa-solid fa-globe"></i> 1. ????? ?? ??? ????? ????? (????? ????? ?? ????????)';
                 });
         }
     </script>
@@ -4449,13 +4457,13 @@ def update_tool_page():
 
 
 # =========================================================================
-# 🏢 ERP ROUTES: SUPPLIERS & PURCHASES
+# ?? ERP ROUTES: SUPPLIERS & PURCHASES
 # =========================================================================
 
 @app.route('/suppliers')
 @admin_required
 def suppliers_page():
-    """شاشة إدارة الموردين وفواتير الشراء."""
+    """???? ????? ???????? ??????? ??????."""
     q = request.args.get('q', '').strip()
     suppliers = accounting.get_suppliers(search_query=q)
     inventory_items = accounting.get_inventory_stock()
@@ -4471,20 +4479,20 @@ def suppliers_page():
 @app.route('/supplier/add', methods=['POST'])
 @admin_required
 def supplier_add():
-    """إضافة مورد جديد."""
+    """????? ???? ????."""
     name = request.form.get('name', '').strip()
     phone = request.form.get('phone', '').strip()
     company = request.form.get('company', '').strip()
     notes = request.form.get('notes', '').strip()
     if name:
         accounting.add_supplier(name=name, phone=phone, company=company, notes=notes)
-        flash("✓ تم حفظ المورد بنجاح", "success")
+        flash("? ?? ??? ?????? ?????", "success")
     return redirect(url_for('suppliers_page'))
 
 @app.route('/purchase/add', methods=['POST'])
 @admin_required
 def purchase_invoice_add():
-    """تسجيل فاتورة شراء بضاعة ومواد خام وتغذية المخزون."""
+    """????? ?????? ???? ????? ????? ??? ?????? ???????."""
     supplier_id = request.form.get('supplier_id')
     inv_id = request.form.get('inventory_id')
     qty = float(request.form.get('qty', 1) or 1)
@@ -4496,11 +4504,11 @@ def purchase_invoice_add():
 
     items = [{
         'inventory_id': int(inv_id) if inv_id else None,
-        'item_name': 'مشتريات مواد خام',
+        'item_name': '??????? ???? ???',
         'qty': qty,
         'cost_unit_usd': cost_usd,
         'cost_unit_lbp': cost_lbp,
-        'unit': 'قطعة'
+        'unit': '????'
     }]
 
     if supplier_id:
@@ -4511,15 +4519,15 @@ def purchase_invoice_add():
             paid_lbp=0.0,
             payment_source=payment_source,
             notes=notes,
-            created_by=session.get('employee_name') or 'المدير'
+            created_by=session.get('employee_name') or '??????'
         )
-        flash("✓ تم تسجيل فاتورة الشراء وتحديث المخزون بنجاح!", "success")
+        flash("? ?? ????? ?????? ?????? ?????? ??????? ?????!", "success")
     return redirect(url_for('suppliers_page'))
 
 @app.route('/supplier/<int:supplier_id>/pay', methods=['POST'])
 @admin_required
 def supplier_pay_route(supplier_id):
-    """سداد دفعة نقدية لحساب المورد."""
+    """???? ???? ????? ????? ??????."""
     amount_usd = float(request.form.get('amount_usd', 0) or 0)
     amount_lbp = float(request.form.get('amount_lbp', 0) or 0)
     payment_source = request.form.get('payment_source', 'safe')
@@ -4531,23 +4539,23 @@ def supplier_pay_route(supplier_id):
         amount_lbp=amount_lbp,
         payment_source=payment_source,
         notes=notes,
-        created_by=session.get('employee_name') or 'المدير'
+        created_by=session.get('employee_name') or '??????'
     )
     if success:
-        flash(f"✓ {msg}", "success")
+        flash(f"? {msg}", "success")
     else:
-        flash(f"⚠️ {msg}", "danger")
+        flash(f"?? {msg}", "danger")
     return redirect(url_for('suppliers_page'))
 
 
 # =========================================================================
-# 🍽️ ERP ROUTES: DINING TABLES
+# ??? ERP ROUTES: DINING TABLES
 # =========================================================================
 
 @app.route('/tables')
 @login_required
 def tables_page():
-    """شاشة إدارة طاولات وصالات الكافيه."""
+    """???? ????? ?????? ?????? ???????."""
     tables = accounting.get_dining_tables()
     settings = accounting.get_settings()
     return render_template(
@@ -4560,25 +4568,25 @@ def tables_page():
 @app.route('/table/add', methods=['POST'])
 @admin_required
 def table_add():
-    """إضافة طاولة جديدة."""
+    """????? ????? ?????."""
     t_num = request.form.get('table_number', '').strip()
     t_name = request.form.get('table_name', '').strip()
-    sec = request.form.get('section', 'الصالة الرئيسية').strip()
+    sec = request.form.get('section', '?????? ????????').strip()
     seats = int(request.form.get('seats', 4) or 4)
     if t_num:
         try:
             accounting.add_dining_table(table_number=t_num, table_name=t_name, section=sec, seats=seats)
-            flash(f"✓ تمت إضافة الطاولة {t_num} بنجاح", "success")
+            flash(f"? ??? ????? ??????? {t_num} ?????", "success")
         except Exception as e:
-            flash(f"تنبيه: {e}", "warning")
+            flash(f"?????: {e}", "warning")
     return redirect(url_for('tables_page'))
 
 
 @app.errorhandler(500)
 def handle_500_error(e):
     if request.is_json or request.path.startswith('/api/'):
-        return jsonify({'success': False, 'error': f'خطأ داخلي في الخادم (500): {str(e)}'}), 200
-    return "خطأ داخلي في الخادم (500)", 500
+        return jsonify({'success': False, 'error': f'??? ????? ?? ?????? (500): {str(e)}'}), 200
+    return "??? ????? ?? ?????? (500)", 500
 
 
 if __name__ == '__main__':
