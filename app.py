@@ -127,8 +127,9 @@ def _periodic_update_checker():
             pass
         time.sleep(300)
 
-# ??? ????? ?????? ?? ???????
-threading.Thread(target=_periodic_update_checker, daemon=True).start()
+# ??? ????? ?????? ?? ??????? (??? ????? ??????? ??? ???? ?????? ???????? ????? ??????????)
+if os.environ.get('ENABLE_OTA_CHECKS', '0') in ('1', 'true', 'True'):
+    threading.Thread(target=_periodic_update_checker, daemon=True).start()
 
 if getattr(sys, 'frozen', False):
     # In PyInstaller, check sys._MEIPASS, executable dir, and _internal
@@ -431,11 +432,6 @@ def admin_required(f):
             return redirect(url_for('admin_login', next=request.path))
         return f(*args, **kwargs)
     return decorated_function
-
-def generate_csrf_token():
-    if '_csrf_token' not in session:
-        session['_csrf_token'] = secrets.token_hex(24)
-    return session['_csrf_token']
 
 app.jinja_env.globals['csrf_token'] = generate_csrf_token
 
@@ -3894,8 +3890,6 @@ def api_do_update():
             download_success = False
             last_download_err = None
             ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
 
             for dl_url in download_urls:
                 try:
