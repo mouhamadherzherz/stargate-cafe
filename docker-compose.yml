@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    image: mouhamadherzherz/stargate-cafe:dev
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - STARGATE_SECRET_KEY=${STARGATE_SECRET_KEY}
+      - FLASK_ENV=production
+    volumes:
+      - ./static:/opt/stargate/static:rw
+      - ./data:/opt/stargate/data:rw
+      - ./Stargate_Cafe_Update.zip:/opt/stargate/Stargate_Cafe_Update.zip:ro
+    depends_on:
+      - db
+
+  db:
+    image: nouchka/sqlite3:latest
+    # Note: SQLite in containers is a file-based DB; we mount ./data to persist the file.
+    volumes:
+      - ./data:/data
