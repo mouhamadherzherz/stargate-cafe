@@ -1,14 +1,42 @@
-# -*- coding: utf-8 -*-
 import unittest
 import os
 import sqlite3
+import tempfile
 import database
 import accounting
 
 class TestCoffeeAndSafeRestoration(unittest.TestCase):
-    def setUp(self):
-        # Initialize database
+    @classmethod
+    def setUpClass(cls):
+        cls.temp_dir = tempfile.TemporaryDirectory()
+        cls.test_db_path = os.path.join(cls.temp_dir.name, 'test_coffee_safe.db')
+        cls.orig_db_dir = database.DB_DIR
+        cls.orig_db_path = database.DB_PATH
+        cls.orig_acct_path = getattr(accounting, 'DB_PATH', None)
+
+        database.DB_DIR = cls.temp_dir.name
+        database.DB_PATH = cls.test_db_path
+        accounting.DB_PATH = cls.test_db_path
         database.init_db()
+        conn = database.get_db()
+        cur = conn.cursor()
+        cur.execute("INSERT OR IGNORE INTO employees (name, username, password, pin, role, is_active) VALUES ('فاحص', 'tester', '1234', '1234', 'admin', 1)")
+        cur.execute("INSERT OR IGNORE INTO cafe_categories (name, icon, sort_order) VALUES ('مشروبات ساخنة', '☕', 1)")
+        conn.commit()
+        conn.close()
+
+    @classmethod
+    def tearDownClass(cls):
+        database.DB_DIR = cls.orig_db_dir
+        database.DB_PATH = cls.orig_db_path
+        if cls.orig_acct_path:
+            accounting.DB_PATH = cls.orig_acct_path
+        try:
+            cls.temp_dir.cleanup()
+        except Exception:
+            pass
+
+    def setUp(self):
         self.conn = database.get_db()
 
     def tearDown(self):
@@ -35,10 +63,13 @@ class TestCoffeeAndSafeRestoration(unittest.TestCase):
         cursor.execute("SELECT id, name FROM cafe_items WHERE name LIKE '%قهوة تركي%' LIMIT 1")
         row = cursor.fetchone()
         if not row:
+            cursor.execute("SELECT id FROM cafe_categories LIMIT 1")
+            cat_row = cursor.fetchone()
+            cat_id = cat_row['id'] if cat_row else 1
             cursor.execute("""
-                INSERT INTO cafe_items (name, price_lbp, price_usd, is_coffee_bean_linked, track_stock, stock_qty)
-                VALUES ('قهوة تركي مخصوص فحص', 60000.0, 0.67, 1, 1, 50.0)
-            """)
+                INSERT INTO cafe_items (category_id, name, price_lbp, price_usd, is_coffee_bean_linked, track_stock, stock_qty)
+                VALUES (?, 'قهوة تركي مخصوص فحص', 60000.0, 0.67, 1, 1, 50.0)
+            """, (cat_id,))
             self.conn.commit()
             item_id = cursor.lastrowid
             item_name = 'قهوة تركي مخصوص فحص'
