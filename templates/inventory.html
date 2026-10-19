@@ -353,11 +353,16 @@
                             </span>
                             {% else %}
                             <div class="flex items-center gap-1.5">
-                                <span class="text-sm font-black font-mono text-cyan-300 bg-slate-950 px-3 py-1 rounded-xl border border-cyan-500/40 min-w-12 text-center shadow-inner" id="stock-val-{{ item.id }}">
+                                <span class="text-sm font-black font-mono text-cyan-300 bg-slate-950 px-3 py-1 rounded-xl border border-cyan-500/40 min-w-12 text-center shadow-inner" id="stock-val-{{ item.id }}" title="الرصيد الفعلي الحالي في الرف / البراد">
                                     {{ item.stock_qty|int }}
                                 </span>
                                 <span class="text-[11px] font-bold text-slate-400">قطعة</span>
                             </div>
+                            {% if item.on_table_qty and item.on_table_qty > 0 %}
+                            <span class="text-[10px] text-amber-300 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded-lg font-bold block mt-1 w-fit" title="كمية مطلوبة ومحجوزة حالياً على طاولات الزبائن بالصالة وخرجت من البراد">
+                                🛋️ {{ item.on_table_qty|int }} مع الزبائن
+                            </span>
+                            {% endif %}
                             {% endif %}
                         </td>
 

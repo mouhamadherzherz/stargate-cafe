@@ -1431,6 +1431,15 @@ def create_order(order_data, items_list, tab_id=None):
         order_status = order_data.get('status', 'paid')
 
         if tab_id:
+            # 1. استرجاع مؤقت لرصيد الطاولة المفتوحة لتطبيق الخصم النهائي للفاتورة بدقة ومنع التكرار
+            cursor.execute("SELECT item_id, item_name, quantity FROM cafe_order_items WHERE order_id = ?", (tab_id,))
+            old_tab_items = cursor.fetchall()
+            for ot in old_tab_items:
+                ot_id = ot['item_id']
+                ot_q = float(ot['quantity'] or 0.0)
+                if ot_id and not is_coffee_item(ot['item_name'], item_id=ot_id):
+                    cursor.execute("UPDATE cafe_items SET stock_qty = stock_qty + ? WHERE id = ? AND track_stock = 1", (ot_q, ot_id))
+
             cursor.execute("""
             UPDATE cafe_orders SET
                 customer_name = ?,
@@ -1760,6 +1769,18 @@ def save_customer_tab(customer_name, items_list=None, tab_id=None, notes='', dis
     conn = get_db()
     cursor = conn.cursor()
     try:
+        conn.execute("BEGIN IMMEDIATE")
+
+        # 0. إذا كان الحساب موجوداً مسبقاً، استرجاع الأصناف السابقة مؤقتاً لتقييم الرصيد الدقيق ومنع التعارض
+        if tab_id:
+            cursor.execute("SELECT item_id, item_name, quantity FROM cafe_order_items WHERE order_id = ?", (tab_id,))
+            old_tab_held = cursor.fetchall()
+            for oth in old_tab_held:
+                oth_id = oth['item_id']
+                oth_q = float(oth['quantity'] or 0.0)
+                if oth_id and not is_coffee_item(oth['item_name'], item_id=oth_id):
+                    cursor.execute("UPDATE cafe_items SET stock_qty = stock_qty + ? WHERE id = ? AND track_stock = 1", (oth_q, oth_id))
+
         # ☕ Atomic Guard: prevent adding coffee items to customer tab if no active coffee batch
         coffee_items_found = []
         for it in computed_items:
@@ -1785,7 +1806,7 @@ def save_customer_tab(customer_name, items_list=None, tab_id=None, notes='', dis
             if item_id and item_type != 'gaming' and not is_coffee_item(item_name, item_id=item_id):
                 cursor.execute("SELECT stock_qty, name, track_stock FROM cafe_items WHERE id = ?", (item_id,))
                 st_row = cursor.fetchone()
-                if st_row:
+                if st_row and st_row['track_stock'] == 1:
                     available = float(st_row['stock_qty'] or 0.0)
                     if available <= 0:
                         conn.rollback()
@@ -1808,7 +1829,7 @@ def save_customer_tab(customer_name, items_list=None, tab_id=None, notes='', dis
 
             # Audit check: detect item removal or quantity modification
             old_summary = ", ".join([f"{r['item_name']} (x{r['quantity']})" for r in old_rows])
-            new_summary = ", ".join([f"{it['name']} (x{it['quantity']})" for it in computed_items])
+            new_summary = ", ".join([f"{it.get('name') or it.get('item_name') or 'صنف'} (x{it['quantity']})" for it in computed_items])
             if old_summary and old_summary != new_summary:
                 cursor.execute("""
                     INSERT INTO audit_log
@@ -1879,6 +1900,25 @@ def save_customer_tab(customer_name, items_list=None, tab_id=None, notes='', dis
             INSERT INTO cafe_order_items (order_id, item_id, item_name, item_type, quantity, unit_price_lbp, unit_price_usd, subtotal_lbp, subtotal_usd, coffee_batch_id)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (order_id, item_id, item_name, item_type, q, u_lbp, u_usd, sub_lbp, sub_usd, item_coffee_batch))
+
+            # 🚀 الخصم الفوري اللحظي للمخزون بمجرد خروج الصنف للطاولة
+            if item_id and not is_coffee_item(item_name, item_id=item_id):
+                cursor.execute("SELECT stock_qty, track_stock FROM cafe_items WHERE id = ?", (item_id,))
+                cur_st = cursor.fetchone()
+                if cur_st and cur_st['track_stock'] == 1:
+                    q_cur_before = float(cur_st['stock_qty'] or 0.0)
+                    q_cur_after = max(0.0, q_cur_before - q)
+                    cursor.execute("UPDATE cafe_items SET stock_qty = ? WHERE id = ?", (q_cur_after, item_id))
+                    try:
+                        cursor.execute("""
+                            INSERT INTO stock_movements (
+                                movement_type, item_type, item_id, item_name, quantity,
+                                qty_before, qty_after, reference_type, reference_id,
+                                user_name, notes
+                            ) VALUES ('TAB_OUT', 'cafe_item', ?, ?, ?, ?, ?, 'cafe_orders', ?, 'كاشير', ?)
+                        """, (item_id, item_name, q, q_cur_before, q_cur_after, order_id, f"خروج فوري لطاولة #{order_num} ({customer_name})"))
+                    except Exception:
+                        pass
 
         conn.commit()
         conn.close()
@@ -2048,6 +2088,22 @@ def delete_tab(tab_id, cancelled_by=None, reason=None, is_waste=False):
                 if 'قهوة' in it['item_name'] or 'اسبريسو' in it['item_name']:
                     try:
                         record_coffee_waste(qty=it['quantity'], reason=f"إلغاء حساب {customer_name}: {waste_reason}", employee_name=actor_name)
+                    except Exception:
+                        pass
+        elif not is_waste and items:
+            # 🔄 استرجاع فوري للمخزون عند إلغاء الطاولة بدون تلف (إعادة للرف/البراد)
+            for it in items:
+                it_id = it.get('item_id')
+                it_q = float(it['quantity'] or 0.0)
+                if it_id and not is_coffee_item(it['item_name'], item_id=it_id):
+                    cursor.execute("UPDATE cafe_items SET stock_qty = stock_qty + ? WHERE id = ? AND track_stock = 1", (it_q, it_id))
+                    try:
+                        cursor.execute("""
+                            INSERT INTO stock_movements (
+                                movement_type, item_type, item_id, item_name, quantity,
+                                reference_type, reference_id, user_name, notes, created_at
+                            ) VALUES ('RETURN_IN', 'cafe_item', ?, ?, ?, 'tab_void_return', ?, ?, ?, CURRENT_TIMESTAMP)
+                        """, (it_id, it['item_name'], it_q, tab_id, actor_name, f"إرجاع للمستودع عند إلغاء طاولة ({customer_name}): {waste_reason}"))
                     except Exception:
                         pass
 
@@ -4178,6 +4234,12 @@ def get_inventory_stock():
         COALESCE(i.track_stock, 0) as track_stock,
         COALESCE(i.low_stock_limit, 5) as low_stock_limit,
         COALESCE(i.is_coffee_bean_linked, 0) as is_coffee_bean_linked,
+        COALESCE((
+            SELECT SUM(oi.quantity)
+            FROM cafe_order_items oi
+            JOIN cafe_orders o ON oi.order_id = o.id
+            WHERE o.status = 'open' AND oi.item_id = i.id
+        ), 0) as on_table_qty,
         c.id as category_id,
         c.name as category_name,
         c.icon as category_icon
