@@ -505,7 +505,9 @@ app.jinja_env.globals['csrf_token'] = generate_csrf_token
 
 @app.before_request
 def csrf_protect():
-    if app.config.get('TESTING') or app.config.get('WTF_CSRF_ENABLED') is False:
+    if app.config.get('WTF_CSRF_ENABLED') is False:
+        return
+    if app.config.get('TESTING') and not app.config.get('WTF_CSRF_ENABLED'):
         return
     # Only validate state-changing HTTP methods
     if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
@@ -527,7 +529,13 @@ def csrf_protect():
                 parsed_origin = urllib.parse.urlparse(origin_val)
                 req_host = (request.host or '').lower().split(':')[0]
                 orig_host = (parsed_origin.hostname or '').lower()
-                if orig_host and orig_host == req_host:
+                if orig_host and orig_host != req_host:
+                    # Forged cross-origin request rejected with 403 Forbidden
+                    if request.is_json or request.path.startswith('/api/'):
+                        return jsonify({'error': 'CSRF verification failed: cross-origin forbidden', 'code': 403}), 403
+                    flash("⚠️ رفض الطلب: مصدر غير موثوق به (CSRF).", "danger")
+                    return redirect(request.referrer or url_for('index'))
+                elif orig_host and orig_host == req_host:
                     if session_token and submitted_token and secrets.compare_digest(session_token, submitted_token):
                         return None
                     # Desktop webview or local AJAX request with session token initialized
@@ -539,7 +547,7 @@ def csrf_protect():
                 pass
             
         # Initial login forms and authenticated POS hardware/API actions are exempt from CSRF
-        if request.endpoint in ('employee_login', 'admin_login', 'api_pos_open_cash_drawer', 'api_order_invoice_update'):
+        if request.endpoint in ('employee_login', 'admin_login', 'login', 'api_pos_open_cash_drawer', 'api_order_invoice_update'):
             return None
 
         # CSRF failed
@@ -598,7 +606,7 @@ def ensure_default_session():
         session.get('is_admin')
     )
     if not is_authenticated:
-        if request.is_json or request.path.startswith('/api/'):
+        if request.is_json or request.path.startswith('/api/') or request.path == '/employee/current' or 'application/json' in request.headers.get('Accept', ''):
             return jsonify({'success': False, 'message': 'يرجى تسجيل الدخول وإدخال الرمز السري أولاً', 'code': 401}), 401
         return redirect(url_for('employee_login'))
 
@@ -1917,17 +1925,24 @@ def telegram_send_daily_report():
 @app.route('/api/telegram/send-shift-report', methods=['POST'])
 @login_required
 def telegram_send_shift_report():
-    """إرسال تقرير وردية الموظف أو الكاشير إلى تيليجرام المدير فورياً بضغطة زر."""
+    """إرسال تقرير وردية الموظف أو الكاشير إلى تيليجرام المدير فورياً بضغطة زر - الحسابات الرسمية من السيرفر."""
+    emp_id = session.get('employee_id')
     emp_name = session.get('employee_name') or 'كاشير'
     target_date = accounting.get_business_date()
     
     # استخراج مبالغ الوردية من الفورم أو الطلب
     data = request.get_json(silent=True) or request.form or {}
-    actual_cash = float(data.get('actual_cash_lbp') or 0.0)
-    expected_cash = float(data.get('expected_cash_lbp') or 0.0)
-    diff = actual_cash - expected_cash if actual_cash > 0 else 0.0
+    actual_cash = max(0.0, float(data.get('actual_cash_lbp') or 0.0))
     diff_note = str(data.get('difference_note') or '').strip()
-    safe_deposit = float(data.get('safe_deposit_lbp') or 0.0)
+    safe_deposit = max(0.0, float(data.get('safe_deposit_lbp') or 0.0))
+
+    # مطابقة الحسابات المالية الحقيقية من السيرفر حصراً (عدم الوثوق بحسابات العميل)
+    drawer_stat = accounting.get_drawer_cash_status()
+    today_orders = accounting.get_orders(date=target_date, employee_id=emp_id)
+    emp_cash_sales = sum(float(o.get('total_lbp') or 0.0) for o in today_orders if o.get('payment_method') == 'cash' and o.get('status') == 'paid')
+    opening_float = float(session.get('opening_cash_lbp') or session.get('handover_actual_cash') or 0.0)
+    expected_cash = max(0.0, float(drawer_stat.get('total_untransferred_lbp') or (opening_float + emp_cash_sales)))
+    diff = actual_cash - expected_cash if actual_cash > 0 else 0.0
     drawer_remaining = max(0.0, actual_cash - safe_deposit)
 
     ok, msg = accounting.send_shift_closing_telegram_report(
@@ -1946,9 +1961,9 @@ def telegram_send_shift_report():
 
 
 @app.route('/api/ai/audit', methods=['GET'])
-@login_required
+@admin_required
 def ai_audit_api():
-    """فحص الذكاء الاصطناعي الشامل للعمليات والمخزون والصندوق والأخطاء."""
+    """فحص الذكاء الاصطناعي الشامل للعمليات والمخزون والصندوق والأخطاء (محصور بالإدارة)."""
     target_date = request.args.get('date', accounting.get_business_date())
     report = accounting.ai_audit_system(target_date)
     return jsonify({'success': True, 'audit': report})
@@ -2231,6 +2246,7 @@ def api_items_set_position():
     return jsonify({'success': ok, 'message': msg})
 
 @app.route('/api/items/top-selling', methods=['GET'])
+@login_required
 def api_top_selling_items():
     """واجهة برمجية لجلب أكثر الأصناف مبيعاً وطلباً لشاشة الكاشير."""
     limit = request.args.get('limit', 12, type=int)
@@ -2947,30 +2963,36 @@ def switch_active_employee():
 
 @app.route('/employee/current')
 def get_current_employee():
-    """Return currently active employee in session."""
+    """Return currently active employee in session. Requires authenticated active session."""
     emp_id = session.get('employee_id')
-    emp_name = session.get('employee_name')
-    if not emp_name:
-        # Default to first active employee or cashier
-        emps = accounting.get_all_employees()
-        if emps:
-            first_cashier = next((e for e in emps if e['is_active'] and e['role'] == 'cashier'), emps[0])
-            session['employee_id'] = first_cashier['id']
-            session['employee_name'] = first_cashier['name']
-            session['employee_role'] = first_cashier['role']
-            emp_id = first_cashier['id']
-            emp_name = first_cashier['name']
-        else:
-            emp_id = 1
-            emp_name = 'كاشير'
-            session['employee_id'] = emp_id
-            session['employee_name'] = emp_name
-            session['employee_role'] = 'cashier'
+    is_admin = bool(session.get('is_admin') or session.get('admin_authenticated') or session.get('employee_role') == 'admin')
+
+    if not emp_id and not is_admin:
+        return jsonify({'success': False, 'error': 'Authentication required', 'code': 401}), 401
+
+    if emp_id:
+        emp = accounting.get_employee_by_id(emp_id)
+        if not emp or not emp.get('is_active'):
+            # Clear invalid / deactivated session
+            session.pop('employee_id', None)
+            session.pop('employee_name', None)
+            session.pop('employee_role', None)
+            session.pop('admin_authenticated', None)
+            session.pop('is_admin', None)
+            return jsonify({'success': False, 'error': 'Employee account is inactive or revoked', 'code': 401}), 401
+        emp_name = emp.get('name')
+        role = emp.get('role', 'cashier')
+    else:
+        emp_id = 1
+        emp_name = session.get('employee_name') or 'المدير العام'
+        role = 'admin'
 
     return jsonify({
+        'success': True,
         'employee_id': emp_id,
         'employee_name': emp_name,
-        'role': session.get('employee_role', 'cashier')
+        'role': role,
+        'is_admin': is_admin
     })
 
 # ==========================================
@@ -2990,29 +3012,49 @@ def setup_wizard():
         return redirect(url_for('employee_login'))
 
     if request.method == 'POST':
-        company_name = request.form.get('company_name', '').strip() or 'STARGATE CAFE'
-        admin_name = request.form.get('admin_name', '').strip()
-        admin_username = request.form.get('admin_username', '').strip()
-        admin_pin = request.form.get('admin_pin', '').strip()
-        admin_password = request.form.get('admin_password', '').strip()
-        exchange_rate = float(request.form.get('exchange_rate') or 89500.0)
-        pc_price_lbp = float(request.form.get('pc_price_lbp') or 100000.0)
-
-        if not admin_name or not admin_username or not admin_password or not admin_pin:
-            flash("⚠️ يرجى ملء كافة الحقول الأساسية لإنشاء حساب المدير العام!", "danger")
-            return render_template('setup_wizard.html')
-
-        if len(admin_pin) < 4:
-            flash("⚠️ رمز الـ PIN يجب أن يتكون من 4 أرقام على الأقل!", "danger")
-            return render_template('setup_wizard.html')
-
-        # Hash passwords securely
-        hashed_password = database.hash_password(admin_password)
-        hashed_pin = database.hash_password(admin_pin)
-
         conn = database.get_db()
         cursor = conn.cursor()
         try:
+            conn.execute("BEGIN IMMEDIATE")
+            admin_check = cursor.execute("SELECT COUNT(*) FROM employees WHERE role='admin' AND is_active=1").fetchone()[0]
+            settings_check = cursor.execute("SELECT setup_complete FROM settings WHERE id=1").fetchone()
+            if settings_check and settings_check['setup_complete'] == 1 and admin_check > 0:
+                conn.rollback()
+                conn.close()
+                logger.warning("Unauthorized attempt to re-execute setup wizard on an initialized system")
+                flash("النظام مهيأ مسبقاً ومحمي. يرجى تسجيل الدخول بحساب المدير.", "warning")
+                return redirect(url_for('admin_login'))
+
+            company_name = request.form.get('company_name', '').strip() or 'STARGATE CAFE'
+            admin_name = request.form.get('admin_name', '').strip()
+            admin_username = request.form.get('admin_username', '').strip()
+            admin_pin = request.form.get('admin_pin', '').strip()
+            admin_password = request.form.get('admin_password', '').strip()
+            exchange_rate = float(request.form.get('exchange_rate') or 89500.0)
+            pc_price_lbp = float(request.form.get('pc_price_lbp') or 100000.0)
+
+            if not admin_name or not admin_username or not admin_password or not admin_pin:
+                conn.rollback()
+                conn.close()
+                flash("⚠️ يرجى ملء كافة الحقول الأساسية لإنشاء حساب المدير العام!", "danger")
+                return render_template('setup_wizard.html')
+
+            if len(admin_pin) < 4:
+                conn.rollback()
+                conn.close()
+                flash("⚠️ رمز الـ PIN يجب أن يتكون من 4 أرقام على الأقل!", "danger")
+                return render_template('setup_wizard.html')
+
+            if len(admin_password) < 6:
+                conn.rollback()
+                conn.close()
+                flash("⚠️ كلمة المرور يجب ألا تقل عن 6 أحرف لحماية النظام!", "danger")
+                return render_template('setup_wizard.html')
+
+            # Hash passwords securely
+            hashed_password = database.hash_password(admin_password)
+            hashed_pin = database.hash_password(admin_pin)
+
             # 1. Update company settings
             cursor.execute("""
                 UPDATE settings
@@ -3029,10 +3071,6 @@ def setup_wizard():
             new_emp_id = cursor.lastrowid
 
             conn.commit()
-            try:
-                cursor.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            except Exception:
-                pass
             conn.close()
 
             # Automatically log in the created admin
@@ -3053,10 +3091,10 @@ def setup_wizard():
             flash(f"🎉 مرحباً بك يا {admin_name}! تم إعداد وتأمين النظام بنجاح، يمكنك الآن بدء العمل وإضافة الأصناف أو البيع.", "success")
             return redirect(url_for('index'))
         except Exception as e:
-            conn.rollback()
-            conn.close()
+            try: conn.rollback(); conn.close()
+            except Exception: pass
             logger.exception("Error in setup_wizard: %s", e)
-            flash(f"حدث خطأ أثناء حفظ الإعداد: {str(e)}", "danger")
+            flash("حدث خطأ أثناء حفظ الإعداد الأولي. يرجى مراجعة البيانات والمحاولة مجدداً.", "danger")
             return render_template('setup_wizard.html')
 
     return render_template('setup_wizard.html')
@@ -3065,6 +3103,7 @@ def setup_wizard():
 # EMPLOYEE AUTHENTICATION & SHIFT CLOSING
 # ==========================================
 
+@app.route('/login', methods=['GET', 'POST'])
 @app.route('/employee/login', methods=['GET', 'POST'])
 def employee_login():
     """Employee shift login screen."""
@@ -3545,7 +3584,8 @@ def safe_transfer():
         op_title = "إيداع" if op_type == 'deposit' else "سحب"
         flash(f'تم تسجيل عملية {op_title} بنجاح في الخزنة الخاصة ✓', 'success')
     except Exception as e:
-        flash(f'خطأ أثناء الحفظ في الخزنة: {str(e)}', 'danger')
+        logger.exception("Error in safe_transfer: %s", e)
+        flash('حدث خطأ أثناء حفظ المعاملة في الخزنة. يرجى مراجعة البيانات والمحاولة مجدداً.', 'danger')
 
     return redirect(url_for('safe_page'))
 
@@ -3780,13 +3820,15 @@ def print_safe_statement():
 
 
 @app.route('/api/inventory/alerts')
+@login_required
 def api_inventory_alerts():
-    """API: جلب عدد المنتجات المنخفضة أو النافدة من المخزون."""
+    """API: جلب عدد المنتجات المنخفضة أو النافدة من المخزون (محصور بالموظفين والإدارة)."""
     try:
         alerts = accounting.get_inventory_alerts_count()
         return jsonify(alerts)
     except Exception as e:
-        return jsonify({'total': 0, 'out_of_stock': 0, 'low_stock': 0, 'error': str(e)})
+        logger.warning("Error fetching inventory alerts: %s", e)
+        return jsonify({'total': 0, 'out_of_stock': 0, 'low_stock': 0})
 
 
 # ----------------- QUICK ITEM & SAFE API ENDPOINTS -----------------
@@ -4476,13 +4518,30 @@ def safe_transfer_drawer_total():
 
 @app.route('/safe/transfer_and_zero_all', methods=['POST'])
 @app.route('/api/safe/transfer_and_zero_all', methods=['POST'])
-@login_required
+@admin_required
 def safe_transfer_and_zero_all():
-    """ترحيل وتصفير شامل لجميع الأموال بالكامل إلى الخزنة الخاصة وتصفير كافة العدادات إلى 0 ل.ل."""
+    """ترحيل وتصفير شامل لجميع الأموال بالكامل إلى الخزنة الخاصة - حصري للمدير العام فقط."""
     transferred_by = session.get('employee_name') or session.get('admin_name') or 'المدير'
-    note = (request.form.get('note') if not request.is_json else (request.get_json(silent=True) or {}).get('note')) or "ترحيل وتصفير شامل لجميع الأموال ونقلها إلى الخزنة الخاصة"
+    data = request.get_json(silent=True) or request.form or {}
+    note = (data.get('note') or '').strip() or "ترحيل وتصفير شامل لجميع الأموال ونقلها إلى الخزنة الخاصة"
+    
+    # حماية من تكرار الطلب عند الضغط المزدوج (Idempotency Key)
+    idem_key = data.get('idempotency_key') or request.headers.get('X-Idempotency-Key')
+    if idem_key and session.get(f'_idem_{idem_key}'):
+        cached = session.get(f'_idem_{idem_key}')
+        if request.is_json:
+            return jsonify(cached)
+        flash(cached.get('message', 'تم تنفيذ العملية مسبقاً'), 'info')
+        return redirect(request.form.get('next') or url_for('safe_page'))
+
     try:
         res = accounting.transfer_and_zero_all_to_safe(transferred_by=transferred_by, note=note)
+        if not res.get('success'):
+            if request.is_json:
+                return jsonify(res), 400
+            flash(res.get('message', 'تعذر إتمام عملية الترحيل والتصفير'), 'warning')
+            return redirect(request.form.get('next') or request.referrer or url_for('safe_page'))
+
         try:
             database.write_audit_log(
                 actor=transferred_by,
@@ -4490,18 +4549,22 @@ def safe_transfer_and_zero_all():
                 table_name='safe_transfers',
                 record_id=res.get('transfer_id'),
                 new_value=str(res.get('amount_lbp')),
-                reason=f"ترحيل وتصفير شامل لجميع الأموال ({res['amount_lbp']:,.0f} ل.ل) إلى الخزنة وتصفير كل شيء"
+                reason=f"ترحيل وتصفير شامل لجميع الأموال ({res.get('amount_lbp', 0):,.0f} ل.ل) إلى الخزنة وتصفير كل شيء"
             )
         except Exception:
             pass
+
+        if idem_key:
+            session[f'_idem_{idem_key}'] = res
 
         if request.is_json:
             return jsonify(res)
         flash(res['message'], 'success')
     except Exception as e:
+        logger.exception("Error in safe_transfer_and_zero_all: %s", e)
         if request.is_json:
-            return jsonify({'success': False, 'message': str(e), 'error': str(e)}), 400
-        flash(f"تنبيه: {e}", "warning")
+            return jsonify({'success': False, 'message': 'حدث خطأ داخلي أثناء عملية الترحيل والتصفير'}), 500
+        flash("حدث خطأ داخلي أثناء ترحيل الأموال. يرجى مراجعة سجل النظام.", "danger")
 
     next_url = request.form.get('next') or request.referrer or url_for('safe_page')
     return redirect(next_url)
@@ -4531,9 +4594,9 @@ def api_safe_drawer_status():
     })
 
 @app.route('/api/audit/logs')
-@login_required
+@admin_required
 def api_audit_logs():
-    """API لجلب سجل الرقابة والأرشيف الشامل لكافة المعاملات والعمليات."""
+    """API لجلب سجل الرقابة والأرشيف الشامل لكافة المعاملات والعمليات (مخصص للإدارة)."""
     limit = int(request.args.get('limit', 250))
     action = request.args.get('action', '').strip() or None
     actor = request.args.get('actor', '').strip() or None
@@ -4551,9 +4614,9 @@ def api_safe_daily_status():
     return jsonify(status)
 
 @app.route('/api/safe/balance')
-@login_required
+@admin_required
 def api_safe_balance():
-    """API لجلب رصيد الخزنة اللحظي."""
+    """API لجلب رصيد الخزنة اللحظي (مخصص للإدارة فقط)."""
     balance = accounting.get_safe_balance()
     return jsonify({
         'success': True,
@@ -4887,24 +4950,28 @@ def download_update_zip():
 @app.route('/installer')
 @app.route('/setup.exe')
 def download_installer_exe():
-    """تنزيل ملف التثبيت الرسمي الكامل v5.3.1 مباشرة لجهاز الموظف."""
+    """تنزيل ملف التثبيت الرسمي الكامل مباشرة لجهاز الموظف."""
     from flask import send_file
+    curr_v = _get_current_version()
     candidates = [
+        rf'C:\STARGATE_CAFE\StargateCafe_Setup_v{curr_v}.exe',
+        os.path.expanduser(rf'~\Desktop\StargateCafe_Setup_v{curr_v}.exe'),
+        rf'C:\Users\mouha\Desktop\StargateCafe_Setup_v{curr_v}.exe',
         r'C:\STARGATE_CAFE\StargateCafe_Setup_v5.3.1.exe',
         os.path.expanduser(r'~\Desktop\StargateCafe_Setup_v5.3.1.exe'),
         r'C:\Users\mouha\Desktop\StargateCafe_Setup_v5.3.1.exe',
-        r'C:\Users\mouha\Desktop\StargateCafe_Setup_v5.3.0.exe'
     ]
     for cand in candidates:
         if os.path.exists(cand):
-            return send_file(cand, as_attachment=True, download_name='StargateCafe_Setup_v5.3.1.exe')
+            return send_file(cand, as_attachment=True, download_name=f'StargateCafe_Setup_v{curr_v}.exe')
     return "ملف التثبيت غير موجود على الخادم", 404
 
 
 @app.route('/download/update_employee.bat')
 def download_employee_update_bat():
-    """ملف BAT ديناميكي يُحدّث جهاز الموظف مباشرة من سيرفر الكافيه المحلي."""
+    """ملف BAT ديناميكي يُحدّث جهاز الموظف مباشرة من سيرفر الكافيه المحلي بإصدار متطابق."""
     from flask import Response
+    curr_v = _get_current_version()
     try:
         server_ip = request.host.split(':')[0]
     except Exception:
@@ -4913,9 +4980,9 @@ def download_employee_update_bat():
     bat_script = f"""@echo off
 chcp 65001 >nul
 color 0B
-title STARGATE CAFE - تحديث جهاز الموظف الفوري v5.3.1
+title STARGATE CAFE - تحديث جهاز الموظف الفوري v{curr_v}
 echo ======================================================================
-echo         STARGATE CAFE - تحديث نظام الكافيه للموظف (v5.3.1)
+echo         STARGATE CAFE - تحديث نظام الكافيه للموظف (v{curr_v})
 echo         التحديث من السيرفر المباشر: http://{server_ip}:5000
 echo ======================================================================
 echo.
@@ -4927,15 +4994,13 @@ if not exist "%CAFE_DIR%" (
     exit /b 1
 )
 
-echo [1/4] إيقاف البرنامج القديم وفك قفل الملفات...
+echo [1/4] إيقاف البرنامج القديم وفك قفل الملفات بأمان...
 taskkill /F /IM STARGATE.exe >nul 2>&1
-taskkill /F /IM python.exe /T >nul 2>&1
-taskkill /F /IM pythonw.exe /T >nul 2>&1
-taskkill /F /IM msedge.exe >nul 2>&1
+powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*STARGATE_CAFE*' -or $_.CommandLine -like '*app.py*' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}" >nul 2>&1
 timeout /t 2 /nobreak >nul
 
 echo [2/4] جاري تنزيل التحديث من السيرفر المحلي بسرعة الشبكة...
-set "TEMP_ZIP=%CAFE_DIR%\\local_update_v531.zip"
+set "TEMP_ZIP=%CAFE_DIR%\\local_update.zip"
 set "TEMP_DIR=%CAFE_DIR%\\local_update_extracted"
 
 if exist "%TEMP_DIR%" rmdir /S /Q "%TEMP_DIR%" >nul 2>&1
@@ -4955,7 +5020,7 @@ if not exist "%TEMP_DIR%\\app.py" (
 )
 
 echo [3/4] تثبيت التحديث وتحديث الحسابات مع حماية المبيعات وقواعد البيانات...
-robocopy "%TEMP_DIR%" "%CAFE_DIR%" /E /IS /IT /XF "*.db" "*.sqlite" "cafe_accounting.db" /XD "data" "Safe_Backups" >nul
+robocopy "%TEMP_DIR%" "%CAFE_DIR%" /E /IS /IT /XF "*.db" "*.sqlite" "cafe_accounting.db" ".secret_key" /XD "data" "Safe_Backups" >nul
 if exist "%CAFE_DIR%\\_internal" (
     robocopy "%TEMP_DIR%\\templates" "%CAFE_DIR%\\_internal\\templates" /E /IS >nul 2>&1
     robocopy "%TEMP_DIR%\\static"    "%CAFE_DIR%\\_internal\\static"    /E /IS >nul 2>&1
@@ -4970,10 +5035,10 @@ if exist "%CAFE_DIR%\\data\\app_profile\\Default\\Cache" (
     rmdir /S /Q "%CAFE_DIR%\\data\\app_profile\\Default\\Cache" >nul 2>&1
 )
 
-echo [4/4] جاري تشغيل البرنامج بالإصدار الجديد v5.3.1...
+echo [4/4] جاري تشغيل البرنامج بالإصدار الجديد v{curr_v}...
 echo ======================================================================
 color 0A
-echo   🎉 تم تحديث برنامج الموظف بنجاح تام إلى v5.3.1!
+echo   🎉 تم تحديث برنامج الموظف بنجاح تام إلى v{curr_v}!
 echo ======================================================================
 cd /d "%CAFE_DIR%"
 if exist "STARGATE.exe" (

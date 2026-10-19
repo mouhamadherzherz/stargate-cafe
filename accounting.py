@@ -4269,6 +4269,21 @@ def get_all_employees():
     conn.close()
     return rows
 
+def get_employee_by_id(emp_id):
+    """Retrieve a single employee record by ID."""
+    if not emp_id:
+        return None
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT id, name, username, pin, role, phone, is_active, created_at
+    FROM employees
+    WHERE id = ?
+    """, (emp_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
 def add_employee(data):
     """Add new employee with hashed password and PIN."""
     name = (data.get('name') or '').strip()
@@ -5476,16 +5491,31 @@ def transfer_and_zero_all_to_safe(transferred_by='المدير', note=None):
 
     actual_note = note.strip() if note and note.strip() else "ترحيل وتصفير شامل لجميع الأموال ونقلها إلى الخزنة الخاصة"
 
-    transfer_id = None
-    if total_lbp > 0:
-        transfer_id = add_safe_transfer(
-            amount_lbp=total_lbp,
-            amount_usd=total_usd,
-            note=actual_note,
-            transferred_by=transferred_by,
-            rate=rate,
-            operation_type='deposit'
-        )
+    if total_lbp <= 0:
+        new_safe = get_safe_balance()
+        return {
+            'success': False,
+            'amount_lbp': 0.0,
+            'amount_usd': 0.0,
+            'safe_balance_lbp': new_safe.get('total_lbp', 0.0),
+            'safe_balance_usd': new_safe.get('total_usd', 0.0),
+            'drawer_remaining_lbp': 0.0,
+            'drawer_remaining_usd': 0.0,
+            'untransferred_cafe_lbp': 0.0,
+            'untransferred_pc_lbp': 0.0,
+            'message': 'لا توجد أموال أو كاش معلق في الصندوق للترحيل حالياً (الرصيد مصفّر بالفعل 0 ل.ل).'
+        }
+
+    transfer_id = add_safe_transfer(
+        amount_lbp=total_lbp,
+        amount_usd=total_usd,
+        note=actual_note,
+        transferred_by=transferred_by,
+        rate=rate,
+        operation_type='deposit',
+        source='drawer',
+        target='safe'
+    )
 
     # توثيق مطابقة وتسوية الوردية/الصندوق لتكون مصفّرة تماماً
     today_bdate = get_business_date()
@@ -5505,16 +5535,6 @@ def transfer_and_zero_all_to_safe(transferred_by='المدير', note=None):
         )
     except Exception as e:
         logger.warning(f"Shift closing auto-record notice: {e}")
-
-    # تحديث وتصفير الحساب الدفتري 1010
-    conn = get_db()
-    try:
-        conn.execute("UPDATE accounts SET balance_lbp = 0.0, balance_usd = 0.0 WHERE code = '1010'")
-        conn.commit()
-    except Exception:
-        pass
-    finally:
-        conn.close()
 
     new_safe = get_safe_balance()
     new_drawer = get_drawer_cash_status()

@@ -31,8 +31,13 @@ class StargateCSRFSecurityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         app.config['TESTING'] = True
+        app.config['WTF_CSRF_ENABLED'] = True
         app.config['SECRET_KEY'] = 'test-audit-security-secret-key-12345'
         cls.client = app.test_client()
+
+    @classmethod
+    def tearDownClass(cls):
+        app.config['WTF_CSRF_ENABLED'] = False
 
     def setUp(self):
         self.test_db_fd, self.test_db_path = tempfile.mkstemp(suffix='_csrf_test.db')
