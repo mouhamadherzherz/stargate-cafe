@@ -104,15 +104,15 @@
     <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 shrink-0">
         
         <!-- 1. Cafe Production -->
-        <div class="pos-emerald-card p-3 rounded-2xl flex items-center justify-between shadow hover:border-[#D6B875] transition border border-[#303A32]">
+        <div class="pos-emerald-card p-3 rounded-2xl flex items-center justify-between shadow hover:border-[#D6B875] transition border border-[#303A32]" title="المتبقي الفعلي من مبيعات الكافيه خارج الخزنة (إجمالي اليوم: {{ summary.cafe.total_lbp|format_currency }} ل.ل)">
             <div class="min-w-0 flex-1">
-                <span class="text-xs text-[#D6B875] font-black block">☕ مبيعات الكافيه:</span>
+                <span class="text-xs text-[#D6B875] font-black block">☕ مبيعات الكافيه بالدرج:</span>
                 <div class="text-base sm:text-lg font-black font-mono text-[#F5F5F0] mt-0.5">
-                    <span id="kpiCafeTotalLbp">{{ summary.cafe.total_lbp|format_currency }}</span> <span class="text-[10px] font-normal text-[#A7B0A8]">ل.ل</span>
+                    <span id="kpiCafeTotalLbp">{{ (drawer_status.untransferred_cafe_lbp or 0)|format_currency if (drawer_status and drawer_status.total_untransferred_lbp > 0 and not drawer_status.is_cafe_transferred) else '0' }}</span> <span class="text-[10px] font-normal text-[#A7B0A8]">ل.ل</span>
                 </div>
                 <div id="kpiCafeSubstatus" class="mt-1 flex items-center gap-1.5 flex-wrap">
                     {% if (drawer_status.total_untransferred_lbp or 0) <= 0 or drawer_status.is_cafe_transferred %}
-                    <span class="text-[11px] text-[#35C995] font-bold flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> مرحّل للخزنة ✓</span>
+                    <span class="text-[11px] text-[#35C995] font-bold flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> مرحّل بالكامل للخزنة (0 متبقٍ) ✓</span>
                     {% else %}
                     <span class="text-[11px] text-amber-300 font-bold flex items-center gap-1"><i class="fa-solid fa-clock"></i> معلق بالدرج: {{ (drawer_status.untransferred_cafe_lbp or 0)|format_currency }} ل.ل</span>
                     {% endif %}
@@ -124,18 +124,18 @@
         </div>
 
         <!-- 2. GAMING & Computers Dedicated Account & 100% Profit -->
-        <div class="pos-emerald-card p-3 rounded-2xl flex items-center justify-between shadow relative overflow-hidden hover:border-[#0E8F65] transition border border-[#303A32]">
+        <div class="pos-emerald-card p-3 rounded-2xl flex items-center justify-between shadow relative overflow-hidden hover:border-[#0E8F65] transition border border-[#303A32]" title="المتبقي الفعلي من مبيعات الألعاب خارج الخزنة (إجمالي اليوم: {{ summary.pc.total_lbp|format_currency }} ل.ل)">
             <div class="relative z-10 min-w-0 flex-1">
                 <div class="flex items-center gap-1.5 mb-0.5">
-                    <span class="text-xs text-[#35C995] font-black block">🎮 ألعاب وكمبيوتر:</span>
+                    <span class="text-xs text-[#35C995] font-black block">🎮 ألعاب وكمبيوتر بالدرج:</span>
                     <span class="bg-[#0E8F65]/30 text-[#35C995] text-[10px] font-black px-1.5 py-0.5 rounded-md border border-[#0E8F65]/40">100% ربح</span>
                 </div>
                 <div class="text-base sm:text-lg font-black font-mono text-[#F5F5F0]">
-                    <span id="kpiGamingTotalLbp">{{ summary.pc.total_lbp|format_currency }}</span> <span class="text-[10px] font-normal text-[#A7B0A8]">ل.ل</span>
+                    <span id="kpiGamingTotalLbp">{{ (drawer_status.untransferred_pc_lbp or 0)|format_currency if (drawer_status and drawer_status.total_untransferred_lbp > 0 and not drawer_status.is_gaming_transferred) else '0' }}</span> <span class="text-[10px] font-normal text-[#A7B0A8]">ل.ل</span>
                 </div>
                 <div id="kpiGamingSubstatus" class="mt-1 flex items-center gap-1.5 flex-wrap">
                     {% if (drawer_status.total_untransferred_lbp or 0) <= 0 or drawer_status.is_gaming_transferred %}
-                    <span class="text-[11px] text-[#35C995] font-bold flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> مرحّل للخزنة ✓</span>
+                    <span class="text-[11px] text-[#35C995] font-bold flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> مرحّل بالكامل للخزنة (0 متبقٍ) ✓</span>
                     {% else %}
                     <span class="text-[11px] text-amber-300 font-bold flex items-center gap-1"><i class="fa-solid fa-clock"></i> معلق بالدرج: {{ (drawer_status.untransferred_pc_lbp or 0)|format_currency }} ل.ل</span>
                     {% endif %}
@@ -211,18 +211,18 @@
         </div>
 
         <!-- 5. Total Production Value (Cash + Debts) -->
-        <div class="pos-emerald-card p-3 rounded-2xl flex items-center justify-between shadow hover:border-[#35C995] transition border border-[#303A32]" title="إجمالي مبيعات اليوم التراكمية (كاش + ديون)">
+        <div class="pos-emerald-card p-3 rounded-2xl flex items-center justify-between shadow hover:border-[#35C995] transition border border-[#303A32]" title="إجمالي الأموال المعلقة خارج الخزنة (إجمالي إنتاج اليوم: {{ summary.total_production_lbp|format_currency }} ل.ل)">
             <div class="min-w-0 flex-1">
-                <span class="text-xs text-[#A7B0A8] font-bold block">📊 إنتاج اليوم (تراكمي كامل):</span>
+                <span class="text-xs text-[#A7B0A8] font-bold block">📊 إنتاج اليوم بالدرج (معلق):</span>
                 <div class="text-base sm:text-lg font-black font-mono text-[#F5F5F0] mt-0.5">
-                    <span id="kpiTotalProductionLbp">{{ summary.total_production_lbp|format_currency }}</span> <span class="text-[10px] font-normal text-[#A7B0A8]">ل.ل</span>
+                    <span id="kpiTotalProductionLbp">{{ (drawer_status.total_untransferred_lbp or 0)|format_currency if (drawer_status and drawer_status.total_untransferred_lbp > 0) else '0' }}</span> <span class="text-[10px] font-normal text-[#A7B0A8]">ل.ل</span>
                 </div>
                 <div class="flex items-center gap-1.5 text-[11px] font-mono mt-1 flex-wrap">
-                    <span id="kpiTotalProductionUsd" class="text-[#D6B875] font-bold">{{ summary.total_production_usd|to_usd }}</span>
+                    <span id="kpiTotalProductionUsd" class="text-[#D6B875] font-bold">{{ (drawer_status.total_untransferred_usd or 0)|to_usd if (drawer_status and drawer_status.total_untransferred_lbp > 0) else '$0.00' }}</span>
                     <span class="text-[#303A32]">•</span>
                     <span id="kpiProductionDrawerStatus" class="font-bold">
                         {% if (drawer_status.total_untransferred_lbp or 0) <= 0 %}
-                        <span class="text-[#35C995] font-bold">✓ الكاش مرحّل للخزنة 🔒</span>
+                        <span class="text-[#35C995] font-bold">✓ كل شيء مصفّر (0 ل.ل) ومرحّل بالكامل 🔒</span>
                         {% else %}
                         <span class="text-amber-400">معلق بالدرج: {{ (drawer_status.total_untransferred_lbp or 0)|format_currency }} ل.ل</span>
                         {% endif %}
@@ -3680,13 +3680,14 @@ async function refreshLiveKpiAndDrawerStatus() {
 
             // Update Card 1 (Cafe)
             const elCafeTot = document.getElementById('kpiCafeTotalLbp');
-            if (elCafeTot && data.summary?.cafe?.total_lbp !== undefined) {
-                elCafeTot.innerText = Math.round(data.summary.cafe.total_lbp).toLocaleString();
+            if (elCafeTot) {
+                const dispCafe = (totalDrawer > 0 && !data.drawer_status?.is_cafe_transferred) ? (cafeUntransferred || 0) : 0;
+                elCafeTot.innerText = Math.round(dispCafe).toLocaleString();
             }
             const elCafeSub = document.getElementById('kpiCafeSubstatus');
             if (elCafeSub) {
                 if (totalDrawer <= 0 || data.drawer_status?.is_cafe_transferred) {
-                    elCafeSub.innerHTML = `<span class="text-[11px] text-[#35C995] font-bold flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> مرحّل للخزنة ✓</span>`;
+                    elCafeSub.innerHTML = `<span class="text-[11px] text-[#35C995] font-bold flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> مرحّل بالكامل للخزنة (0 متبقٍ) ✓</span>`;
                 } else {
                     elCafeSub.innerHTML = `<span class="text-[11px] text-amber-300 font-bold flex items-center gap-1"><i class="fa-solid fa-clock"></i> معلق بالدرج: ${Math.round(cafeUntransferred).toLocaleString()} ل.ل</span>`;
                 }
@@ -3694,13 +3695,14 @@ async function refreshLiveKpiAndDrawerStatus() {
 
             // Update Card 2 (Gaming)
             const elPcTot = document.getElementById('kpiGamingTotalLbp');
-            if (elPcTot && data.summary?.pc?.total_lbp !== undefined) {
-                elPcTot.innerText = Math.round(data.summary.pc.total_lbp).toLocaleString();
+            if (elPcTot) {
+                const dispPc = (totalDrawer > 0 && !data.drawer_status?.is_gaming_transferred) ? (pcUntransferred || 0) : 0;
+                elPcTot.innerText = Math.round(dispPc).toLocaleString();
             }
             const elPcSub = document.getElementById('kpiGamingSubstatus');
             if (elPcSub) {
                 if (totalDrawer <= 0 || data.drawer_status?.is_gaming_transferred) {
-                    elPcSub.innerHTML = `<span class="text-[11px] text-[#35C995] font-bold flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> مرحّل للخزنة ✓</span>`;
+                    elPcSub.innerHTML = `<span class="text-[11px] text-[#35C995] font-bold flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> مرحّل بالكامل للخزنة (0 متبقٍ) ✓</span>`;
                 } else {
                     elPcSub.innerHTML = `<span class="text-[11px] text-amber-300 font-bold flex items-center gap-1"><i class="fa-solid fa-clock"></i> معلق بالدرج: ${Math.round(pcUntransferred).toLocaleString()} ل.ل</span>`;
                 }
@@ -3726,17 +3728,19 @@ async function refreshLiveKpiAndDrawerStatus() {
 
             // Update Card 5 (Production & Drawer Status)
             const elProdLbp = document.getElementById('kpiTotalProductionLbp');
-            if (elProdLbp && data.summary?.total_production_lbp !== undefined) {
-                elProdLbp.innerText = Math.round(data.summary.total_production_lbp).toLocaleString();
+            if (elProdLbp) {
+                const dispProd = totalDrawer > 0 ? totalDrawer : 0;
+                elProdLbp.innerText = Math.round(dispProd).toLocaleString();
             }
             const elProdUsd = document.getElementById('kpiTotalProductionUsd');
-            if (elProdUsd && data.summary?.total_production_usd !== undefined) {
-                elProdUsd.innerText = '$' + (data.summary.total_production_usd || 0).toFixed(2);
+            if (elProdUsd) {
+                const dispProdUsd = totalDrawer > 0 ? (currentLiveDrawerStatus.total_untransferred_usd || 0) : 0;
+                elProdUsd.innerText = '$' + dispProdUsd.toFixed(2);
             }
             const elProdStatus = document.getElementById('kpiProductionDrawerStatus');
             if (elProdStatus) {
                 if (totalDrawer <= 0) {
-                    elProdStatus.innerHTML = `<span class="text-[#35C995] font-bold">✓ الكاش مرحّل للخزنة 🔒</span>`;
+                    elProdStatus.innerHTML = `<span class="text-[#35C995] font-bold">✓ كل شيء مصفّر (0 ل.ل) ومرحّل بالكامل 🔒</span>`;
                 } else {
                     elProdStatus.innerHTML = `<span class="text-amber-400 font-bold">معلق بالدرج: ${Math.round(totalDrawer).toLocaleString()} ل.ل</span>`;
                 }
@@ -3843,24 +3847,24 @@ async function transferAllDrawerCashNow() {
     await refreshLiveKpiAndDrawerStatus();
     const totalCash = currentLiveDrawerStatus.total_untransferred_lbp;
     if (totalCash <= 0) {
-        alert('درج الكاشير مصفّر حالياً (0 ل.ل) ولا يوجد كاش غير مرحل.');
+        alert('درج الكاشير وجميع عدادات النقدية مصفّرة حالياً (0 ل.ل) وتم نقل كل شيء مسبقاً للخزنة.');
         return;
     }
-    if (!confirm(`تأكيد ترحيل كامل كاش الدرج (${Math.round(totalCash).toLocaleString()} ل.ل) إلى الخزنة الخاصة وتصفير رصيد الدرج إلى 0 ل.ل؟`)) {
+    if (!confirm(`⚡ تأكيد ترحيل وتصفير شامل لجميع الأموال (${Math.round(totalCash).toLocaleString()} ل.ل) إلى الخزنة الخاصة؟\n\n✓ سيتم نقل جميع المبالغ بالكامل إلى الخزنة الخاصة.\n✓ ستصبح جميع عدادات الكاش والإنتاج مصفّرة إلى (0 ل.ل) فوراً.`)) {
         return;
     }
     try {
-        const resp = await fetch('/safe/transfer_drawer_total', {
+        const resp = await fetch('/safe/transfer_and_zero_all', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
-                note: 'ترحيل كامل كاش الدرج وتصفير رصيد الصندوق'
+                note: 'ترحيل وتصفير شامل لجميع الأموال ونقلها إلى الخزنة الخاصة'
             })
         });
         const res = await resp.json();
         if (res.success) {
             closeSafeTransferModal();
-            alert('✓ ' + res.message);
+            alert('✓ ' + (res.message || 'تم ترحيل وتصفير جميع الأموال بنجاح!'));
             await refreshLiveKpiAndDrawerStatus();
             location.reload();
         } else {

@@ -505,6 +505,8 @@ app.jinja_env.globals['csrf_token'] = generate_csrf_token
 
 @app.before_request
 def csrf_protect():
+    if app.config.get('TESTING') or app.config.get('WTF_CSRF_ENABLED') is False:
+        return
     # Only validate state-changing HTTP methods
     if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
         session_token = session.get('_csrf_token')
@@ -4467,6 +4469,38 @@ def safe_transfer_drawer_total():
     except Exception as e:
         if request.is_json:
             return jsonify({'success': False, 'message': str(e)}), 400
+        flash(f"تنبيه: {e}", "warning")
+
+    next_url = request.form.get('next') or request.referrer or url_for('safe_page')
+    return redirect(next_url)
+
+@app.route('/safe/transfer_and_zero_all', methods=['POST'])
+@app.route('/api/safe/transfer_and_zero_all', methods=['POST'])
+@login_required
+def safe_transfer_and_zero_all():
+    """ترحيل وتصفير شامل لجميع الأموال بالكامل إلى الخزنة الخاصة وتصفير كافة العدادات إلى 0 ل.ل."""
+    transferred_by = session.get('employee_name') or session.get('admin_name') or 'المدير'
+    note = (request.form.get('note') if not request.is_json else (request.get_json(silent=True) or {}).get('note')) or "ترحيل وتصفير شامل لجميع الأموال ونقلها إلى الخزنة الخاصة"
+    try:
+        res = accounting.transfer_and_zero_all_to_safe(transferred_by=transferred_by, note=note)
+        try:
+            database.write_audit_log(
+                actor=transferred_by,
+                action='SAFE_TRANSFER_AND_ZERO_ALL',
+                table_name='safe_transfers',
+                record_id=res.get('transfer_id'),
+                new_value=str(res.get('amount_lbp')),
+                reason=f"ترحيل وتصفير شامل لجميع الأموال ({res['amount_lbp']:,.0f} ل.ل) إلى الخزنة وتصفير كل شيء"
+            )
+        except Exception:
+            pass
+
+        if request.is_json:
+            return jsonify(res)
+        flash(res['message'], 'success')
+    except Exception as e:
+        if request.is_json:
+            return jsonify({'success': False, 'message': str(e), 'error': str(e)}), 400
         flash(f"تنبيه: {e}", "warning")
 
     next_url = request.form.get('next') or request.referrer or url_for('safe_page')

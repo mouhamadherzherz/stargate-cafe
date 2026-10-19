@@ -170,5 +170,30 @@ class TestOwnerDrawingsAndSafeTotal(unittest.TestCase):
         self.assertIn('safe_balance_lbp', data['money'])
         self.assertEqual(data['money']['drawer_cash_lbp'], 0.0)
 
+    def test_06_transfer_and_zero_all(self):
+        """التحقق من ترحيل وتصفير جميع الأموال ونقلها للخزنة وتصفير كافة العدادات"""
+        self._add_cash_to_drawer(1800000.0)
+        drawer_before = accounting.get_drawer_cash_status()
+        self.assertGreater(drawer_before['total_untransferred_lbp'], 0.0)
+
+        with self.client.session_transaction() as sess:
+            sess['employee_id'] = 1
+            sess['employee_name'] = 'المدير العام'
+            sess['employee_role'] = 'admin'
+            sess['is_admin'] = True
+            sess['admin_authenticated'] = True
+
+        resp = self.client.post('/safe/transfer_and_zero_all', json={'note': 'اختبار ترحيل وتصفير كل شيء'})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['drawer_remaining_lbp'], 0.0)
+
+        # التحقق من أن جميع عدادات الكاش بالدرج أصبحت 0
+        drawer_after = accounting.get_drawer_cash_status()
+        self.assertEqual(drawer_after['total_untransferred_lbp'], 0.0)
+        self.assertEqual(drawer_after['untransferred_cafe_lbp'], 0.0)
+        self.assertEqual(drawer_after['untransferred_pc_lbp'], 0.0)
+
 if __name__ == '__main__':
     unittest.main()

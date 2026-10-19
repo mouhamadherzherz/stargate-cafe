@@ -191,21 +191,22 @@
                 </form>
                 {% endif %}
 
-                {% if drawer_status and drawer_status.total_untransferred_lbp > daily_transfer_status.recommended_transfer_lbp and daily_transfer_status.recommended_transfer_lbp > 0 %}
-                <!-- Transfer All Drawer Total Cash -->
-                <form action="{{ url_for('safe_transfer_drawer_total') }}" method="POST" class="inline" onsubmit="var b=this.querySelector('button'); b.disabled=true; b.innerHTML='⏳ جاري النقل...';">
+                <!-- ⚡ MASTER ACTION: Transfer and Zero All to Safe -->
+                {% if drawer_status and drawer_status.total_untransferred_lbp > 0 %}
+                <form action="{{ url_for('safe_transfer_and_zero_all') }}" method="POST" class="inline" onsubmit="var b=this.querySelector('button'); b.disabled=true; b.innerHTML='⏳ جاري النقل والتصفير...';">
+                    <input type="hidden" name="note" value="ترحيل وتصفير شامل لجميع الأموال ونقلها إلى الخزنة الخاصة">
                     <button type="submit"
-                            class="bg-teal-600 hover:bg-teal-500 text-white font-black px-4 py-2.5 rounded-xl text-xs transition shadow-md flex items-center gap-1.5 active:scale-95 cursor-pointer">
-                        <i class="fa-solid fa-vault"></i>
-                        <span>نقل كامل رصيد الدرج ({{ drawer_status.total_untransferred_lbp|format_currency }} ل.ل)</span>
+                            class="bg-gradient-to-r from-amber-400 via-emerald-500 to-teal-500 hover:from-amber-300 hover:to-teal-400 text-slate-950 font-black px-5 py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-500/30 flex items-center gap-2 active:scale-95 cursor-pointer border border-amber-300">
+                        <i class="fa-solid fa-bolt text-sm"></i>
+                        <span>⚡ نقل جميع المال وتصفير كل شيء ({{ drawer_status.total_untransferred_lbp|format_currency }} ل.ل) إلى الخزنة 🏦</span>
                     </button>
                 </form>
                 {% endif %}
 
-                {% if daily_transfer_status.is_fully_transferred and (not drawer_status or drawer_status.total_untransferred_lbp <= 0) %}
-                <div class="bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 font-black px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-inner">
-                    <i class="fa-solid fa-circle-check text-emerald-400"></i>
-                    <span>✓ كامل الكاش مرحّل للخزنة (0 ل.ل متبقٍ بالدرج) 🔒</span>
+                {% if not drawer_status or drawer_status.total_untransferred_lbp <= 0 %}
+                <div class="bg-emerald-950/90 border border-emerald-500/80 text-emerald-300 font-black px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow-inner">
+                    <i class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>
+                    <span>✓ جميع الأموال مصفّرة (0 ل.ل متبقٍ خارج الخزنة) ونُقلت بالكامل إلى الخزنة الخاصة 🔒</span>
                 </div>
                 {% endif %}
 
