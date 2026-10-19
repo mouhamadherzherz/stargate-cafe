@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  stargate-cafe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stargate_cafe_app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - STARGATE_SECRET_KEY=${STARGATE_SECRET_KEY}
+      - ENABLE_OTA_CHECKS=0
+      - FLASK_ENV=production
+    volumes:
+      - ./data:/opt/stargate/data
+      - ./Safe_Backups:/opt/stargate/Safe_Backups
+      - ./logs:/opt/stargate/logs
+      - ./static/uploads:/opt/stargate/static/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/check_update"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

@@ -1,0 +1,604 @@
+{% extends "base.html" %}
+
+{% block title %}المركز المالي والقوائم الختامية وإقفال السنة | STARGATE CAFE ERP{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-7xl mx-auto pb-16 print:p-0 print:space-y-4">
+
+    <!-- Header Section (Screen Only) -->
+    <div class="print:hidden bg-gradient-to-r from-slate-900 via-indigo-950/80 to-slate-900 text-white p-6 rounded-3xl shadow-xl border border-indigo-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="space-y-1">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-400/30">
+                <span>🏛️</span>
+                <span>النظام المحاسبي المتكامل ERP v5.7</span>
+            </div>
+            <h1 class="text-2xl lg:text-3xl font-black text-white flex items-center gap-3">
+                <span>المركز المالي والقوائم الختامية</span>
+            </h1>
+            <p class="text-xs text-slate-400">
+                إدارة شاملة لدورة المال من بداية الوردية لآخر الدوام إلى إقفال السنة المالية (P&L، ميزان المراجعة، والميزانية العمومية).
+            </p>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+            <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 shadow-lg shadow-indigo-600/30">
+                <span>🖨️ طباعة القوائم</span>
+            </button>
+            <form action="{{ url_for('financial_recalculate_route') }}" method="POST" class="inline" onsubmit="return confirm('هل تريد إعادة احتساب ومزامنة كافة الحسابات من قيود اليومية؟')">
+                <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 border border-slate-700">
+                    <span>⚡ مزامنة الحسابات</span>
+                </button>
+            </form>
+            <a href="{{ url_for('financial_ledger_page') }}" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 border border-slate-700">
+                <span>📑 سجل القيود</span>
+            </a>
+            <a href="{{ url_for('admin_panel') }}" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 border border-slate-700">
+                <span>← لوحة الإدارة</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Print Header (Print Only) -->
+    <div class="hidden print:block text-center border-b pb-4 mb-4">
+        <h1 class="text-2xl font-black text-slate-900">{{ settings.get('company_name', 'STARGATE CAFE') }}</h1>
+        <h2 class="text-lg font-bold text-slate-700">التقرير والقوائم المالية الختامية</h2>
+        <p class="text-sm text-slate-500">الفترة: {{ display_period }} | تاريخ التقرير: {{ now_date if now_date else '' }}</p>
+    </div>
+
+    <!-- KPI Summary Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <!-- Cash Drawer -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg">
+            <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+                <span>صندوق الكاشير</span>
+                <span class="text-emerald-400">💵 #1010</span>
+            </div>
+            <div class="text-base lg:text-lg font-mono font-black text-white">
+                {{ (drawer_status.exact_drawer_account_lbp or 0)|format_currency }} <span class="text-[10px] text-slate-400 font-normal">ل.ل</span>
+            </div>
+            <div class="text-xs font-mono text-emerald-400 font-bold mt-1">
+                ${{ "{:,.2f}".format(drawer_status.exact_drawer_account_usd or 0) }}
+            </div>
+        </div>
+
+        <!-- Safe Vault -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg">
+            <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+                <span>الخزنة المركزية</span>
+                <span class="text-amber-400">🏦 #1020</span>
+            </div>
+            <div class="text-base lg:text-lg font-mono font-black text-white">
+                {{ (safe_balance.balance_lbp or 0)|format_currency }} <span class="text-[10px] text-slate-400 font-normal">ل.ل</span>
+            </div>
+            <div class="text-xs font-mono text-amber-400 font-bold mt-1">
+                ${{ "{:,.2f}".format(safe_balance.balance_usd or 0) }}
+            </div>
+        </div>
+
+        <!-- Customer Receivables -->
+        {% set rec_acc = (accounts|selectattr('code', 'equalto', '1030')|first) %}
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg">
+            <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+                <span>ديون الزبائن</span>
+                <span class="text-cyan-400">📋 #1030</span>
+            </div>
+            <div class="text-base lg:text-lg font-mono font-black text-white">
+                {{ (rec_acc.balance_lbp if rec_acc else 0)|format_currency }} <span class="text-[10px] text-slate-400 font-normal">ل.ل</span>
+            </div>
+            <div class="text-xs font-mono text-cyan-400 font-bold mt-1">
+                ${{ "{:,.2f}".format(rec_acc.balance_usd if rec_acc else 0) }}
+            </div>
+        </div>
+
+        <!-- Supplier Payables -->
+        {% set pay_acc = (accounts|selectattr('code', 'equalto', '2010')|first) %}
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg">
+            <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+                <span>مستحقات الموردين</span>
+                <span class="text-rose-400">📦 #2010</span>
+            </div>
+            <div class="text-base lg:text-lg font-mono font-black text-white">
+                {{ (pay_acc.balance_lbp if pay_acc else 0)|format_currency }} <span class="text-[10px] text-slate-400 font-normal">ل.ل</span>
+            </div>
+            <div class="text-xs font-mono text-rose-400 font-bold mt-1">
+                ${{ "{:,.2f}".format(pay_acc.balance_usd if pay_acc else 0) }}
+            </div>
+        </div>
+
+        <!-- Total Assets -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg">
+            <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+                <span>إجمالي الأصول</span>
+                <span class="text-indigo-400">💎 Assets</span>
+            </div>
+            <div class="text-base lg:text-lg font-mono font-black text-indigo-300">
+                {{ (balance_sheet.total_assets_lbp or 0)|format_currency }} <span class="text-[10px] text-slate-400 font-normal">ل.ل</span>
+            </div>
+            <div class="text-xs font-mono text-indigo-400 font-bold mt-1">
+                ${{ "{:,.2f}".format(balance_sheet.total_assets_usd or 0) }}
+            </div>
+        </div>
+
+        <!-- Net Profit -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg">
+            <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+                <span>صافي الأرباح</span>
+                <span class="text-purple-400">📈 Net P&L</span>
+            </div>
+            <div class="text-base lg:text-lg font-mono font-black {% if income_statement.net_profit_lbp >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                {{ (income_statement.net_profit_lbp or 0)|format_currency }} <span class="text-[10px] text-slate-400 font-normal">ل.ل</span>
+            </div>
+            <div class="text-xs font-mono {% if income_statement.net_profit_usd >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %} font-bold mt-1">
+                ${{ "{:,.2f}".format(income_statement.net_profit_usd or 0) }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Golden Accounting Balance Check Banner -->
+    <div class="p-3.5 rounded-2xl border flex items-center justify-between gap-3 text-xs {% if balance_sheet.is_balanced and trial_balance.is_balanced %}bg-emerald-950/40 border-emerald-500/30 text-emerald-300{% else %}bg-amber-950/40 border-amber-500/30 text-amber-300{% endif %}">
+        <div class="flex items-center gap-2">
+            <span class="text-base">{% if balance_sheet.is_balanced and trial_balance.is_balanced %}✅{% else %}⚠️{% endif %}</span>
+            <span class="font-bold">المطابقة المحاسبية الذهبية (ERP Balance Check):</span>
+            <span>الأصول ({{ (balance_sheet.total_assets_lbp or 0)|format_currency }} ل.ل) = الخصوم + حقوق الملكية ({{ (balance_sheet.total_liabilities_and_equity_lbp or 0)|format_currency }} ل.ل)</span>
+        </div>
+        <div class="font-mono font-bold">
+            {% if balance_sheet.is_balanced and trial_balance.is_balanced %}
+            الفارق: 0 ل.ل (مطابق 100% بدون أي خلل)
+            {% else %}
+            الفارق: {{ balance_sheet.difference_lbp|format_currency }} ل.ل
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Period Filter Toolbar (Screen Only) -->
+    <div class="print:hidden bg-slate-900 border border-slate-800 p-4 rounded-3xl shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-slate-400 font-bold ml-2">الفترة الزمنية:</span>
+            <a href="{{ url_for('financial_statements_page', period='today') }}" class="px-3 py-1.5 rounded-xl text-xs font-bold transition {% if period == 'today' %}bg-indigo-600 text-white shadow{% else %}bg-slate-800 text-slate-300 hover:bg-slate-700{% endif %}">اليوم</a>
+            <a href="{{ url_for('financial_statements_page', period='week') }}" class="px-3 py-1.5 rounded-xl text-xs font-bold transition {% if period == 'week' %}bg-indigo-600 text-white shadow{% else %}bg-slate-800 text-slate-300 hover:bg-slate-700{% endif %}">هذا الأسبوع</a>
+            <a href="{{ url_for('financial_statements_page', period='month') }}" class="px-3 py-1.5 rounded-xl text-xs font-bold transition {% if period == 'month' %}bg-indigo-600 text-white shadow{% else %}bg-slate-800 text-slate-300 hover:bg-slate-700{% endif %}">هذا الشهر</a>
+            <a href="{{ url_for('financial_statements_page', period='year') }}" class="px-3 py-1.5 rounded-xl text-xs font-bold transition {% if period == 'year' or not period %}bg-indigo-600 text-white shadow{% else %}bg-slate-800 text-slate-300 hover:bg-slate-700{% endif %}">هذه السنة ({{ current_year }})</a>
+        </div>
+
+        <form method="GET" action="{{ url_for('financial_statements_page') }}" class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-slate-400 font-bold">مخصص:</span>
+            <input type="date" name="start_date" value="{{ start_date }}" style="color-scheme: dark;" class="bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white">
+            <span class="text-xs text-slate-500">إلى</span>
+            <input type="date" name="end_date" value="{{ end_date }}" style="color-scheme: dark;" class="bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white">
+            <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl border border-slate-700 transition">
+                عرض
+            </button>
+        </form>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="print:hidden border-b border-slate-800 flex items-center gap-4 text-xs font-bold">
+        <button onclick="switchTab('pnl')" id="tab-btn-pnl" class="tab-btn pb-3 border-b-2 border-indigo-500 text-indigo-400 flex items-center gap-2">
+            <span>📈 قائمة الأرباح والخسائر (P&L)</span>
+        </button>
+        <button onclick="switchTab('trial')" id="tab-btn-trial" class="tab-btn pb-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+            <span>⚖️ ميزان المراجعة (Trial Balance)</span>
+        </button>
+        <button onclick="switchTab('bs')" id="tab-btn-bs" class="tab-btn pb-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+            <span>🏛️ الميزانية العمومية (Balance Sheet)</span>
+        </button>
+        <button onclick="switchTab('coa')" id="tab-btn-coa" class="tab-btn pb-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+            <span>🌳 شجرة الحسابات (COA)</span>
+        </button>
+        <button onclick="switchTab('close')" id="tab-btn-close" class="tab-btn pb-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+            <span>🔒 إقفال السنة المالية</span>
+        </button>
+    </div>
+
+    <!-- TAB 1: INCOME STATEMENT (P&L) -->
+    <div id="tab-pnl" class="tab-content space-y-4">
+        <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden p-6 space-y-6">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div>
+                    <h2 class="text-lg font-black text-white">قائمة الأرباح والخسائر (Income Statement)</h2>
+                    <p class="text-xs text-slate-400">الفترة: {{ display_period }}</p>
+                </div>
+                <div class="text-left font-mono">
+                    <div class="text-xs text-slate-400">صافي ربح الفترة</div>
+                    <div class="text-xl font-black {% if income_statement.net_profit_lbp >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                        {{ income_statement.net_profit_lbp|format_currency }} ل.ل
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Revenues Section -->
+                <div class="space-y-3">
+                    <h3 class="text-sm font-bold text-cyan-400 flex items-center gap-2">
+                        <span>📥 الإيرادات التشغيلية (Operating Revenues)</span>
+                    </h3>
+                    <div class="bg-slate-950/60 rounded-2xl border border-slate-800/80 p-4 space-y-2 text-xs">
+                        {% for r in income_statement.revenues %}
+                        <div class="flex items-center justify-between py-1 border-b border-slate-800/40">
+                            <span class="text-slate-300">#{{ r.code }} - {{ r.name_ar }}</span>
+                            <span class="font-mono font-bold text-white">{{ r.net_amount_lbp|format_currency }} ل.ل</span>
+                        </div>
+                        {% else %}
+                        <div class="text-slate-500 py-2 text-center">لا توجد إيرادات مسجلة لهذه الفترة</div>
+                        {% endfor %}
+
+                        {% if income_statement.discounts_lbp > 0 %}
+                        <div class="flex items-center justify-between py-1 text-rose-400 border-b border-slate-800/40">
+                            <span>(-) الخصومات والضيافة (#4100)</span>
+                            <span class="font-mono font-bold">-{{ income_statement.discounts_lbp|format_currency }} ل.ل</span>
+                        </div>
+                        {% endif %}
+
+                        <div class="flex items-center justify-between pt-2 font-bold text-cyan-300">
+                            <span>صافي الإيرادات (Net Revenues)</span>
+                            <span class="font-mono">{{ income_statement.net_revenue_lbp|format_currency }} ل.ل</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Expenses Section -->
+                <div class="space-y-3">
+                    <h3 class="text-sm font-bold text-amber-400 flex items-center gap-2">
+                        <span>📤 المصروفات والتكاليف (Operating Expenses)</span>
+                    </h3>
+                    <div class="bg-slate-950/60 rounded-2xl border border-slate-800/80 p-4 space-y-2 text-xs">
+                        {% if income_statement.cogs_lbp > 0 %}
+                        <div class="flex items-center justify-between py-1 border-b border-slate-800/40">
+                            <span class="text-slate-300">#5010 - تكلفة البضاعة المباعة (COGS)</span>
+                            <span class="font-mono font-bold text-amber-400">{{ income_statement.cogs_lbp|format_currency }} ل.ل</span>
+                        </div>
+                        {% endif %}
+
+                        {% for e in income_statement.operating_expenses %}
+                        <div class="flex items-center justify-between py-1 border-b border-slate-800/40">
+                            <span class="text-slate-300">#{{ e.code }} - {{ e.name_ar }}</span>
+                            <span class="font-mono font-bold text-white">{{ e.net_amount_lbp|format_currency }} ل.ل</span>
+                        </div>
+                        {% else %}
+                        <div class="text-slate-500 py-2 text-center">لا توجد مصروفات مسجلة لهذه الفترة</div>
+                        {% endfor %}
+
+                        <div class="flex items-center justify-between pt-2 font-bold text-amber-300">
+                            <span>إجمالي المصروفات (Total Expenses)</span>
+                            <span class="font-mono">{{ (income_statement.total_expense_lbp + income_statement.cogs_lbp)|format_currency }} ل.ل</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Net Result Card -->
+            <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center justify-between">
+                <div>
+                    <div class="text-sm font-bold text-white">صافي الدخل والربح النهائي (Net Operating Profit)</div>
+                    <div class="text-xs text-slate-400">إجمالي الإيرادات مطروحاً منها كافة المصروفات والتكاليف</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-2xl font-mono font-black {% if income_statement.net_profit_lbp >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                        {{ income_statement.net_profit_lbp|format_currency }} ل.ل
+                    </div>
+                    <div class="text-xs font-mono {% if income_statement.net_profit_usd >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %} font-bold">
+                        ${{ "{:,.2f}".format(income_statement.net_profit_usd) }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 2: TRIAL BALANCE -->
+    <div id="tab-trial" class="tab-content hidden space-y-4">
+        <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden">
+            <div class="p-4 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between">
+                <div>
+                    <h2 class="text-base font-black text-white">ميزان المراجعة المحاسبي (Trial Balance)</h2>
+                    <p class="text-xs text-slate-400">التحقق من توازن الحركات والقيود المحاسبية بالكامل حتى تاريخ: {{ trial_balance.as_of_date }}</p>
+                </div>
+                <span class="text-xs font-mono font-bold px-3 py-1 rounded-xl {% if trial_balance.is_balanced %}bg-emerald-950 text-emerald-300 border border-emerald-800{% else %}bg-rose-950 text-rose-300 border border-rose-800{% endif %}">
+                    {% if trial_balance.is_balanced %}✓ متوازن 100%{% else %}⚠️ غير متوازن{% endif %}
+                </span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-right text-xs">
+                    <thead class="bg-slate-950 text-slate-400 border-b border-slate-800">
+                        <tr>
+                            <th class="p-3">رمز الحساب</th>
+                            <th class="p-3">اسم الحساب (عربي)</th>
+                            <th class="p-3">Account Name</th>
+                            <th class="p-3">النوع</th>
+                            <th class="p-3 font-mono text-emerald-400">إجمالي مدين (Debit)</th>
+                            <th class="p-3 font-mono text-rose-400">إجمالي دائن (Credit)</th>
+                            <th class="p-3 font-mono">صافي مدين</th>
+                            <th class="p-3 font-mono">صافي دائن</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                        {% for a in trial_balance.accounts %}
+                        <tr class="hover:bg-slate-800/40">
+                            <td class="p-3 font-mono font-bold text-amber-400">#{{ a.code }}</td>
+                            <td class="p-3 font-bold text-white">{{ a.name_ar }}</td>
+                            <td class="p-3 font-mono text-slate-400">{{ a.name }}</td>
+                            <td class="p-3 text-[10px] uppercase font-bold text-slate-400">{{ a.account_type }}</td>
+                            <td class="p-3 font-mono text-white">{{ a.total_debit_lbp|format_currency }}</td>
+                            <td class="p-3 font-mono text-white">{{ a.total_credit_lbp|format_currency }}</td>
+                            <td class="p-3 font-mono font-bold text-emerald-400">
+                                {% if a.balance_debit_lbp > 0 %}{{ a.balance_debit_lbp|format_currency }}{% else %}—{% endif %}
+                            </td>
+                            <td class="p-3 font-mono font-bold text-cyan-400">
+                                {% if a.balance_credit_lbp > 0 %}{{ a.balance_credit_lbp|format_currency }}{% else %}—{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="bg-slate-950 font-mono font-black text-sm text-white border-t-2 border-indigo-500">
+                        <tr>
+                            <td colspan="4" class="p-4 text-slate-300 font-bold">المجموع العام المتطابق:</td>
+                            <td class="p-4 text-emerald-400">{{ trial_balance.total_debit_lbp|format_currency }} ل.ل</td>
+                            <td class="p-4 text-rose-400">{{ trial_balance.total_credit_lbp|format_currency }} ل.ل</td>
+                            <td colspan="2" class="p-4 text-center text-xs font-bold {% if trial_balance.is_balanced %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                                {% if trial_balance.is_balanced %}✓ متطابق تماماً (فارق 0 ل.ل){% else %}فارق: {{ trial_balance.difference_lbp|format_currency }} ل.ل{% endif %}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 3: BALANCE SHEET -->
+    <div id="tab-bs" class="tab-content hidden space-y-4">
+        <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden p-6 space-y-6">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div>
+                    <h2 class="text-lg font-black text-white">الميزانية العمومية والمركز المالي (Balance Sheet)</h2>
+                    <p class="text-xs text-slate-400">كما في تاريخ: {{ balance_sheet.as_of_date }}</p>
+                </div>
+                <div class="text-left font-mono">
+                    <div class="text-xs text-slate-400">إجمالي المركز المالي</div>
+                    <div class="text-xl font-black text-indigo-400">
+                        {{ balance_sheet.total_assets_lbp|format_currency }} ل.ل
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Assets Side -->
+                <div class="space-y-4">
+                    <h3 class="text-sm font-bold text-emerald-400 flex items-center justify-between border-b border-emerald-500/30 pb-2">
+                        <span>💎 الأصول والموجودات (Assets)</span>
+                        <span class="font-mono">{{ balance_sheet.total_assets_lbp|format_currency }} ل.ل</span>
+                    </h3>
+                    <div class="bg-slate-950/60 rounded-2xl border border-slate-800/80 p-4 space-y-2 text-xs">
+                        {% for a in balance_sheet.assets %}
+                        <div class="flex items-center justify-between py-1.5 border-b border-slate-800/40">
+                            <div>
+                                <span class="text-amber-400 font-mono font-bold">#{{ a.code }}</span>
+                                <span class="text-white font-bold ml-1">{{ a.name_ar }}</span>
+                            </div>
+                            <span class="font-mono font-bold text-emerald-400">{{ a.balance_lbp|format_currency }} ل.ل</span>
+                        </div>
+                        {% endfor %}
+                        <div class="flex items-center justify-between pt-2 text-sm font-bold text-white">
+                            <span>مجموع الأصول (Total Assets)</span>
+                            <span class="font-mono text-emerald-400">{{ balance_sheet.total_assets_lbp|format_currency }} ل.ل</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Liabilities & Equity Side -->
+                <div class="space-y-4">
+                    <h3 class="text-sm font-bold text-indigo-400 flex items-center justify-between border-b border-indigo-500/30 pb-2">
+                        <span>⚖️ الخصوم وحقوق الملكية (Liabilities & Equity)</span>
+                        <span class="font-mono">{{ balance_sheet.total_liabilities_and_equity_lbp|format_currency }} ل.ل</span>
+                    </h3>
+                    <div class="bg-slate-950/60 rounded-2xl border border-slate-800/80 p-4 space-y-3 text-xs">
+                        <!-- Liabilities -->
+                        <div>
+                            <div class="text-[11px] font-bold text-rose-400 mb-1">الخصوم والالتزامات (Liabilities):</div>
+                            {% for l in balance_sheet.liabilities %}
+                            <div class="flex items-center justify-between py-1 border-b border-slate-800/40">
+                                <div>
+                                    <span class="text-amber-400 font-mono font-bold">#{{ l.code }}</span>
+                                    <span class="text-white ml-1">{{ l.name_ar }}</span>
+                                </div>
+                                <span class="font-mono font-bold text-rose-400">{{ l.balance_lbp|format_currency }} ل.ل</span>
+                            </div>
+                            {% endfor %}
+                            <div class="flex items-center justify-between py-1 text-slate-300 font-bold">
+                                <span>مجموع الخصوم</span>
+                                <span class="font-mono text-rose-400">{{ balance_sheet.total_liabilities_lbp|format_currency }} ل.ل</span>
+                            </div>
+                        </div>
+
+                        <!-- Equity -->
+                        <div class="pt-2 border-t border-slate-800">
+                            <div class="text-[11px] font-bold text-purple-400 mb-1">حقوق الملكية ورأس المال (Equity):</div>
+                            {% for eq in balance_sheet.equity %}
+                            <div class="flex items-center justify-between py-1 border-b border-slate-800/40">
+                                <div>
+                                    <span class="text-amber-400 font-mono font-bold">#{{ eq.code }}</span>
+                                    <span class="text-white ml-1">{{ eq.name_ar }}</span>
+                                </div>
+                                <span class="font-mono font-bold text-purple-300">{{ eq.balance_lbp|format_currency }} ل.ل</span>
+                            </div>
+                            {% endfor %}
+
+                            <!-- Current Period Net Profit -->
+                            <div class="flex items-center justify-between py-1 text-cyan-300 border-b border-slate-800/40 font-bold">
+                                <span>(+) صافي أرباح الفترة الحالية غير المقفلة</span>
+                                <span class="font-mono">{{ balance_sheet.current_net_income_lbp|format_currency }} ل.ل</span>
+                            </div>
+
+                            <div class="flex items-center justify-between py-1 text-slate-300 font-bold">
+                                <span>مجموع حقوق الملكية والأرباح</span>
+                                <span class="font-mono text-purple-400">{{ balance_sheet.total_equity_and_reserves_lbp|format_currency }} ل.ل</span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-2 text-sm font-bold text-white border-t border-slate-800">
+                            <span>مجموع الخصوم وحقوق الملكية</span>
+                            <span class="font-mono text-indigo-400">{{ balance_sheet.total_liabilities_and_equity_lbp|format_currency }} ل.ل</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 4: CHART OF ACCOUNTS -->
+    <div id="tab-coa" class="tab-content hidden space-y-4">
+        <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-xl overflow-hidden">
+            <div class="p-4 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between">
+                <div>
+                    <h2 class="text-base font-black text-white">دليل وشجرة الحسابات (Chart of Accounts)</h2>
+                    <p class="text-xs text-slate-400">الأرصدة الصافية اللحظية المحسوبة وفق القواعد المحاسبية الدقيقة</p>
+                </div>
+                <span class="text-xs font-mono font-bold bg-indigo-950 text-indigo-300 px-3 py-1 rounded-xl border border-indigo-800">
+                    {{ accounts|length }} حساب نشط
+                </span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-right text-xs">
+                    <thead class="bg-slate-950 text-slate-400 border-b border-slate-800">
+                        <tr>
+                            <th class="p-3">رمز الحساب</th>
+                            <th class="p-3">اسم الحساب (عربي)</th>
+                            <th class="p-3">Account Name</th>
+                            <th class="p-3">النوع</th>
+                            <th class="p-3 font-mono">الرصيد الدفتري (ل.ل)</th>
+                            <th class="p-3 font-mono">الرصيد ($)</th>
+                            <th class="p-3">الوظيفة والبيان</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                        {% for a in accounts %}
+                        <tr class="hover:bg-slate-800/40">
+                            <td class="p-3 font-mono font-black text-amber-400">#{{ a.code }}</td>
+                            <td class="p-3 font-bold text-white">{{ a.name_ar }}</td>
+                            <td class="p-3 font-mono text-slate-400">{{ a.name }}</td>
+                            <td class="p-3 font-bold">
+                                {% if a.account_type == 'asset' %}
+                                <span class="text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded text-[10px]">أصول (Asset)</span>
+                                {% elif a.account_type == 'liability' %}
+                                <span class="text-rose-400 bg-rose-950/80 px-2 py-0.5 rounded text-[10px]">خصوم (Liability)</span>
+                                {% elif a.account_type == 'revenue' %}
+                                <span class="text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded text-[10px]">إيرادات (Revenue)</span>
+                                {% elif a.account_type == 'expense' %}
+                                <span class="text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded text-[10px]">مصروفات (Expense)</span>
+                                {% else %}
+                                <span class="text-purple-400 bg-purple-950/80 px-2 py-0.5 rounded text-[10px]">حقوق ملكية (Equity)</span>
+                                {% endif %}
+                            </td>
+                            <td class="p-3 font-mono font-bold text-white">
+                                {{ (a.balance_lbp or 0)|format_currency }} ل.ل
+                            </td>
+                            <td class="p-3 font-mono font-bold text-emerald-400">
+                                ${{ "{:,.2f}".format(a.balance_usd or 0) }}
+                            </td>
+                            <td class="p-3 text-slate-400 text-[11px]">{{ a.description or '—' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB 5: YEAR-END CLOSING WIZARD -->
+    <div id="tab-close" class="tab-content hidden space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Closing Form -->
+            <div class="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold">🔒</span>
+                    <div>
+                        <h3 class="font-bold text-white text-sm">أداة إقفال السنة المالية</h3>
+                        <p class="text-[10px] text-slate-400">تدوير صافي الأرباح وتصفير الإيرادات والمصروفات</p>
+                    </div>
+                </div>
+
+                <div class="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs text-slate-300 space-y-2">
+                    <p class="font-bold text-amber-300">ماذا يحدث عند الإقفال؟</p>
+                    <ul class="list-disc list-inside space-y-1 text-[11px] text-slate-400">
+                        <li>حساب صافي أرباح/خسائر السنة المحددة.</li>
+                        <li>تصفير حسابات الإيرادات (4xxx) والمصروفات (5xxx).</li>
+                        <li>ترحيل صافي الربح إلى <strong class="text-purple-300">#3020 الأرباح المبقاة والمدورة</strong>.</li>
+                        <li>توليد قيد إقفال سنوي رسمي وموثق في السجل.</li>
+                    </ul>
+                </div>
+
+                <form action="{{ url_for('financial_year_end_close_route') }}" method="POST" class="space-y-3" onsubmit="return confirm('تنبيه: هل أنت متأكد تماماً من رغبتك في إقفال السنة المالية؟ سيتم ترحيل الأرباح وتوليد القيد الختامي.')">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">السنة المالية المراد إقفالها</label>
+                        <input type="number" name="fiscal_year" value="{{ current_year }}" min="2020" max="2050" required
+                               class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white font-mono font-bold focus:border-purple-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-300 mb-1">ملاحظات وبيان الإقفال</label>
+                        <textarea name="notes" rows="2" placeholder="مثال: إقفال سنوي دوري معتمد وحساب الأرباح"
+                                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:border-purple-500 outline-none"></textarea>
+                    </div>
+                    <button type="submit" class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-lg shadow-purple-600/30">
+                        تنفيذ إقفال السنة المالية وتدوير الأرباح
+                    </button>
+                </form>
+            </div>
+
+            <!-- Previous Fiscal Closings Table -->
+            <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 class="font-bold text-white text-sm">سجل إقفالات السنوات المالية السابقة</h3>
+                    <span class="text-xs font-mono text-purple-400">{{ fiscal_closings|length }} سنوات مقفلة</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-xs">
+                        <thead class="bg-slate-950 text-slate-400 border-b border-slate-800">
+                            <tr>
+                                <th class="p-3">السنة المالية</th>
+                                <th class="p-3">تاريخ الإقفال</th>
+                                <th class="p-3">إجمالي الإيرادات</th>
+                                <th class="p-3">إجمالي المصروفات</th>
+                                <th class="p-3">صافي الربح المدور</th>
+                                <th class="p-3">المعتمد</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                            {% for c in fiscal_closings %}
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="p-3 font-mono font-black text-amber-400">سنة {{ c.fiscal_year }}</td>
+                                <td class="p-3 font-mono text-slate-400">{{ c.closing_date[:10] }}</td>
+                                <td class="p-3 font-mono text-cyan-300">{{ c.total_revenues_lbp|format_currency }} ل.ل</td>
+                                <td class="p-3 font-mono text-amber-300">{{ c.total_expenses_lbp|format_currency }} ل.ل</td>
+                                <td class="p-3 font-mono font-bold text-emerald-400">{{ c.net_profit_lbp|format_currency }} ل.ل</td>
+                                <td class="p-3 text-white">{{ c.closed_by }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="p-6 text-center text-slate-500">لا توجد سنوات مقفلة سابقاً حتى الآن</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-indigo-500', 'text-indigo-400');
+        btn.classList.add('border-transparent', 'text-slate-400');
+    });
+
+    const activeContent = document.getElementById('tab-' + tabId);
+    const activeBtn = document.getElementById('tab-btn-' + tabId);
+    if (activeContent) activeContent.classList.remove('hidden');
+    if (activeBtn) {
+        activeBtn.classList.remove('border-transparent', 'text-slate-400');
+        activeBtn.classList.add('border-indigo-500', 'text-indigo-400');
+    }
+}
+</script>
+{% endblock %}

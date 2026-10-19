@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex-1 flex flex-col p-3 lg:p-6 max-w-7xl mx-auto w-full space-y-6">
+
+    <!-- Header & Action -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-5 rounded-3xl shadow-xl">
+        <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 flex items-center justify-center text-slate-950 text-2xl font-black shadow-lg shadow-amber-500/20">
+                <i class="fa-solid fa-truck-ramp-box"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-black text-white flex items-center gap-2">
+                    <span>إدارة الموردين وفواتير الشراء</span>
+                    <span class="bg-amber-500/20 text-amber-400 text-xs px-2.5 py-0.5 rounded-full border border-amber-500/30">ERP v5</span>
+                </h1>
+                <p class="text-xs text-slate-400">متابعة حسابات الموردين، مشتريات المواد الخام، وتغذية المخزون</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button onclick="document.getElementById('addSupplierModal').classList.remove('hidden')" class="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs transition shadow-lg shadow-amber-500/20 flex items-center gap-2 cursor-pointer active:scale-95">
+                <i class="fa-solid fa-user-plus"></i>
+                <span>إضافة مورد جديد</span>
+            </button>
+            <button onclick="document.getElementById('addPurchaseModal').classList.remove('hidden')" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl text-xs transition shadow-lg shadow-indigo-600/20 flex items-center gap-2 cursor-pointer active:scale-95">
+                <i class="fa-solid fa-receipt"></i>
+                <span>تسجيل فاتورة شراء</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Suppliers Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for s in suppliers %}
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 hover:border-amber-500/40 transition shadow-lg space-y-4">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="font-black text-base text-white">{{ s.name }}</h3>
+                    <p class="text-xs text-slate-400">{{ s.company or 'شركة توريد' }} • {{ s.phone or 'لا يوجد هاتف' }}</p>
+                </div>
+                <span class="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center text-amber-400 text-sm">
+                    🏢
+                </span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 bg-slate-950/80 p-3 rounded-2xl border border-slate-800/80">
+                <div>
+                    <span class="text-[10px] text-slate-400 block">رصيد الذمة (USD):</span>
+                    <strong class="text-sm font-mono text-amber-400">${{ s.balance_usd|default(0)|format_currency }}</strong>
+                </div>
+                <div>
+                    <span class="text-[10px] text-slate-400 block">رصيد الذمة (LBP):</span>
+                    <strong class="text-sm font-mono text-slate-200">{{ s.balance_lbp|default(0)|format_currency }} ل.ل</strong>
+                </div>
+            </div>
+
+            {% if s.notes %}
+            <p class="text-[11px] text-slate-400 italic bg-slate-950/40 p-2 rounded-xl border border-slate-800/40">
+                💬 {{ s.notes }}
+            </p>
+            {% endif %}
+
+            <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                <button type="button" 
+                        onclick="openPaySupplierModal({{ s.id }}, '{{ s.name }}', {{ s.balance_usd|default(0) }}, {{ s.balance_lbp|default(0) }})"
+                        class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black py-2 px-3 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md active:scale-95">
+                    <i class="fa-solid fa-hand-holding-dollar"></i>
+                    <span>تسديد دفعة للمورد</span>
+                </button>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-span-full bg-slate-900/40 border-2 border-dashed border-slate-800 rounded-3xl p-12 text-center text-slate-400">
+            <i class="fa-solid fa-truck-ramp-box text-4xl mb-3 text-slate-600"></i>
+            <p class="font-bold">لا يوجد موردين مسجلين حالياً</p>
+            <p class="text-xs text-slate-500 mt-1">أضف الموردين لتسجيل فواتير الشراء وخصم المبالغ من الخزنة تلقائياً</p>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+
+<!-- Modal: Add Supplier -->
+<div id="addSupplierModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="font-black text-white text-base">إضافة مورد جديد</h3>
+            <button onclick="document.getElementById('addSupplierModal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('supplier_add') }}" class="space-y-3">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">اسم المورد / الشركة *</label>
+                <input type="text" name="name" required class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2.5 rounded-xl outline-none focus:border-amber-500">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">الهاتف</label>
+                    <input type="text" name="phone" class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2.5 rounded-xl outline-none focus:border-amber-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">الشركة / المجال</label>
+                    <input type="text" name="company" placeholder="مثال: حبوب قهوة، ألبان" class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2.5 rounded-xl outline-none focus:border-amber-500">
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">ملاحظات</label>
+                <textarea name="notes" rows="2" class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl outline-none focus:border-amber-500"></textarea>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition">حفظ المورد</button>
+                <button type="button" onclick="document.getElementById('addSupplierModal').classList.add('hidden')" class="px-4 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Add Purchase Invoice -->
+<div id="addPurchaseModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="font-black text-white text-base">تسجيل فاتورة مشتريات (تغذية المخزون)</h3>
+            <button onclick="document.getElementById('addPurchaseModal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+        </div>
+        <form method="POST" action="{{ url_for('purchase_invoice_add') }}" class="space-y-3">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">اختر المورد *</label>
+                <select name="supplier_id" required class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2.5 rounded-xl outline-none focus:border-amber-500">
+                    {% for s in suppliers %}
+                    <option value="{{ s.id }}">{{ s.name }} ({{ s.company }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">المادة الخام / الصنف بالمخزون</label>
+                <select name="inventory_id" class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2.5 rounded-xl outline-none focus:border-amber-500">
+                    <option value="">صنف مشتريات عام (بدون ربط)</option>
+                    {% for inv in inventory_items %}
+                    <option value="{{ inv.id }}">{{ inv.name }} (الحالي: {{ inv.stock_qty }} {{ inv.unit }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">الكمية</label>
+                    <input type="number" step="any" name="qty" required value="1" class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl outline-none focus:border-amber-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">السعر الإفرادي ($)</label>
+                    <input type="number" step="any" name="cost_usd" value="0" class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl outline-none focus:border-amber-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">السعر الإفرادي (ل.ل)</label>
+                    <input type="number" step="any" name="cost_lbp" value="0" class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl outline-none focus:border-amber-500">
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-2xl border border-slate-800">
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-300 mb-1">الدفعة المدفوعة ($)</label>
+                    <input type="number" step="any" name="paid_usd" value="0" class="w-full bg-slate-900 border border-slate-700 text-amber-400 font-mono text-xs px-3 py-2 rounded-xl outline-none">
+                </div>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-300 mb-1">طريقة خصم الدفعة</label>
+                    <select name="payment_source" class="w-full bg-slate-900 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl outline-none">
+                        <option value="safe">🏦 من الخزنة الخاصة (Safe)</option>
+                        <option value="drawer">💵 من كاش الدرج (Cash Drawer)</option>
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">بيان / ملاحظات</label>
+                <input type="text" name="notes" placeholder="رقم فاتورة المورد، ملاحظات استلام..." class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl outline-none focus:border-amber-500">
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-black py-2.5 rounded-xl text-xs transition">ترحيل الفاتورة وتغذية المخزون</button>
+                <button type="button" onclick="document.getElementById('addPurchaseModal').classList.add('hidden')" class="px-4 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold">إلغاء</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Pay Supplier Balance -->
+<div id="paySupplierModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-emerald-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm font-black">💵</span>
+                <div>
+                    <h3 class="font-black text-white text-sm" id="payModalSupplierName">سداد دفعة للمورد</h3>
+                    <p class="text-[10px] text-slate-400">تسجيل سداد نقدي وتحديث رصيد الذمة وحساب الخزنة</p>
+                </div>
+            </div>
+            <button onclick="document.getElementById('paySupplierModal').classList.add('hidden')" class="text-slate-400 hover:text-white">✕</button>
+        </div>
+
+        <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex justify-between items-center text-xs">
+            <span class="text-slate-400">الرصيد المستحق الحالي:</span>
+            <div class="text-left font-mono font-bold">
+                <span class="text-amber-400 block" id="payModalBalanceUSD">$0.00</span>
+                <span class="text-slate-300 text-[10px] block" id="payModalBalanceLBP">0 ل.ل</span>
+            </div>
+        </div>
+
+        <form id="paySupplierForm" method="POST" action="" class="space-y-3.5">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">المبلغ بالدولار ($)</label>
+                    <input type="number" step="any" name="amount_usd" id="payInputUSD" placeholder="0.00" class="w-full bg-slate-950 border border-slate-700 text-amber-400 font-mono text-sm px-3 py-2 rounded-xl outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">أو بالليرة (LBP)</label>
+                    <input type="number" step="any" name="amount_lbp" id="payInputLBP" placeholder="0" class="w-full bg-slate-950 border border-slate-700 text-white font-mono text-sm px-3 py-2 rounded-xl outline-none focus:border-emerald-500">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">طريقة الدفع ومصدر الأموال</label>
+                <select name="payment_source" class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2.5 rounded-xl outline-none focus:border-emerald-500">
+                    <option value="safe">🏦 خصم من الخزنة المركزية (Safe)</option>
+                    <option value="drawer">💵 خصم من كاش الدرج (Cash Drawer)</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">بيان / سند الدفع</label>
+                <input type="text" name="notes" placeholder="سند قبض رقم، دفعة على الحساب..." class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl outline-none focus:border-emerald-500">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2">
+                <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black py-2.5 px-4 rounded-xl text-xs transition shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-1.5 active:scale-95">
+                    <span>تأكيد السداد والخصم</span>
+                    <i class="fa-solid fa-check"></i>
+                </button>
+                <button type="button" onclick="document.getElementById('paySupplierModal').classList.add('hidden')" class="px-4 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-700">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openPaySupplierModal(suppId, name, balUSD, balLBP) {
+    document.getElementById('payModalSupplierName').textContent = `تسديد دفعة للمورد: ${name}`;
+    document.getElementById('payModalBalanceUSD').textContent = `$${parseFloat(balUSD || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+    document.getElementById('payModalBalanceLBP').textContent = `${Math.round(balLBP || 0).toLocaleString('en-US')} ل.ل`;
+    document.getElementById('paySupplierForm').action = `/supplier/${suppId}/pay`;
+    document.getElementById('payInputUSD').value = '';
+    document.getElementById('payInputLBP').value = '';
+    document.getElementById('paySupplierModal').classList.remove('hidden');
+}
+</script>
+{% endblock %}

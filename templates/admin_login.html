@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex-1 flex items-center justify-center p-4 min-h-[calc(100vh-8rem)]">
+    <div class="bg-slate-900/90 border border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl backdrop-blur-md space-y-6 text-center relative overflow-hidden">
+        
+        <!-- Ambient Top Glow -->
+        <div class="absolute -top-24 left-1/2 -translate-x-1/2 w-48 h-48 bg-purple-600/30 rounded-full blur-3xl pointer-events-none"></div>
+
+        <!-- Lock Icon Header -->
+        <div class="relative">
+            <div class="w-16 h-16 rounded-3xl bg-gradient-to-tr from-purple-600 to-amber-500 mx-auto flex items-center justify-center text-white text-2xl font-black shadow-xl shadow-purple-600/30">
+                🔒
+            </div>
+            <h2 class="text-xl font-black text-white mt-4 tracking-wide">لوحة الإدارة والحسابات</h2>
+            <p class="text-xs text-slate-400 mt-1">المنطقة مخصصة للمدير فقط، يرجى إدخال كلمة السر للمتابعة</p>
+        </div>
+
+        <!-- Login Form -->
+        <form method="POST" action="{{ url_for('admin_login') }}" class="space-y-4 text-right">
+            <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">كلمة مرور الإدارة السرية: *</label>
+                <div class="relative">
+                    <input type="password" 
+                           name="admin_pin" 
+                           id="adminPinInput" 
+                           required 
+                           autofocus
+                           placeholder="••••••••" 
+                           class="w-full bg-slate-950 border-2 border-purple-500/50 focus:border-amber-400 text-white font-mono text-center text-lg tracking-widest rounded-2xl py-3 px-4 focus:outline-none transition shadow-inner">
+                    <button type="button" onclick="togglePinVisibility()" class="absolute left-3 top-3 text-slate-400 hover:text-white text-sm">
+                        <i id="pinToggleIcon" class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+
+            <button type="submit" class="w-full bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-black py-3 rounded-2xl text-sm transition shadow-lg shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2 cursor-pointer">
+                <i class="fa-solid fa-lock-open text-xs"></i>
+                <span>تسجيل الدخول للإدارة 🔓</span>
+            </button>
+        </form>
+
+        <div class="pt-2 border-t border-slate-800/80">
+            <a href="{{ url_for('index') }}" class="text-xs font-bold text-slate-400 hover:text-amber-400 transition flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                <span>العودة إلى شاشة الكاشير والمبيعات</span>
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+    function togglePinVisibility() {
+        const input = document.getElementById('adminPinInput');
+        const icon = document.getElementById('pinToggleIcon');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+</script>
+{% endblock %}

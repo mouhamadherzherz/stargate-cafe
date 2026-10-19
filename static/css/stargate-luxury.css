@@ -1,0 +1,800 @@
+/**
+ * STARGATE CAFE — Luxury Design System (v6.2.0 PRO)
+ * Theme: Dark Charcoal (#090d16), Emerald Green (#10b981), Champagne Gold (#f59e0b)
+ * Designed for High-Resolution POS Terminals, Glassmorphism & High-Contrast Arabic RTL
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap');
+
+:root {
+  /* Premium Emerald Edition Specification Palette */
+  --bg-main: #101411;
+  --bg-surface: #191F1B;
+  --bg-surface-elevated: #222A24;
+  --bg-glass: rgba(25, 31, 27, 0.85);
+  --bg-glass-card: rgba(25, 31, 27, 0.75);
+  --bg-glass-elevated: rgba(34, 42, 36, 0.90);
+  --border-subtle: #303A32;
+  --border-hover: rgba(14, 143, 101, 0.6);
+
+  /* Primary Accent: Emerald Green */
+  --emerald-50: #e6f9f2;
+  --emerald-400: #35C995;
+  --emerald-500: #0E8F65;
+  --emerald-600: #0b7352;
+  --emerald-700: #08573e;
+  --emerald-glow: rgba(14, 143, 101, 0.28);
+
+  /* Secondary Accent: Champagne Gold */
+  --gold-300: #f0e0b3;
+  --gold-400: #e2c98d;
+  --gold-500: #D6B875;
+  --gold-600: #b89851;
+  --gold-glow: rgba(214, 184, 117, 0.25);
+
+  /* Status Colors */
+  --danger-500: #ef4444;
+  --danger-glow: rgba(239, 68, 68, 0.25);
+  --info-500: #38bdf8;
+  --info-glow: rgba(56, 189, 248, 0.25);
+
+  /* Typography */
+  --font-family: 'Cairo', 'Tajawal', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --text-main: #F5F5F0;
+  --text-muted: #A7B0A8;
+  --text-dim: #758177;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.65);
+  --shadow-emerald: 0 0 20px var(--emerald-glow);
+  --shadow-gold: 0 0 20px var(--gold-glow);
+}
+
+/* ============================================================
+   Base Resets & Scrollbars
+   ============================================================ */
+html {
+  direction: rtl;
+  color-scheme: dark;
+  scroll-behavior: smooth;
+  font-family: var(--font-family);
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: normal tabular-nums !important;
+  font-size: 16.5px;
+}
+
+/* Eye-comfort readability bump for compact labels and badges */
+.text-\[10px\] {
+  font-size: 11.5px !important;
+}
+.text-\[11px\] {
+  font-size: 12.5px !important;
+}
+
+*, *::before, *::after {
+  font-variant-numeric: normal tabular-nums;
+}
+
+.font-mono, .font-digits, input[type="number"], .badge-num, .price-tag {
+  font-family: 'JetBrains Mono', 'Segoe UI', Tahoma, Arial, sans-serif !important;
+  font-feature-settings: "tnum" 1, "ss01" 0 !important;
+  unicode-bidi: isolate !important;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: radial-gradient(circle at 10% 10%, rgba(16, 185, 129, 0.05) 0%, transparent 40%),
+              radial-gradient(circle at 90% 90%, rgba(245, 158, 11, 0.04) 0%, transparent 40%),
+              var(--bg-main);
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--emerald-500);
+}
+
+/* ============================================================
+   Glassmorphic Containers & Cards
+   ============================================================ */
+.sg-card, .luxury-card {
+  background: var(--bg-glass-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow-md);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.sg-card:hover, .luxury-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-lg), var(--shadow-emerald);
+  transform: translateY(-2px);
+}
+
+.sg-card-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sg-card-body {
+  padding: 1.5rem;
+}
+
+/* ============================================================
+   Buttons & Action Controls
+   ============================================================ */
+.btn-emerald {
+  background: linear-gradient(135deg, var(--emerald-500), var(--emerald-600));
+  color: #ffffff;
+  font-weight: 700;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 14px var(--emerald-glow);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.btn-emerald:hover {
+  background: linear-gradient(135deg, var(--emerald-400), var(--emerald-500));
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+  transform: translateY(-1px);
+  color: #ffffff;
+}
+
+.btn-gold {
+  background: linear-gradient(135deg, var(--gold-500), var(--gold-600));
+  color: #1e1b4b;
+  font-weight: 800;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 14px var(--gold-glow);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.btn-gold:hover {
+  background: linear-gradient(135deg, var(--gold-400), var(--gold-500));
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-glass {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
+  backdrop-filter: blur(8px);
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-glass:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+/* ============================================================
+   Inputs & Form Elements
+   ============================================================ */
+.sg-input, input[type="text"], input[type="number"], input[type="password"], input[type="search"], select, textarea {
+  background: rgba(15, 23, 42, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #f8fafc !important;
+  border-radius: 0.75rem !important;
+  padding: 0.625rem 1rem !important;
+  font-family: var(--font-family) !important;
+  transition: all 0.2s ease !important;
+  outline: none !important;
+}
+
+.sg-input:focus, input:focus, select:focus, textarea:focus {
+  border-color: var(--emerald-500) !important;
+  box-shadow: 0 0 0 3px var(--emerald-glow) !important;
+  background: rgba(22, 32, 51, 0.95) !important;
+}
+
+/* ============================================================
+   High-Contrast Monetary Display Badges
+   ============================================================ */
+.badge-lbp {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--emerald-400);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.5rem;
+  font-weight: 800;
+  font-size: 0.95em;
+  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.badge-usd {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--gold-400);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.5rem;
+  font-weight: 800;
+  font-size: 0.95em;
+  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* ============================================================
+   Tables & Data Grids
+   ============================================================ */
+.sg-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  text-align: right;
+}
+
+.sg-table th {
+  background: rgba(15, 23, 42, 0.9);
+  color: var(--text-muted);
+  font-weight: 700;
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+}
+
+.sg-table td {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--text-main);
+  vertical-align: middle;
+  transition: background 0.15s ease;
+}
+
+.sg-table tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* ============================================================
+   Quick-Touch POS Drink Grid Optimization
+   ============================================================ */
+.pos-item-card {
+  background: var(--bg-glass-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  padding: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.pos-item-card:active {
+  transform: scale(0.97);
+}
+
+.pos-item-card:hover {
+  border-color: var(--emerald-500);
+  box-shadow: 0 8px 24px var(--emerald-glow);
+  transform: translateY(-3px);
+}
+
+.pos-item-card .item-thumb {
+  width: 100%;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 0.625rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Pulse indicator for live coffee batch */
+.pulse-emerald {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--emerald-500);
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: pulse-animation 2s infinite;
+}
+
+@keyframes pulse-animation {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+/* Top bar banner */
+.top-nav-luxury {
+  background: rgba(16, 20, 17, 0.92);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+/* ============================================================
+   STARGATE CAFE POS — PREMIUM EMERALD EDITION DESIGN SYSTEM
+   Palette:
+   - Primary Background: #101411
+   - Card Surface: #191F1B
+   - Secondary Surface: #222A24
+   - Primary Emerald: #0E8F65
+   - Light Emerald (Positive): #35C995
+   - Champagne Gold: #D6B875
+   - Main Text: #F5F5F0
+   - Secondary Text: #A7B0A8
+   - Borders: #303A32
+   ============================================================ */
+
+.pos-emerald-container {
+  background-color: #101411;
+  color: #F5F5F0;
+  font-family: var(--font-family);
+}
+
+.pos-emerald-card {
+  background-color: #191F1B;
+  border: 1px solid #303A32;
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pos-emerald-card-subtle {
+  background-color: #222A24;
+  border: 1px solid #303A32;
+  border-radius: 1rem;
+}
+
+.pos-emerald-btn-main {
+  background: linear-gradient(135deg, #0E8F65 0%, #0a6b4c 100%) !important;
+  color: #F5F5F0 !important;
+  font-weight: 800 !important;
+  border: 1px solid rgba(53, 201, 149, 0.4) !important;
+  box-shadow: 0 4px 16px rgba(14, 143, 101, 0.35) !important;
+  border-radius: 0.875rem !important;
+  transition: all 0.18s ease-in-out !important;
+  min-height: 44px;
+}
+.pos-emerald-btn-main:hover {
+  background: linear-gradient(135deg, #10a373 0%, #0E8F65 100%) !important;
+  box-shadow: 0 6px 22px rgba(14, 143, 101, 0.5) !important;
+  transform: translateY(-1px);
+}
+.pos-emerald-btn-main:active {
+  transform: scale(0.98);
+}
+
+.pos-emerald-btn-gold {
+  background: linear-gradient(135deg, #D6B875 0%, #b89851 100%) !important;
+  color: #101411 !important;
+  font-weight: 800 !important;
+  border: 1px solid rgba(245, 230, 190, 0.4) !important;
+  box-shadow: 0 4px 16px rgba(214, 184, 117, 0.3) !important;
+  border-radius: 0.875rem !important;
+  transition: all 0.18s ease-in-out !important;
+  min-height: 44px;
+}
+.pos-emerald-btn-gold:hover {
+  background: linear-gradient(135deg, #e0c88b 0%, #D6B875 100%) !important;
+  box-shadow: 0 6px 22px rgba(214, 184, 117, 0.45) !important;
+  transform: translateY(-1px);
+}
+.pos-emerald-btn-gold:active {
+  transform: scale(0.98);
+}
+
+.pos-emerald-btn-subtle {
+  background-color: #222A24 !important;
+  color: #F5F5F0 !important;
+  border: 1px solid #303A32 !important;
+  border-radius: 0.75rem !important;
+  transition: all 0.18s ease-in-out !important;
+}
+.pos-emerald-btn-subtle:hover {
+  background-color: #2c362f !important;
+  border-color: #0E8F65 !important;
+  color: #35C995 !important;
+}
+
+.pos-emerald-product-card {
+  background: #191F1B;
+  border: 1px solid #303A32;
+  border-radius: 0.85rem;
+  overflow: hidden;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  min-height: 105px;
+  position: relative;
+}
+.pos-emerald-product-card:hover {
+  border-color: #0E8F65;
+  box-shadow: 0 4px 14px rgba(14, 143, 101, 0.22), 0 0 0 1px rgba(14, 143, 101, 0.3);
+  transform: translateY(-2px);
+}
+.pos-emerald-product-card:active {
+  transform: scale(0.98);
+}
+
+.pos-emerald-product-card {
+  min-height: 148px;
+  background: linear-gradient(180deg, #1d2520 0%, #151a17 100%);
+  border: 1px solid #303A32;
+  border-radius: 1.1rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+}
+.pos-emerald-product-card:hover {
+  border-color: #35C995;
+  box-shadow: 0 8px 24px rgba(14, 143, 101, 0.25), 0 0 0 1px rgba(53, 201, 149, 0.35);
+  transform: translateY(-2px);
+}
+.pos-emerald-product-card:active {
+  transform: scale(0.97);
+}
+
+.pos-emerald-product-visual {
+  width: 100%;
+  height: 82px;
+  background: radial-gradient(circle at center, #242c26 0%, #121614 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(48, 58, 50, 0.7);
+}
+.pos-emerald-product-visual img {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+  object-fit: cover !important;
+  transition: transform 0.25s ease;
+}
+.pos-emerald-product-card:hover .pos-emerald-product-visual img {
+  transform: scale(1.06);
+}
+
+.pos-emerald-cart-item {
+  background: #222A24;
+  border: 1px solid #303A32;
+  border-radius: 0.875rem;
+  padding: 0.625rem 0.75rem;
+  transition: border-color 0.18s ease;
+}
+.pos-emerald-cart-item:hover {
+  border-color: rgba(53, 201, 149, 0.4);
+}
+
+.pos-emerald-badge {
+  background: rgba(14, 143, 101, 0.18);
+  color: #35C995;
+  border: 1px solid rgba(53, 201, 149, 0.35);
+  border-radius: 9999px;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pos-gold-badge {
+  background: rgba(214, 184, 117, 0.18);
+  color: #D6B875;
+  border: 1px solid rgba(214, 184, 117, 0.35);
+  border-radius: 9999px;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pos-cat-pill {
+  padding: 0.6rem 1.15rem;
+  border-radius: 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 800;
+  white-space: nowrap;
+  background-color: #222A24;
+  color: #A7B0A8;
+  border: 1px solid #303A32;
+  transition: all 0.18s ease;
+  cursor: pointer;
+}
+.pos-cat-pill:hover {
+  background-color: #2c362f;
+  color: #F5F5F0;
+  border-color: #35C995;
+}
+.pos-cat-pill.active {
+  background: linear-gradient(135deg, #0E8F65 0%, #0a6b4c 100%);
+  color: #F5F5F0;
+  border-color: #35C995;
+  box-shadow: 0 4px 14px rgba(14, 143, 101, 0.45);
+}
+
+.pos-num-btn {
+  background: #222A24;
+  border: 1px solid #303A32;
+  color: #F5F5F0;
+  font-weight: 800;
+  font-size: 1.1rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.pos-num-btn:hover {
+  background: #2c362f;
+  border-color: #D6B875;
+  color: #D6B875;
+}
+.pos-num-btn:active {
+  transform: scale(0.95);
+}
+
+/* ============================================================
+   💎 NEXT-GEN STARGATE EMERALD LUXURY DESIGN SYSTEM (v6.3.0)
+   ============================================================ */
+
+/* Surface Elevation Hierarchy */
+.surface-ground {
+  background-color: #080b0e !important;
+}
+.surface-card-level-1 {
+  background: linear-gradient(145deg, rgba(25, 31, 27, 0.92) 0%, rgba(16, 20, 17, 0.96) 100%);
+  border: 1px solid rgba(48, 58, 50, 0.85);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+}
+.surface-card-level-2 {
+  background: linear-gradient(145deg, rgba(34, 42, 36, 0.90) 0%, rgba(22, 28, 24, 0.94) 100%);
+  border: 1px solid rgba(53, 201, 149, 0.22);
+  box-shadow: 0 12px 35px -8px rgba(0, 0, 0, 0.8);
+}
+
+/* Status Badges with Precision Contrast */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+.status-pill-new {
+  background: rgba(14, 165, 233, 0.18);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+.status-pill-preparing {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+.status-pill-ready {
+  background: rgba(20, 184, 166, 0.18);
+  color: #2dd4bf;
+  border: 1px solid rgba(45, 212, 191, 0.4);
+}
+.status-pill-completed {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+}
+.status-pill-cancelled {
+  background: rgba(244, 63, 94, 0.18);
+  color: #fb7185;
+  border: 1px solid rgba(251, 113, 133, 0.4);
+}
+
+/* Kanban Board Styling */
+.kanban-column {
+  background: rgba(16, 20, 17, 0.75);
+  border: 1px solid #303A32;
+  border-radius: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 290px);
+  min-height: 600px;
+  backdrop-filter: blur(12px);
+  transition: border-color 0.2s ease;
+}
+.kanban-column.drag-over {
+  border-color: #35C995 !important;
+  background: rgba(14, 143, 101, 0.08) !important;
+}
+.kanban-card {
+  background: #191F1B;
+  border: 1px solid #303A32;
+  border-radius: 1rem;
+  padding: 0.85rem;
+  cursor: grab;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+.kanban-card:hover {
+  border-color: rgba(53, 201, 149, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+}
+.kanban-card:active {
+  cursor: grabbing;
+}
+
+/* Product Card Studio Highlight */
+.product-studio-card {
+  position: relative;
+  background: #191F1B;
+  border: 1px solid #303A32;
+  border-radius: 1.25rem;
+  overflow: hidden;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  min-height: 225px;
+}
+.product-studio-card:hover {
+  border-color: #0E8F65;
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px -5px rgba(14, 143, 101, 0.25), 0 0 0 1px rgba(53, 201, 149, 0.3);
+}
+.product-studio-card:active {
+  transform: scale(0.98);
+}
+.product-image-frame {
+  width: 100%;
+  height: 135px;
+  background: radial-gradient(circle at center, #222A24 0%, #111613 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(48, 58, 50, 0.8);
+}
+.product-image-frame img {
+  max-width: 88%;
+  max-height: 88%;
+  object-fit: contain;
+  transition: transform 0.28s ease;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.65));
+}
+.product-studio-card:hover .product-image-frame img {
+  transform: scale(1.08);
+}
+
+/* Cart Polish & Micro-interactions */
+.cart-qty-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.cart-qty-btn:hover {
+  transform: scale(1.1);
+}
+.cart-qty-btn:active {
+  transform: scale(0.95);
+}
+
+/* Touch Friendly Utilities */
+.touch-target-min {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* 🎮 Gaming & Computer Duration Chips (ساعات وأنصاف الساعات) */
+.pc-chip {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: #101411;
+  color: #A7B0A8;
+  border: 1px solid #303A32;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.pc-chip:hover {
+  background: #0E8F65;
+  color: #ffffff;
+  border-color: #35C995;
+  transform: scale(1.05);
+}
+.pc-chip.active {
+  background: #0E8F65;
+  color: #ffffff;
+  border-color: #35C995;
+  box-shadow: 0 0 10px rgba(14, 143, 101, 0.45);
+}
+
+.pc-card-chip {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 7px;
+  border-radius: 8px;
+  background: #101411;
+  color: #D6B875;
+  border: 1px solid #303A32;
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+.pc-card-chip:hover {
+  background: #0E8F65;
+  color: #ffffff;
+  border-color: #35C995;
+  transform: scale(1.06);
+}
+
+

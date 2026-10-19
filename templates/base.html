@@ -1,0 +1,1830 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{{ title or company_name }} - نظام محاسبة القهوة و GAMING</title>
+    
+    <!-- Automatic CSRF Handler -->
+    <script>
+        window.CSRF_TOKEN = "{{ csrf_token() }}";
+        document.addEventListener("DOMContentLoaded", function() {
+            // Auto inject CSRF token into all forms
+            document.querySelectorAll("form").forEach(function(f) {
+                if (!f.querySelector('input[name="csrf_token"]')) {
+                    var inp = document.createElement("input");
+                    inp.type = "hidden";
+                    inp.name = "csrf_token";
+                    inp.value = window.CSRF_TOKEN;
+                    f.appendChild(inp);
+                }
+            });
+            // Automatically add CSRF token header to fetch calls
+            var _origFetch = window.fetch;
+            window.fetch = function(resource, init) {
+                init = init || {};
+                init.headers = init.headers || {};
+                if (init.headers instanceof Headers) {
+                    if (!init.headers.has('X-CSRFToken')) {
+                        init.headers.append('X-CSRFToken', window.CSRF_TOKEN);
+                    }
+                } else if (Array.isArray(init.headers)) {
+                    init.headers.push(['X-CSRFToken', window.CSRF_TOKEN]);
+                } else {
+                    if (!init.headers['X-CSRFToken']) {
+                        init.headers['X-CSRFToken'] = window.CSRF_TOKEN;
+                    }
+                }
+                return _origFetch(resource, init);
+            };
+        });
+    </script>
+    
+    <!-- 🔢 GLOBAL ENFORCEMENT OF ENGLISH NUMERALS (0-9) ACROSS ENTIRE SYSTEM -->
+    <script>
+        (function() {
+            // Force Number.prototype.toLocaleString to always use standard English/Western numerals (0-9)
+            const _origNumToLocaleString = Number.prototype.toLocaleString;
+            Number.prototype.toLocaleString = function(locales, options) {
+                return _origNumToLocaleString.call(this, 'en-US', options);
+            };
+
+            // Force Date.prototype to format dates & times with English numerals (0-9)
+            const _origDateToLocaleDateString = Date.prototype.toLocaleDateString;
+            Date.prototype.toLocaleDateString = function(locales, options) {
+                return _origDateToLocaleDateString.call(this, 'en-US', options);
+            };
+
+            const _origDateToLocaleTimeString = Date.prototype.toLocaleTimeString;
+            Date.prototype.toLocaleTimeString = function(locales, options) {
+                return _origDateToLocaleTimeString.call(this, 'en-US', options);
+            };
+
+            // Helper to sanitize any Arabic/Persian digits to 0-9
+            window.toEnglishDigits = function(str) {
+                if (str === null || str === undefined) return '';
+                return String(str)
+                    .replace(/[٠۰]/g, '0')
+                    .replace(/[١۱]/g, '1')
+                    .replace(/[٢۲]/g, '2')
+                    .replace(/[٣۳]/g, '3')
+                    .replace(/[٤۴]/g, '4')
+                    .replace(/[٥۵]/g, '5')
+                    .replace(/[٦۶]/g, '6')
+                    .replace(/[٧۷]/g, '7')
+                    .replace(/[٨۸]/g, '8')
+                    .replace(/[٩۹]/g, '9');
+            };
+
+            // Auto-clean any inputs of type number or force-en-num if user types/pastes Arabic digits
+            document.addEventListener('input', function(e) {
+                if (e.target && (e.target.type === 'number' || e.target.classList.contains('force-en-num'))) {
+                    const cleaned = window.toEnglishDigits(e.target.value);
+                    if (cleaned !== e.target.value) {
+                        e.target.value = cleaned;
+                    }
+                }
+            }, true);
+        })();
+    </script>
+    
+    <!-- Local Offline Tailwind CSS Engine -->
+    <script src="{{ url_for('static', filename='js/tailwindcss.js') }}?v=6.0.2"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        amber: {
+                            500: '#f59e0b',
+                            600: '#d97706',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Cairo', 'Segoe UI', 'Tahoma', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Local Offline Font Awesome Icons -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.min.css') }}?v=6.0.2">
+    <!-- STARGATE Pro visual system (local/offline) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/stargate-pro.css') }}?v=6.1.0">
+    <!-- STARGATE Luxury Design System (Dark Charcoal, Emerald & Champagne Gold) -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/stargate-luxury.css') }}?v=6.2.0">
+    <!-- Local Offline Chart.js (Deferred) -->
+    <script src="{{ url_for('static', filename='js/chart.min.js') }}?v=6.0.2" defer></script>
+
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+        /* 🔢 Universal English/Western numerals (0-9) enforcement */
+        *, *::before, *::after {
+            font-variant-numeric: normal tabular-nums !important;
+        }
+        .font-mono, .font-digits, input[type="number"], .badge-num {
+            font-family: 'JetBrains Mono', 'Segoe UI', Tahoma, Arial, sans-serif !important;
+            font-feature-settings: "tnum" 1, "ss01" 0 !important;
+            direction: ltr !important;
+            unicode-bidi: isolate !important;
+        }
+        body {
+            font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+            background-color: #06090e !important;
+            background: 
+                /* ☕ Dark luxury coffee & gaming ambient vignette overlays */
+                linear-gradient(to bottom, rgba(7, 10, 16, 0.66) 0%, rgba(5, 7, 12, 0.74) 50%, rgba(4, 6, 10, 0.85) 100%),
+                radial-gradient(circle at 15% 15%, rgba(245, 158, 11, 0.20) 0%, transparent 45%),
+                radial-gradient(circle at 85% 25%, rgba(139, 92, 246, 0.24) 0%, transparent 50%),
+                /* 📸 Realistic Photorealistic Coffee Lounge & Gaming PC Battle Station Wallpaper */
+                url("{{ url_for('static', filename='images/bg_coffee_gaming.jpg') }}?v=6.1.5") no-repeat center center fixed !important;
+            background-size: cover !important;
+            background-attachment: fixed !important;
+            color: #f1f5f9;
+        }
+        .classic-luxury-card {
+            background: linear-gradient(145deg, rgba(14, 18, 28, 0.88) 0%, rgba(8, 11, 18, 0.94) 100%) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border: 1px solid rgba(245, 158, 11, 0.22) !important;
+            box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+            border-radius: 1.25rem !important;
+        }
+        .gaming-card {
+            background: linear-gradient(145deg, rgba(18, 14, 32, 0.90) 0%, rgba(9, 8, 20, 0.95) 100%) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border: 1px solid rgba(139, 92, 246, 0.35) !important;
+            box-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.85), 0 0 25px rgba(139, 92, 246, 0.15) !important;
+        }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; color: black !important; }
+        }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #07090e; }
+        ::-webkit-scrollbar-thumb { background: #26334d; border-radius: 6px; }
+        ::-webkit-scrollbar-thumb:hover { background: #f59e0b; }
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(11, 15, 26, 0.85); border-radius: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d97706; border-radius: 6px; }
+
+        /* 💎 LUXURY INPUTS & CONTROLS STYLING */
+        input[type="text"], input[type="number"], input[type="search"], input[type="password"], input[type="email"], select, textarea {
+            background-color: #090e18 !important;
+            border: 1px solid #1e293b !important;
+            color: #ffffff !important;
+            border-radius: 0.85rem !important;
+            padding: 0.55rem 0.9rem !important;
+            font-size: 0.85rem !important;
+            font-weight: 700 !important;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5) !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            outline: none !important;
+        }
+        input[type="text"]:focus, input[type="number"]:focus, input[type="search"]:focus, input[type="password"]:focus, select:focus, textarea:focus {
+            border-color: #f59e0b !important;
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25), inset 0 2px 4px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        /* 📅 NATIVE DARK DATE CONTROLS */
+        input[type="date"], input[type="datetime-local"], input[type="month"] {
+            color-scheme: dark !important;
+            background-color: #090e18 !important;
+            color: #ffffff !important;
+            border: 1px solid #1e293b !important;
+            border-radius: 0.85rem !important;
+            padding: 0.5rem 0.9rem !important;
+            font-family: 'JetBrains Mono', 'Cairo', monospace, sans-serif !important;
+            font-size: 0.82rem !important;
+            font-weight: 800 !important;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5) !important;
+            outline: none !important;
+            transition: all 0.2s ease-in-out !important;
+        }
+        input[type="date"]:hover, input[type="date"]:focus {
+            border-color: #f59e0b !important;
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25), inset 0 2px 4px rgba(0, 0, 0, 0.5) !important;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1) brightness(1.2) sepia(1) hue-rotate(10deg) saturate(3) !important;
+            cursor: pointer !important;
+            opacity: 0.9 !important;
+            margin-right: 4px !important;
+            transition: opacity 0.2s, transform 0.2s !important;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator:hover {
+            opacity: 1 !important;
+            transform: scale(1.15) !important;
+        }
+        input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+        input[type="date"]::-webkit-datetime-edit-text,
+        input[type="date"]::-webkit-datetime-edit-month-field,
+        input[type="date"]::-webkit-datetime-edit-day-field,
+        input[type="date"]::-webkit-datetime-edit-year-field {
+            color: #ffffff !important;
+            font-weight: 800 !important;
+        }
+
+        .glass-panel {
+            background: linear-gradient(135deg, rgba(14, 18, 28, 0.82) 0%, rgba(8, 11, 18, 0.92) 100%) !important;
+            backdrop-filter: blur(24px) saturate(140%) !important;
+            -webkit-backdrop-filter: blur(24px) saturate(140%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.14) !important;
+            box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.85), inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+        }
+
+        /* 🔮 GLASSMORPHISM SUITE (أدوات وأيقونات وكروت زجاجية فائقة الجمال) */
+        .glass-orb {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 100%) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.25) !important;
+            box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.45), 0 8px 24px -4px rgba(0, 0, 0, 0.6) !important;
+        }
+        .glass-orb-amber {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.32) 0%, rgba(180, 83, 9, 0.14) 100%) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border: 1px solid rgba(245, 158, 11, 0.55) !important;
+            box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5), 0 0 22px rgba(245, 158, 11, 0.35) !important;
+        }
+        .glass-orb-purple {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.32) 0%, rgba(99, 102, 241, 0.14) 100%) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border: 1px solid rgba(139, 92, 246, 0.6) !important;
+            box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5), 0 0 25px rgba(139, 92, 246, 0.4) !important;
+        }
+        .glass-orb-emerald {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.32) 0%, rgba(5, 150, 105, 0.14) 100%) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border: 1px solid rgba(16, 185, 129, 0.55) !important;
+            box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5), 0 0 22px rgba(16, 185, 129, 0.35) !important;
+        }
+        .glass-orb-rose {
+            background: linear-gradient(135deg, rgba(244, 63, 94, 0.32) 0%, rgba(190, 18, 60, 0.14) 100%) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border: 1px solid rgba(244, 63, 94, 0.55) !important;
+            box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.5), 0 0 22px rgba(244, 63, 94, 0.35) !important;
+        }
+
+        /* 🛍️ FROSTED GLASS ITEM CARD (كروت المنتجات الزجاجية الفاخرة) */
+        .item-card {
+            background: linear-gradient(145deg, rgba(14, 18, 28, 0.78) 0%, rgba(8, 11, 18, 0.88) 100%) !important;
+            backdrop-filter: blur(20px) saturate(140%) !important;
+            -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
+            border: 1px solid rgba(255, 255, 255, 0.14) !important;
+            box-shadow: 0 12px 30px -6px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+            transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .item-card:hover {
+            border-color: rgba(245, 158, 11, 0.65) !important;
+            box-shadow: 0 22px 50px -10px rgba(0, 0, 0, 0.85), 0 0 28px rgba(245, 158, 11, 0.25) !important;
+            transform: translateY(-4px) scale(1.015) !important;
+        }
+
+        /* 🏷️ GLASS PILLS */
+        .cat-pill {
+            background: rgba(14, 18, 28, 0.75) !important;
+            backdrop-filter: blur(14px) !important;
+            -webkit-backdrop-filter: blur(14px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45) !important;
+            transition: all 0.2s ease !important;
+        }
+        .cat-pill:hover {
+            border-color: rgba(245, 158, 11, 0.5) !important;
+            color: #ffffff !important;
+            transform: translateY(-1px) !important;
+        }
+        .cat-pill.active {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+            color: #06090e !important;
+            border-color: #fbbf24 !important;
+            box-shadow: 0 0 22px rgba(245, 158, 11, 0.5) !important;
+        }
+
+        /* ⚡ GLASS ACTION BUTTONS */
+        .glass-btn {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%) !important;
+            backdrop-filter: blur(18px) !important;
+            -webkit-backdrop-filter: blur(18px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.20) !important;
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35), 0 8px 20px -4px rgba(0, 0, 0, 0.6) !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .glass-btn:hover {
+            transform: translateY(-2px) scale(1.02) !important;
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.5), 0 12px 28px -4px rgba(0, 0, 0, 0.75), 0 0 20px rgba(245, 158, 11, 0.25) !important;
+        }
+
+        .card-lift {
+            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease !important;
+        }
+        .card-lift:hover {
+            transform: translateY(-3px) !important;
+            box-shadow: 0 22px 40px -8px rgba(0, 0, 0, 0.8) !important;
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col antialiased">
+
+    <!-- Top Navigation Bar (Coffee & Gaming Lounge Identity) -->
+    {% if not hide_top_nav %}
+    <header class="bg-slate-950/95 border-b border-amber-900/30 sticky top-0 z-40 px-3 lg:px-6 py-2 shadow-xl backdrop-blur-md flex items-center justify-between no-print">
+        <div class="flex items-center gap-3">
+            <a href="{{ url_for('index') }}" class="flex items-center gap-3 group">
+                <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-600 via-purple-700 to-indigo-600 p-[1.5px] shadow-lg shadow-amber-900/40 group-hover:scale-105 transition">
+                    <div class="w-full h-full bg-slate-950 rounded-2xl flex items-center justify-center text-lg gap-0.5">
+                        <span>☕</span><span class="text-xs">🎮</span>
+                    </div>
+                </div>
+                <div>
+                    <h1 class="font-black text-sm lg:text-base text-white tracking-wider flex items-center gap-1.5">
+                        <span class="text-amber-400">⚡</span> {{ company_name or 'STARGATE' }}
+                        <span class="text-[9px] bg-gradient-to-r from-amber-500/20 to-purple-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">LOUNGE</span>
+                    </h1>
+                    <span class="text-[10px] text-slate-300 font-bold flex items-center gap-1.5">
+                        <span class="text-amber-400">☕ كافيه ومشروبات</span>
+                        <span class="text-slate-600">•</span>
+                        <span class="text-purple-400">🎮 ألعاب وكمبيوتر GAMING</span>
+                    </span>
+                </div>
+            </a>
+        </div>
+
+        <!-- Center Nav Menus (Clean, Organized, Zero Clutter) -->
+        <nav class="flex items-center gap-1.5 text-xs font-bold">
+            <!-- 1. POS & Orders Dropdown -->
+            <div class="relative group">
+                <button type="button" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 bg-slate-950 hover:bg-slate-800 text-amber-300 font-black border border-slate-800 hover:border-amber-500/50 cursor-pointer shadow-sm">
+                    <i class="fa-solid fa-cash-register"></i>
+                    <span>الكاشير والطلبات</span>
+                    <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 group-hover:rotate-180 transition-transform"></i>
+                </button>
+                <div class="absolute right-0 top-full pt-2 hidden group-hover:block z-50 min-w-[220px]">
+                    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-2 space-y-1 backdrop-blur-xl">
+                        <a href="{{ url_for('index') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-amber-300 transition">
+                            <i class="fa-solid fa-cash-register text-amber-400 w-4"></i>
+                            <span>شاشة الكاشير والـ POS</span>
+                        </a>
+                        <a href="/orders" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-emerald-300 transition">
+                            <i class="fa-solid fa-rectangle-list text-emerald-400 w-4"></i>
+                            <span>إدارة ومتابعة الطلبات (Live Orders)</span>
+                            <span class="text-[9px] bg-emerald-500/20 text-emerald-300 font-bold px-1.5 py-0.5 rounded-full border border-emerald-500/30 mr-auto">جديد</span>
+                        </a>
+                        <a href="{{ url_for('tables_page') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-emerald-300 transition">
+                            <i class="fa-solid fa-utensils text-emerald-400 w-4"></i>
+                            <span>صالة وتوزيع الطاولات</span>
+                        </a>
+                        <a href="{{ url_for('debts_page') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-cyan-300 transition">
+                            <i class="fa-solid fa-book-bookmark text-cyan-400 w-4"></i>
+                            <span>سجل ديون الزبائن</span>
+                        </a>
+                        <a href="{{ url_for('employee_close_shift') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-amber-300 transition border-t border-slate-800 pt-2">
+                            <i class="fa-solid fa-calculator text-amber-400 w-4"></i>
+                            <span>تسكير حساب الوردية والصندوق</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Inventory & Stock Dropdown -->
+            {% if is_admin or session.get('is_admin') or session.get('employee_role') == 'admin' %}
+            <div class="relative group">
+                <button type="button" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 bg-slate-950 hover:bg-slate-800 text-slate-200 hover:text-white font-bold border border-slate-800 hover:border-indigo-500/50 cursor-pointer shadow-sm">
+                    <i class="fa-solid fa-boxes-stacked text-indigo-400"></i>
+                    <span>المستودع والمشتريات</span>
+                    <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 group-hover:rotate-180 transition-transform"></i>
+                </button>
+                <div class="absolute right-0 top-full pt-2 hidden group-hover:block z-50 min-w-[220px]">
+                    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-2 space-y-1 backdrop-blur-xl">
+                        <a href="{{ url_for('inventory_page') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-indigo-300 transition">
+                            <i class="fa-solid fa-boxes-stacked text-indigo-400 w-4"></i>
+                            <span>البضاعة والمخزون العام</span>
+                        </a>
+                        <a href="{{ url_for('coffee_hub') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-amber-300 transition">
+                            <i class="fa-solid fa-mug-hot text-amber-500 w-4"></i>
+                            <span>إنتاجية القهوة وأكياس البن</span>
+                        </a>
+                        <a href="{{ url_for('suppliers_page') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-emerald-300 transition">
+                            <i class="fa-solid fa-truck-ramp-box text-emerald-400 w-4"></i>
+                            <span>الموردين وفواتير الشراء</span>
+                        </a>
+                        <a href="{{ url_for('categories_page') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-purple-300 transition border-t border-slate-800 pt-2">
+                            <i class="fa-solid fa-tags text-purple-400 w-4"></i>
+                            <span>الأقسام والتصنيفات</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. Reports & Accounting Dropdown -->
+            <div class="relative group">
+                <button type="button" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 bg-slate-950 hover:bg-slate-800 text-slate-200 hover:text-white font-bold border border-slate-800 hover:border-cyan-500/50 cursor-pointer shadow-sm">
+                    <i class="fa-solid fa-chart-pie text-cyan-400"></i>
+                    <span>التقارير والمحاسبة</span>
+                    <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 group-hover:rotate-180 transition-transform"></i>
+                </button>
+                <div class="absolute right-0 top-full pt-2 hidden group-hover:block z-50 min-w-[230px]">
+                    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-2 space-y-1 backdrop-blur-xl">
+                        <a href="{{ url_for('reports_page') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-cyan-300 transition">
+                            <i class="fa-solid fa-chart-pie text-cyan-400 w-4"></i>
+                            <span>التقارير اليومية والشاملة</span>
+                        </a>
+                        <a href="{{ url_for('dashboard_page') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-indigo-300 transition">
+                            <i class="fa-solid fa-gauge-high text-indigo-400 w-4"></i>
+                            <span>لوحة القيادة والمؤشرات</span>
+                        </a>
+                        <a href="{{ url_for('safe_page') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-amber-300 transition">
+                            <i class="fa-solid fa-vault text-amber-400 w-4"></i>
+                            <span>الخزنة الخاصة (صندوق المالك)</span>
+                        </a>
+                        <a href="{{ url_for('financial_ledger_page') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-emerald-300 transition">
+                            <i class="fa-solid fa-book text-emerald-400 w-4"></i>
+                            <span>السجل المالي العام (Ledger)</span>
+                        </a>
+                        <a href="{{ url_for('financial_statements_page') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-purple-300 transition border-t border-slate-800 pt-2">
+                            <i class="fa-solid fa-landmark text-purple-400 w-4"></i>
+                            <span>القوائم الختامية والأرباح (P&L)</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Management & System Dropdown -->
+            <div class="relative group">
+                <button type="button" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 bg-slate-950 hover:bg-slate-800 text-slate-200 hover:text-white font-bold border border-slate-800 hover:border-purple-500/50 cursor-pointer shadow-sm">
+                    <i class="fa-solid fa-gear text-purple-400"></i>
+                    <span>الإدارة والنظام</span>
+                    <i class="fa-solid fa-chevron-down text-[10px] text-slate-400 group-hover:rotate-180 transition-transform"></i>
+                </button>
+                <div class="absolute right-0 top-full pt-2 hidden group-hover:block z-50 min-w-[220px]">
+                    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-2 space-y-1 backdrop-blur-xl">
+                        <a href="{{ url_for('employees_page') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-purple-300 transition">
+                            <i class="fa-solid fa-user-shield text-purple-400 w-4"></i>
+                            <span>شؤون الموظفين والورديات</span>
+                        </a>
+                        <a href="{{ url_for('admin_panel') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-amber-300 transition">
+                            <i class="fa-solid fa-sliders text-amber-400 w-4"></i>
+                            <span>إعدادات النظام العامة</span>
+                        </a>
+                        <button type="button" onclick="openMaintenanceModal()" class="w-full text-right flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-emerald-300 transition border-t border-slate-800 pt-2 cursor-pointer">
+                            <i class="fa-solid fa-shield-halved text-emerald-400 w-4"></i>
+                            <span>مركز الصيانة والنسخ الاحتياطي</span>
+                        </button>
+                        <button type="button" onclick="openUpdatesModal()" class="w-full text-right flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-sky-300 hover:text-white transition border-t border-slate-800 pt-2 cursor-pointer">
+                            <i class="fa-solid fa-cloud-arrow-down text-sky-400 w-4"></i>
+                            <span>تحديث البرنامج عن بعد (OTA)</span>
+                            <span class="text-[9px] bg-sky-500/20 text-sky-300 font-bold px-1.5 py-0.5 rounded-full border border-sky-500/30 mr-auto">سحابي</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </nav>
+
+        <!-- Right Quick Action Bar -->
+        <div class="flex items-center gap-2">
+            <!-- Remote OTA Update Button -->
+            <button type="button" onclick="openUpdatesModal()" title="تحديث البرنامج عن بعد وفحص الإصدارات الجديدة (OTA)" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-sky-300 hover:text-white border border-sky-500/40 cursor-pointer shadow-sm text-xs font-bold">
+                <i class="fa-solid fa-cloud-arrow-down text-sky-400"></i>
+                <span class="hidden xl:inline">تحديث عن بعد 🔄</span>
+            </button>
+
+            <!-- 5. User Guide Button -->
+            <a href="{{ url_for('user_guide_page') }}" title="دليل الاستخدام والتشغيل الشامل" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800">
+                <i class="fa-solid fa-book-open text-amber-400"></i>
+                <span class="hidden lg:inline text-xs font-bold">دليل الاستخدام 📖</span>
+            </a>
+
+            <!-- 6. AI Copilot Assistant Button -->
+            <button type="button" onclick="openCopilotModal()" title="المساعد والمدقق الذكي الفوري (STARGATE Copilot)" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 text-white font-black shadow-md shadow-indigo-600/30 cursor-pointer border border-indigo-400/40 animate-pulse text-xs">
+                <span class="text-sm">🤖</span>
+                <span>المساعد الذكي ✨</span>
+            </button>
+
+            <!-- Quick Expense Button (تسجيل مصروف من الصندوق) -->
+            <button type="button" onclick="openQuickExpenseModal()" title="تسجيل مصروف سريع تم دفعه نقداً من درج الصندوق" class="bg-rose-600/90 hover:bg-rose-500 text-white font-bold px-2.5 py-1.5 rounded-xl text-xs transition flex items-center gap-1 shadow-sm border border-rose-500/40 cursor-pointer">
+                <i class="fa-solid fa-receipt"></i>
+                <span class="hidden md:inline">مصروف 💸</span>
+            </button>
+
+            <!-- Active Employee Pill / Switch -->
+            <div onclick="openSwitchEmployeeModal()" title="انقر لتبديل الموظف أو الوردية" class="cursor-pointer bg-slate-900 hover:bg-slate-800 border border-indigo-500/40 px-3 py-1.5 rounded-2xl flex items-center gap-2 transition group shadow-sm">
+                <span class="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center text-xs">👤</span>
+                <strong id="navCurrentEmpName" class="text-xs text-white group-hover:text-indigo-300 font-black">
+                    {{ session.get('employee_name', 'تسجيل الدخول') }}
+                </strong>
+            </div>
+
+            <!-- Lock / Logout POS Screen -->
+            <a href="{{ url_for('employee_logout') }}" title="قفل الشاشة وتسجيل خروج الموظف" class="bg-slate-800 hover:bg-rose-900 text-slate-300 hover:text-rose-200 px-2.5 py-1.5 rounded-xl text-xs transition flex items-center gap-1 border border-slate-700">
+                <i class="fa-solid fa-lock text-[11px]"></i>
+            </a>
+        </div>
+
+        <!-- Left Actions -->
+        <div class="flex items-center gap-2">
+            <span class="hidden sm:inline-flex text-xs bg-slate-800 text-amber-300 px-3 py-1.5 rounded-xl border border-slate-700 font-mono font-bold">
+                1$ = {{ exchange_rate|format_currency }} ل.ل
+            </span>
+            <a href="{{ url_for('print_daily') }}" target="_blank" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-3.5 py-1.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm whitespace-nowrap">
+                <i class="fa-solid fa-print"></i>
+                <span>طباعة إغلاق اليوم</span>
+            </a>
+        </div>
+    </header>
+    {% endif %}
+
+    <!-- Live OTA Update Notification Banner -->
+    <div id="otaUpdateBanner" class="hidden bg-gradient-to-r from-amber-600 via-indigo-700 to-purple-800 text-white px-4 py-2.5 shadow-2xl border-b border-amber-400/50 relative z-30 transition-all duration-300 no-print">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-sm">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-lg shadow-inner animate-bounce">
+                    🚀
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <strong class="font-black text-amber-200">يوجد تحديث رسمي جديد لنظام الكافيه (<span id="otaVersionText">v4.5.0</span>)!</strong>
+                        <span class="px-2 py-0.5 bg-amber-400 text-slate-950 font-black rounded text-[10px] uppercase">جديد</span>
+                    </div>
+                    <span id="otaMessageText" class="text-xs text-slate-200 block md:inline">إصلاح شامل لمنظومة المالية وترحيل الخزينة وتسكير الشفتات.</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="startOtaUpdateProcess()" id="btnStartOtaUpdate" class="bg-white text-slate-950 hover:bg-amber-400 hover:text-slate-950 font-black px-4 py-2 rounded-xl text-xs transition-all shadow-lg flex items-center gap-2 cursor-pointer transform active:scale-95">
+                    <i class="fa-solid fa-circle-arrow-down text-indigo-600 text-sm"></i>
+                    <span>تحديث البرنامج الآن (بضغطة واحدة)</span>
+                </button>
+                <button onclick="dismissOtaBanner()" class="bg-black/25 hover:bg-black/50 text-white/80 hover:text-white px-2.5 py-1.5 rounded-lg text-xs transition" title="إغلاق الإشعار مؤقتاً">✕</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flash Messages -->
+    <div class="max-w-7xl mx-auto w-full px-4 pt-3 no-print">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="p-3.5 rounded-2xl text-xs font-bold flex items-center justify-between shadow-md mb-2
+                        {% if category == 'success' %} bg-emerald-950/80 text-emerald-300 border border-emerald-800
+                        {% elif category == 'danger' %} bg-rose-950/80 text-rose-300 border border-rose-800
+                        {% elif category == 'warning' %} bg-amber-950/80 text-amber-300 border border-amber-800
+                        {% else %} bg-slate-800 text-slate-200 border border-slate-700 {% endif %}">
+                        <div class="flex items-center gap-2">
+                            {% if category == 'success' %}<i class="fa-solid fa-circle-check text-emerald-400 text-sm"></i>
+                            {% elif category == 'danger' %}<i class="fa-solid fa-circle-exclamation text-rose-400 text-sm"></i>
+                            {% else %}<i class="fa-solid fa-info-circle text-blue-400 text-sm"></i>{% endif %}
+                            <span>{{ message }}</span>
+                        </div>
+                        <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Main Content Body -->
+    <main class="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Modal Helper Scripts -->
+    <script>
+        function openModal(id) {
+            const m = document.getElementById(id);
+            if (m) {
+                m.classList.remove('hidden');
+                m.style.display = 'flex';
+            }
+        }
+        function closeModal(id) {
+            const m = document.getElementById(id);
+            if (m) {
+                m.classList.add('hidden');
+                m.style.display = 'none';
+            }
+        }
+    </script>
+
+<!-- MODAL: SWITCH ACTIVE EMPLOYEE (PIN OR PASSWORD) -->
+<div id="switchEmployeeModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-indigo-500/40 rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4 text-center">
+        <div class="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-300 mx-auto flex items-center justify-center text-2xl font-black">
+            👤
+        </div>
+        <div>
+            <h3 class="font-black text-white text-base">تبديل الموظف / الوردية الحالية</h3>
+            <p class="text-xs text-slate-400 mt-1">أدخل رمز الـ PIN السريع أو كلمة المرور للمتابعة</p>
+        </div>
+
+        <div class="space-y-3 pt-1">
+            <input type="password" 
+                   id="switchEmpPinInput" 
+                   maxlength="8" 
+                   autofocus
+                   onkeyup="if(event.key==='Enter') executeSwitchEmployee()"
+                   placeholder="أدخل رمز PIN (مثال: 1234)..." 
+                   class="w-full bg-slate-950 border-2 border-indigo-500/50 text-indigo-300 font-mono text-center text-lg font-black rounded-2xl py-2.5 focus:border-indigo-400 focus:outline-none">
+            
+            <p id="switchEmpError" class="text-xs text-rose-400 font-bold hidden"></p>
+
+            <div class="grid grid-cols-2 gap-2 pt-2">
+                <button type="button" onclick="closeSwitchEmployeeModal()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs transition">
+                    إلغاء
+                </button>
+                <button type="button" onclick="executeSwitchEmployee()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black py-2 rounded-xl text-xs transition shadow-md shadow-indigo-600/30">
+                    دخول الوردية
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function openSwitchEmployeeModal() {
+    const m = document.getElementById('switchEmployeeModal');
+    if (m) {
+        m.classList.remove('hidden');
+        const inp = document.getElementById('switchEmpPinInput');
+        if (inp) {
+            inp.value = '';
+            inp.focus();
+        }
+        document.getElementById('switchEmpError').classList.add('hidden');
+    }
+}
+function closeSwitchEmployeeModal() {
+    const m = document.getElementById('switchEmployeeModal');
+    if (m) m.classList.add('hidden');
+}
+
+function executeSwitchEmployee() {
+    const pin = document.getElementById('switchEmpPinInput').value.trim();
+    if (!pin) return;
+
+    fetch("/employee/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pin })
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.success) {
+            const b = document.getElementById('navCurrentEmpName');
+            if (b) b.innerText = d.employee_name;
+            closeSwitchEmployeeModal();
+            location.reload();
+        } else {
+            const err = document.getElementById('switchEmpError');
+            err.innerText = d.message || 'رمز غير صحيح';
+            err.classList.remove('hidden');
+        }
+    })
+    .catch(e => {
+        alert('خطأ في الاتصال: ' + e);
+    });
+}
+</script>
+
+<!-- ============================================================ -->
+<!-- 🔄 Updates Page Modal (صفحة التحديثات الكاملة)               -->
+<!-- ============================================================ -->
+<div id="updatesPageModal" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-indigo-500/40 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5">
+        <!-- Header -->
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-amber-500 flex items-center justify-center text-white text-xl shadow-lg">
+                    🔄
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-white">إدارة تحديثات النظام</h3>
+                    <p class="text-[11px] text-slate-400">تحديث تلقائي ويدوي لبرنامج STARGATE</p>
+                </div>
+            </div>
+            <button onclick="closeUpdatesModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm transition">✕</button>
+        </div>
+
+        <!-- Current Version Card -->
+        <div class="bg-slate-950 rounded-2xl p-4 border border-slate-800">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-[10px] text-slate-500 font-bold mb-1">الإصدار الحالي المثبت</div>
+                    <div class="text-xl font-black font-mono text-amber-400" id="updModalCurrentVer">جاري التحقق...</div>
+                </div>
+                <div id="updModalStatusBadge" class="px-3 py-1.5 rounded-xl text-xs font-black bg-slate-800 text-slate-400 border border-slate-700">
+                    <i class="fa-solid fa-spinner fa-spin"></i> جاري الفحص...
+                </div>
+            </div>
+        </div>
+
+        <!-- Remote Version Info (shown when update available) -->
+        <div id="updModalNewVerCard" class="hidden bg-gradient-to-r from-amber-950/60 to-indigo-950/60 rounded-2xl p-4 border border-amber-500/50 space-y-2">
+            <div class="flex items-center gap-2 text-amber-300 font-black text-sm">
+                <i class="fa-solid fa-circle-up text-amber-400"></i>
+                <span>تحديث رسمي جديد متاح!</span>
+            </div>
+            <div class="text-xs text-slate-300" id="updModalNewVer">...</div>
+            <div class="text-[11px] text-slate-400 leading-relaxed bg-slate-900/50 rounded-xl p-3 border border-slate-800" id="updModalChangelog">...</div>
+        </div>
+
+        <!-- Up to date notice -->
+        <div id="updModalOkCard" class="hidden bg-emerald-950/50 rounded-2xl p-4 border border-emerald-700/40 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-lg">✅</div>
+            <div>
+                <div class="text-sm font-black text-emerald-300">البرنامج محدّث لآخر إصدار</div>
+                <div class="text-[11px] text-slate-400">لا يوجد أي تحديث جديد في الوقت الحالي.</div>
+            </div>
+        </div>
+
+        <!-- Connection error -->
+        <div id="updModalErrCard" class="hidden bg-rose-950/50 rounded-2xl p-4 border border-rose-700/40 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-lg">⚠️</div>
+            <div>
+                <div class="text-sm font-black text-rose-300">تعذّر الاتصال بخادم التحديثات</div>
+                <div class="text-[11px] text-slate-400">تأكد من الاتصال بالإنترنت ثم اضغط فحص يدوي.</div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex flex-col gap-2">
+            <!-- Install Update -->
+            <button id="updModalInstallBtn" onclick="startOtaUpdateProcess(); closeUpdatesModal();" class="hidden w-full bg-gradient-to-r from-amber-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-white font-black py-3 rounded-2xl text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer">
+                <i class="fa-solid fa-circle-arrow-down text-lg"></i>
+                <span>تثبيت التحديث الجديد الآن 🚀</span>
+            </button>
+
+            <!-- Force check + Manual update info -->
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="forceCheckUpdate()" id="updModalForceCheckBtn" class="bg-indigo-900/60 hover:bg-indigo-800/80 text-indigo-300 font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 border border-indigo-500/40 cursor-pointer">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>فحص يدوي 🔍</span>
+                </button>
+                <a href="https://github.com/mouhamadherzherz/stargate-cafe/releases" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 border border-slate-700">
+                    <i class="fa-brands fa-github"></i>
+                    <span>سجل الإصدارات</span>
+                </a>
+            </div>
+
+            <!-- 📦 خانة التحديث اليدوي المباشر (رفع ملف ZIP أو من سطح المكتب) -->
+            <div class="bg-slate-950/90 rounded-2xl p-4 border border-indigo-500/40 space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">📦</span>
+                        <span class="text-xs font-black text-white">خانة التحديث اليدوي (ملف ZIP)</span>
+                    </div>
+                    <span class="text-[10px] text-amber-400 font-bold">بضغطة واحدة</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="file" id="manualUpdateZipInput" accept=".zip" class="hidden" onchange="onManualZipFileSelected(this)">
+                    <button type="button" onclick="document.getElementById('manualUpdateZipInput').click()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer truncate">
+                        <i class="fa-solid fa-file-zipper text-amber-400"></i>
+                        <span id="manualZipFileLabel">اختر ملف Stargate_Cafe_Update.zip</span>
+                    </button>
+                    <button type="button" id="btnManualUploadSubmit" onclick="submitManualZipUpdate()" disabled class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black py-2.5 px-4 rounded-xl text-xs transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-indigo-600/30 shrink-0">
+                        <i class="fa-solid fa-upload"></i>
+                        <span>تثبيت</span>
+                    </button>
+                </div>
+                <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[10px]">
+                    <button type="button" onclick="scanAndApplyLocalZip()" class="text-indigo-400 hover:text-indigo-300 font-bold transition flex items-center gap-1 cursor-pointer">
+                        <i class="fa-solid fa-bolt"></i>
+                        <span>تثبيت تلقائي من سطح المكتب (إذا وُجد الملف هناك)</span>
+                    </button>
+                </div>
+                <div id="manualUpdateStatusMsg" class="hidden text-[11px] font-mono p-2.5 rounded-xl text-center"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🔄 OTA Progress Modal (during download/install) -->
+<div id="otaProgressModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-amber-500/40 rounded-3xl p-6 max-w-md w-full shadow-2xl text-center">
+        <div class="w-16 h-16 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto text-3xl mb-4 shadow-inner">
+            <i class="fa-solid fa-cloud-arrow-down animate-bounce" id="otaModalIcon"></i>
+        </div>
+        <h3 class="text-xl font-black text-white mb-2" id="otaModalTitle">جاري تحديث برنامج الكافيه...</h3>
+        <p class="text-xs text-slate-300 mb-6 leading-relaxed" id="otaModalDesc">يتم تنزيل وتطبيق حزمة التحديث الرسمية بأمان كامل 100% دون لمس أو التأثير على مبيعاتك وقواعد البيانات.</p>
+        <div class="w-full bg-slate-800 rounded-full h-3 mb-4 overflow-hidden border border-slate-700">
+            <div id="otaProgressBar" class="bg-gradient-to-r from-amber-500 to-indigo-500 h-full rounded-full transition-all duration-500 w-1/4 animate-pulse"></div>
+        </div>
+        <div class="text-xs text-amber-300 font-mono" id="otaModalStatus">جاري الاتصال بالسيرفر السحابي...</div>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// Updates Page Modal Logic
+// ============================================================
+function openUpdatesModal() {
+    document.getElementById('updatesPageModal').classList.remove('hidden');
+    // Reset all state cards
+    document.getElementById('updModalNewVerCard').classList.add('hidden');
+    document.getElementById('updModalOkCard').classList.add('hidden');
+    document.getElementById('updModalErrCard').classList.add('hidden');
+    document.getElementById('updModalInstallBtn').classList.add('hidden');
+    document.getElementById('updModalCurrentVer').innerText = 'جاري التحقق...';
+    document.getElementById('updModalStatusBadge').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الفحص...';
+    document.getElementById('updModalStatusBadge').className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-slate-800 text-slate-400 border border-slate-700';
+    // Trigger a check
+    loadUpdatesStatus();
+}
+
+function closeUpdatesModal() {
+    document.getElementById('updatesPageModal').classList.add('hidden');
+}
+
+function loadUpdatesStatus() {
+    fetch('/api/check_update')
+        .then(r => r.json())
+        .then(data => renderUpdatesModal(data))
+        .catch(() => renderUpdatesModal({checked: true, available: false, message: 'تعذّر الاتصال بخادم التحديثات', error: true}));
+}
+
+function forceCheckUpdate() {
+    const btn = document.getElementById('updModalForceCheckBtn');
+    const badge = document.getElementById('updModalStatusBadge');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الفحص...'; }
+    badge.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الفحص...';
+    badge.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-slate-800 text-slate-400 border border-slate-700';
+    document.getElementById('updModalNewVerCard').classList.add('hidden');
+    document.getElementById('updModalOkCard').classList.add('hidden');
+    document.getElementById('updModalErrCard').classList.add('hidden');
+    document.getElementById('updModalInstallBtn').classList.add('hidden');
+
+    fetch('/api/force_check_update')
+        .then(r => r.json())
+        .then(data => {
+            renderUpdatesModal(data);
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> <span>فحص يدوي 🔍</span>'; }
+            // Also refresh banner/badge
+            checkOtaUpdates();
+        })
+        .catch(() => {
+            renderUpdatesModal({checked: true, available: false, message: 'تعذّر الاتصال', error: true});
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> <span>فحص يدوي 🔍</span>'; }
+        });
+}
+
+function renderUpdatesModal(data) {
+    const curVerEl = document.getElementById('updModalCurrentVer');
+    const badgeEl = document.getElementById('updModalStatusBadge');
+    const newCard = document.getElementById('updModalNewVerCard');
+    const okCard = document.getElementById('updModalOkCard');
+    const errCard = document.getElementById('updModalErrCard');
+    const installBtn = document.getElementById('updModalInstallBtn');
+
+    // Try to get local version from page (injected by server) or fallback
+    const localVer = data.local_version || (data.available ? 'مثبّت' : (data.version || '...'));
+
+    if (data.available) {
+        // Update available!
+        curVerEl.innerText = 'v' + (data.local_version || '...');
+        badgeEl.innerHTML = '<i class="fa-solid fa-circle-up"></i> تحديث جديد!';
+        badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/50';
+        newCard.classList.remove('hidden');
+        okCard.classList.add('hidden');
+        errCard.classList.add('hidden');
+        installBtn.classList.remove('hidden');
+        document.getElementById('updModalNewVer').innerText = 'الإصدار الجديد: v' + (data.version || '?');
+        document.getElementById('updModalChangelog').innerText = data.changelog || data.message || 'تحديث رسمي جديد.';
+        // Show nav dot
+        const dot = document.getElementById('navUpdateDot');
+        const dotS = document.getElementById('navUpdateDotStatic');
+        if (dot) dot.classList.remove('hidden');
+        if (dotS) dotS.classList.remove('hidden');
+    } else if (data.checked && !data.available && !data.error) {
+        // All good, up to date
+        curVerEl.innerText = 'v' + (data.version || '...');
+        badgeEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> محدّث';
+        badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-700/50';
+        newCard.classList.add('hidden');
+        okCard.classList.remove('hidden');
+        errCard.classList.add('hidden');
+        installBtn.classList.add('hidden');
+    } else {
+        // Error / not yet checked
+        curVerEl.innerText = data.version ? 'v' + data.version : 'غير محدد';
+        badgeEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> خطأ في الاتصال';
+        badgeEl.className = 'px-3 py-1.5 rounded-xl text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-700/50';
+        newCard.classList.add('hidden');
+        okCard.classList.add('hidden');
+        errCard.classList.remove('hidden');
+        installBtn.classList.add('hidden');
+    }
+}
+
+function checkOtaUpdates() {
+    fetch('/api/check_update')
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.available) {
+                const banner = document.getElementById('otaUpdateBanner');
+                const badge = document.getElementById('navUpdateBtn');
+                const verText = document.getElementById('otaVersionText');
+                const msgText = document.getElementById('otaMessageText');
+                const verStr = data.version || '4.6.0';
+                if (verText) verText.innerText = 'v' + verStr;
+                if (msgText && data.message) msgText.innerText = data.message;
+                // Show top banner if not dismissed
+                if (banner && sessionStorage.getItem('dismissOtaBanner_' + verStr) !== 'true') {
+                    banner.classList.remove('hidden');
+                }
+                // Show pulsing nav badge
+                if (badge) { badge.classList.remove('hidden'); badge.classList.add('inline-flex'); }
+                // Show dots on updates button
+                const dot = document.getElementById('navUpdateDot');
+                const dotS = document.getElementById('navUpdateDotStatic');
+                if (dot) dot.classList.remove('hidden');
+                if (dotS) dotS.classList.remove('hidden');
+            }
+        })
+        .catch(() => {});
+}
+
+function dismissOtaBanner() {
+    const banner = document.getElementById('otaUpdateBanner');
+    if (banner) banner.classList.add('hidden');
+    const verText = document.getElementById('otaVersionText');
+    const ver = verText ? verText.innerText.replace('v', '').trim() : 'latest';
+    sessionStorage.setItem('dismissOtaBanner_' + ver, 'true');
+}
+
+function triggerUpdateModal() {
+    openUpdatesModal();
+}
+
+function startOtaUpdateProcess() {
+    const modal = document.getElementById('otaProgressModal');
+    const bar = document.getElementById('otaProgressBar');
+    const status = document.getElementById('otaModalStatus');
+    const btn = document.getElementById('btnStartOtaUpdate');
+
+    if (modal) modal.classList.remove('hidden');
+    if (btn) btn.disabled = true;
+    if (bar) bar.style.width = '40%';
+    if (status) status.innerText = 'جاري تنزيل ملفات التحديث الرسمية من السحابة...';
+
+    fetch('/api/do_update', { 
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(async response => {
+        const text = await response.text();
+        let res;
+        try {
+            res = JSON.parse(text);
+        } catch (jsonErr) {
+            console.error('Non-JSON server response:', text);
+            if (response.status === 401 || response.status === 403) {
+                throw new Error('انتهت الجلسة أو تعذر الوصول للصلاحيات. يرجى تسجيل الدخول وإعادة المحاولة.');
+            }
+            throw new Error(`تعذر معالجة استجابة السيرفر (كود: ${response.status}). يرجى إعادة المحاولة.`);
+        }
+        if (!response.ok) {
+            throw new Error((res && (res.error || res.message)) || `خطأ من الخادم (${response.status})`);
+        }
+        return res;
+    })
+    .then(res => {
+        if (res && res.success) {
+            if (bar) bar.style.width = '100%';
+            if (status) status.innerText = '✅ تم التنزيل بنجاح! جاري تثبيت التحديث وإعادة تشغيل البرنامج...';
+            let counter = 4;
+            const interval = setInterval(() => {
+                if (status) status.innerText = `سيُعاد فتح البرنامج تلقائياً خلال ${counter} ثوانٍ...`;
+                counter--;
+                if (counter < 0) { clearInterval(interval); location.reload(); }
+            }, 1000);
+        } else {
+            alert('تعذر تطبيق التحديث: ' + ((res && res.error) || 'خطأ غير معروف'));
+            if (modal) modal.classList.add('hidden');
+            if (btn) btn.disabled = false;
+        }
+    })
+    .catch(err => {
+        alert('حدث خطأ أثناء التحديث: ' + (err.message || err));
+        if (modal) modal.classList.add('hidden');
+        if (btn) btn.disabled = false;
+    });
+}
+
+// ============================================================
+// 📦 Manual Update Functions (تطبيق التحديث اليدوي)
+// ============================================================
+function onManualZipFileSelected(input) {
+    const file = input.files[0];
+    const lbl = document.getElementById('manualZipFileLabel');
+    const btn = document.getElementById('btnManualUploadSubmit');
+    if (file) {
+        if (lbl) lbl.innerText = file.name + ' (' + (file.size / (1024*1024)).toFixed(1) + ' MB)';
+        if (btn) btn.disabled = false;
+    } else {
+        if (lbl) lbl.innerText = 'اختر ملف Stargate_Cafe_Update.zip';
+        if (btn) btn.disabled = true;
+    }
+}
+
+function submitManualZipUpdate() {
+    const input = document.getElementById('manualUpdateZipInput');
+    const file = input.files[0];
+    if (!file) {
+        alert('يرجى اختيار ملف التحديث .zip أولاً');
+        return;
+    }
+    const btn = document.getElementById('btnManualUploadSubmit');
+    const statusMsg = document.getElementById('manualUpdateStatusMsg');
+    if (btn) btn.disabled = true;
+    if (statusMsg) {
+        statusMsg.classList.remove('hidden');
+        statusMsg.className = 'text-[11px] font-mono p-2.5 rounded-xl bg-indigo-950/80 border border-indigo-500/40 text-indigo-200 text-center';
+        statusMsg.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري رفع حزمة التحديث وفحص الملفات...';
+    }
+
+    const formData = new FormData();
+    formData.append('update_zip', file);
+
+    fetch('/api/manual_update', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token() }}' },
+        body: formData
+    })
+    .then(async r => {
+        const text = await r.text();
+        let res;
+        try { res = JSON.parse(text); } catch(e) { throw new Error('استجابة غير متوقعة من السيرفر: ' + text.substring(0, 100)); }
+        if (!r.ok) throw new Error(res.error || ('خطأ ' + r.status));
+        return res;
+    })
+    .then(res => {
+        if (res.success) {
+            if (statusMsg) {
+                statusMsg.className = 'text-[11px] font-mono p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-center';
+                statusMsg.innerHTML = '✅ ' + res.message;
+            }
+            setTimeout(() => { location.reload(); }, 4000);
+        } else {
+            alert('تعذر التحديث: ' + (res.error || 'خطأ غير معروف'));
+            if (btn) btn.disabled = false;
+            if (statusMsg) statusMsg.classList.add('hidden');
+        }
+    })
+    .catch(err => {
+        alert('حدث خطأ أثناء التحديث اليدوي: ' + err.message);
+        if (btn) btn.disabled = false;
+        if (statusMsg) statusMsg.classList.add('hidden');
+    });
+}
+
+function scanAndApplyLocalZip() {
+    const statusMsg = document.getElementById('manualUpdateStatusMsg');
+    if (statusMsg) {
+        statusMsg.classList.remove('hidden');
+        statusMsg.className = 'text-[11px] font-mono p-2.5 rounded-xl bg-indigo-950/80 border border-indigo-500/40 text-indigo-200 text-center';
+        statusMsg.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري فحص ملفات التحديث على سطح المكتب...';
+    }
+
+    fetch('/api/manual_update', {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify({ mode: 'scan_local' })
+    })
+    .then(async r => {
+        const text = await r.text();
+        let res;
+        try { res = JSON.parse(text); } catch(e) { throw new Error(text.substring(0, 100)); }
+        if (!r.ok) throw new Error(res.error || ('خطأ ' + r.status));
+        return res;
+    })
+    .then(res => {
+        if (res.success) {
+            if (statusMsg) {
+                statusMsg.className = 'text-[11px] font-mono p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-center';
+                statusMsg.innerHTML = '✅ ' + res.message;
+            }
+            setTimeout(() => { location.reload(); }, 4000);
+        } else {
+            alert('لم يتم العثور على الملف: ' + (res.error || ''));
+            if (statusMsg) statusMsg.classList.add('hidden');
+        }
+    })
+    .catch(err => {
+        alert('تنبيه: ' + err.message);
+        if (statusMsg) statusMsg.classList.add('hidden');
+    });
+}
+</script>
+
+<!-- ============================================================ -->
+<!-- 💸 Quick Expense Modal (تسجيل مصروف مباشر من الصندوق)            -->
+<!-- ============================================================ -->
+<div id="quickExpenseModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-rose-500/50 rounded-3xl p-5 max-w-sm w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <div class="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-lg">
+                    💸
+                </div>
+                <div>
+                    <h3 class="text-sm font-black text-white">تسجيل مصروف سريع</h3>
+                    <p class="text-[10px] text-slate-400">يُخصم فوراً من كاش الدرج ويُسجل بالوردية</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeQuickExpenseModal()" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-xs">
+                ✕
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('expense_quick_add') }}" class="space-y-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">بيان المصروف *</label>
+                <input type="text" name="title" id="quickExpenseTitle" required placeholder="مثال: شراء ثلج، خبز، حليب، نثريات..." class="w-full bg-slate-950 border border-slate-700 text-white text-xs px-3 py-2 rounded-xl focus:border-rose-400 outline-none">
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">المبلغ بالليرة (ل.ل) *</label>
+                <input type="number" step="any" min="1" name="amount_lbp" id="quickExpenseAmount" required placeholder="0" class="w-full bg-slate-950 border border-slate-700 text-rose-300 font-mono font-black text-base px-3 py-2 rounded-xl focus:border-rose-400 outline-none text-left" dir="ltr">
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">مصدر الدفع:</label>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <label class="bg-slate-950 p-2 rounded-xl border border-rose-500/40 flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="source" value="drawer" checked class="text-rose-500 focus:ring-rose-400">
+                        <span class="text-[11px] text-white font-bold">درج الكاشير 💵</span>
+                    </label>
+                    {% if session.get('is_admin') or session.get('admin_authenticated') or session.get('employee_role') == 'admin' %}
+                    <label class="bg-slate-950 p-2 rounded-xl border border-slate-700 flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="source" value="safe" class="text-amber-500 focus:ring-amber-400">
+                        <span class="text-[11px] text-amber-300 font-bold">الخزنة 🏦</span>
+                    </label>
+                    {% else %}
+                    <div class="bg-slate-950/40 p-2 rounded-xl border border-slate-800 text-[10px] text-slate-500 flex items-center justify-center">
+                        الخزنة (للإدارة فقط)
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">التصنيف:</label>
+                <select name="category" class="w-full bg-slate-950 border border-slate-700 text-slate-200 text-xs px-2.5 py-2 rounded-xl focus:border-rose-400 outline-none">
+                    <option value="نثريات كافيه">نثريات كافيه ومشتريات طارئة</option>
+                    <option value="مشتريات بضاعة">مشتريات بضاعة ومواد خام</option>
+                    <option value="صيانة">صيانة وإصلاحات</option>
+                    <option value="رواتب وسلف">رواتب وسلف موظفين</option>
+                    <option value="مصاريف عامة">مصاريف عامة أخرى</option>
+                </select>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-black py-2.5 rounded-xl text-xs transition shadow-lg shadow-rose-600/20 active:scale-95 cursor-pointer">
+                    تأكيد صرف المبلغ 💸
+                </button>
+                <button type="button" onclick="closeQuickExpenseModal()" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Quick Opening Float Modal (تسجيل فكة / عهدة بداية الدوام للصندوق) -->
+<div id="quickFloatModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 no-print">
+    <div class="bg-slate-900 border-2 border-amber-500/50 rounded-3xl p-5 max-w-md w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-black">💼</span>
+                <div>
+                    <h3 class="font-black text-sm text-white">إيداع عهدة بداية الدوام (فكة الصندوق)</h3>
+                    <p class="text-[10px] text-slate-400">تسجيل سيولة نقدية في درج الكاشير مع قيد محاسبي رسمي</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeQuickFloatModal()" class="text-slate-500 hover:text-slate-300 text-lg">✕</button>
+        </div>
+
+        <form action="{{ url_for('shift_open_float_route') }}" method="POST" class="space-y-3" onsubmit="var b=this.querySelector('button[type=submit]'); b.disabled=true; b.innerHTML='⏳ جاري الإيداع...';">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">مبلغ العهدة (ليرة لبنانية): *</label>
+                <input type="number" name="amount_lbp" id="quickFloatAmountLbp" step="500" placeholder="مثال: 1000000" required
+                       class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold text-base px-3 py-2 rounded-xl focus:border-amber-400 outline-none">
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">مصدر العهدة والسيولة:</label>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <label class="bg-slate-950 p-2 rounded-xl border border-amber-500/40 flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="source" value="safe" checked class="text-amber-500 focus:ring-amber-400">
+                        <span class="text-[11px] text-white font-bold">من الخزنة الخاصة 🏦</span>
+                    </label>
+                    <label class="bg-slate-950 p-2 rounded-xl border border-slate-700 flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="source" value="capital" class="text-indigo-500 focus:ring-indigo-400">
+                        <span class="text-[11px] text-indigo-300 font-bold">رأس مال / المالك 💼</span>
+                    </label>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-[11px] font-bold text-slate-300 mb-1">ملاحظات وبيان العهدة:</label>
+                <input type="text" name="notes" placeholder="فكة بداية الوردية الصباحية / المسائية"
+                       class="w-full bg-slate-950 border border-slate-700 text-slate-200 text-xs px-2.5 py-2 rounded-xl focus:border-amber-400 outline-none">
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-black py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-600/20 active:scale-95 cursor-pointer">
+                    تأكيد إيداع العهدة بالصندوق 💼
+                </button>
+                <button type="button" onclick="closeQuickFloatModal()" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openQuickExpenseModal() {
+    const m = document.getElementById('quickExpenseModal');
+    if (m) {
+        m.classList.remove('hidden');
+        const inp = document.getElementById('quickExpenseTitle');
+        if (inp) {
+            inp.value = '';
+            inp.focus();
+        }
+        const amt = document.getElementById('quickExpenseAmount');
+        if (amt) amt.value = '';
+    }
+}
+function closeQuickExpenseModal() {
+    const m = document.getElementById('quickExpenseModal');
+    if (m) m.classList.add('hidden');
+}
+
+function openQuickFloatModal() {
+    const m = document.getElementById('quickFloatModal');
+    if (m) {
+        m.classList.remove('hidden');
+        const inp = document.getElementById('quickFloatAmountLbp');
+        if (inp) {
+            inp.value = '';
+            inp.focus();
+        }
+    }
+}
+function closeQuickFloatModal() {
+    const m = document.getElementById('quickFloatModal');
+    if (m) m.classList.add('hidden');
+}
+
+/* ============================================================ */
+/* ☕ Coffee Waste (تلف) & Open Bag (فتح كيلو) Modals for Cashier */
+/* ============================================================ */
+function openPosWasteModal() {
+    const m = document.getElementById('posCoffeeWasteModal');
+    if (m) {
+        m.classList.remove('hidden');
+        const q = document.getElementById('posWasteQty');
+        if (q) { q.value = '1'; q.focus(); }
+    }
+}
+function closePosWasteModal() {
+    const m = document.getElementById('posCoffeeWasteModal');
+    if (m) m.classList.add('hidden');
+}
+
+function openPosOpenBagModal() {
+    const m = document.getElementById('posOpenCoffeeBagModal');
+    if (m) {
+        m.classList.remove('hidden');
+    }
+}
+function closePosOpenBagModal() {
+    const m = document.getElementById('posOpenCoffeeBagModal');
+    if (m) m.classList.add('hidden');
+}
+</script>
+
+<!-- ☕ 1. Cashier Coffee Waste Modal (تسجيل فنجان تالف) -->
+<div id="posCoffeeWasteModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-rose-500/60 rounded-3xl p-6 md:p-7 max-w-lg w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3.5">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-xl border border-rose-500/30">
+                    ⚠️
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-white">تسجيل فنجان قهوة تالف (تلف)</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">تُحسب الخسارة بسعر تكلفة الفنجان المستخرجة من الكيلو السابق دون أرباح</p>
+                </div>
+            </div>
+            <button type="button" onclick="closePosWasteModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold">
+                ✕
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('coffee_log_waste') }}" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">عدد الفناجين التالفة (تلف) *</label>
+                <div class="flex items-center gap-3">
+                    <input type="number" name="qty" id="posWasteQty" value="1" min="1" max="50" required
+                           class="w-full bg-slate-950 border border-slate-700 text-rose-400 font-mono font-black text-2xl text-center py-2.5 rounded-2xl focus:border-rose-400 outline-none">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">سبب التلف:</label>
+                <select name="reason" class="w-full bg-slate-950 border border-slate-700 text-slate-200 text-sm px-3.5 py-3 rounded-2xl focus:border-rose-400 outline-none">
+                    <option value="تلف / خطأ أثناء التحضير">تلف / خطأ أثناء التحضير</option>
+                    <option value="انكب / سقط أثناء التحضير أو التقديم">انكب / سقط أثناء التحضير أو التقديم</option>
+                    <option value="خطأ في طلب الزبون أو تحضير البن">خطأ في طلب الزبون أو تحضير البن</option>
+                    <option value="خلل في ماكينة الإسبريسو أو الطحنة">خلل في ماكينة الإسبريسو أو الطحنة</option>
+                    <option value="ضيافة أو تذوق الموظف">ضيافة أو تذوق الموظف</option>
+                    <option value="سبب تلف آخر">سبب تلف آخر</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">ملاحظة (اختياري):</label>
+                <input type="text" name="notes" placeholder="ملاحظة سريعة..." class="w-full bg-slate-950 border border-slate-700 text-white text-sm px-4 py-3 rounded-2xl focus:border-rose-400 outline-none">
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-black py-3 rounded-2xl text-sm transition shadow-lg shadow-rose-600/30 active:scale-95 cursor-pointer">
+                    تأكيد خصم التالف ⚠️
+                </button>
+                <button type="button" onclick="closePosWasteModal()" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ☕ 2. Cashier Open New Kilo Bag Modal (فتح كيلو بن جديد - واسع ومريح) -->
+<div id="posOpenCoffeeBagModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-6 md:p-8 max-w-xl w-full shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3.5">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-xl border border-amber-500/30">
+                    ☕
+                </div>
+                <div>
+                    <h3 class="text-base font-black text-white">فتح كيلو بن قهوة جديد (1 كغ)</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">يخصم 1 كغ من المخزون وتسكير الكيلو السابق تلقائياً وبدء العداد من 0</p>
+                </div>
+            </div>
+            <button type="button" onclick="closePosOpenBagModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm font-bold">
+                ✕
+            </button>
+        </div>
+
+        {% set active_batch_modal = get_active_coffee_batch() if get_active_coffee_batch else None %}
+        {% set stock_info_modal = get_coffee_beans_stock() if get_coffee_beans_stock else None %}
+
+        <div class="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs md:text-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-slate-400">📦 رصيد أكياس البن بالمحل:</span>
+                <span class="font-mono font-black text-amber-400 text-base">{{ stock_info_modal.stock_kg if stock_info_modal else 0 }} كغ</span>
+            </div>
+            {% if stock_info_modal and stock_info_modal.cost_per_kg > 0 %}
+            <div class="bg-amber-500/10 border border-amber-500/30 p-2.5 rounded-xl flex items-center justify-between text-xs">
+                <span class="text-amber-300 font-bold">السعر الموحد للكيلو من المخزون:</span>
+                <span class="font-mono font-black text-white">{{ stock_info_modal.cost_per_kg|format_currency }} ل.ل</span>
+            </div>
+            {% endif %}
+            {% if active_batch_modal %}
+            <div class="border-t border-slate-800/80 pt-2 flex items-center justify-between text-xs">
+                <span class="text-rose-300">الكيلو المفتوح حالياً:</span>
+                <span class="font-mono font-bold text-white">{{ active_batch_modal.batch_code }} (أنتج {{ active_batch_modal.cups_sold }} فنجان مبيع + {{ active_batch_modal.cups_damaged }} تلف)</span>
+            </div>
+            <p class="text-xs text-amber-300/90 pt-1 leading-relaxed">
+                💡 سيتم تسكير الكيلو الحالي تلقائياً وتوثيق عدد فناجينه ورسماله وصافي ربحه وتوريثه، وبدء الكيلو الجديد من 0 فنجان.
+            </p>
+            {% else %}
+            <p class="text-xs text-emerald-400 pt-1">
+                🟢 لا يوجد كيلو مفتوح حالياً، سيتم بدء تشغيل أول كيلو فوراً.
+            </p>
+            {% endif %}
+        </div>
+
+        <form method="POST" action="{{ url_for('coffee_open_bag') }}" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">سعر شراء الكيلو بالليرة (ل.ل) - معتمد تلقائياً من المخزن:</label>
+                <input type="number" name="cost_per_kg_lbp" value="{{ stock_info_modal.cost_per_kg if stock_info_modal and stock_info_modal.cost_per_kg > 0 else '' }}" placeholder="{{ stock_info_modal.cost_per_kg if stock_info_modal else 'سعر الشراء الموحد...' }}" class="w-full bg-slate-950 border border-slate-700 text-amber-300 font-mono font-bold text-sm px-4 py-3 rounded-2xl focus:border-amber-400 outline-none text-left" dir="ltr">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5">ملاحظة الكاشير (اختياري):</label>
+                <input type="text" name="notes" placeholder="مثال: فتح كيس بن غامق رقم 2..." class="w-full bg-slate-950 border border-slate-700 text-white text-sm px-4 py-3 rounded-2xl focus:border-amber-400 outline-none">
+            </div>
+
+            <div class="flex gap-3 pt-2">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black py-3 rounded-2xl text-sm transition shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer">
+                    تأكيد فتح الكيلو وبدء العداد ☕
+                </button>
+                <button type="button" onclick="closePosOpenBagModal()" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-2xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 🛡️ Maintenance & Backup Quick Hub Modal (v6.0 PRO) -->
+<div id="maintenanceModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-emerald-500/60 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl font-black border border-emerald-500/40 shadow-inner">
+                    🛡️
+                </div>
+                <div>
+                    <h3 class="text-sm font-black text-white flex items-center gap-2">
+                        <span>مركز الصيانة والنسخ الاحتياطي الفوري</span>
+                        <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/40 font-mono">v6.0 PRO</span>
+                    </h3>
+                    <p class="text-[11px] text-slate-400">أدوات حماية البيانات، تحسين الفهارس، والنسخ السريع بدون إيقاف الكاشير</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeMaintenanceModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-xs transition cursor-pointer">
+                ✕
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <!-- 1. Instant Backup -->
+            <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center gap-2 font-black text-white">
+                        <i class="fa-solid fa-file-zipper text-emerald-400"></i>
+                        <span>نسخة احتياطية فورية (ZIP)</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                        يأخذ نسخة فورية كاملة عبر SQLite Online Backup بدون قفل قاعدة البيانات أو تعطيل الكاشير.
+                    </p>
+                </div>
+                <button type="button" onclick="executeInstantBackup(this)" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-black py-2 rounded-xl text-xs transition shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-download"></i>
+                    <span>إنشاء نسخة الآن ⚡</span>
+                </button>
+            </div>
+
+            <!-- 2. Optimize & Checkpoint -->
+            <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center gap-2 font-black text-white">
+                        <i class="fa-solid fa-bolt text-amber-400"></i>
+                        <span>تحسين وتسريع الفهارس</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                        ينفذ PRAGMA optimize وضغط سجلات WAL وإعادة ترتيب الذاكرة لتسريع الاستعلامات وضغط البيانات.
+                    </p>
+                </div>
+                <button type="button" onclick="executeDatabaseOptimize(this)" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-black py-2 rounded-xl text-xs transition shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-gauge-high"></i>
+                    <span>تسريع وضغط الآن 🚀</span>
+                </button>
+            </div>
+
+            <!-- 3. Integrity Check -->
+            <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 space-y-2 flex flex-col justify-between sm:col-span-2">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="flex items-center gap-2 font-black text-white">
+                            <i class="fa-solid fa-heart-pulse text-rose-400"></i>
+                            <span>فحص سلامة قاعدة البيانات (Integrity Check)</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-0.5">
+                            التحقق من صحة ترابط الجداول والعلاقات الخارجية (Foreign Keys) وخلو البيانات من أي تلف.
+                        </p>
+                    </div>
+                    <button type="button" onclick="executeIntegrityCheck(this)" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-4 py-2 rounded-xl text-xs transition shadow-md active:scale-95 cursor-pointer flex items-center gap-1.5 shrink-0">
+                        <i class="fa-solid fa-stethoscope"></i>
+                        <span>فحص السلامة 🔍</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="maintStatusAlert" class="hidden p-3 rounded-2xl text-xs font-bold leading-relaxed border transition"></div>
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+            <span>💾 النسخ الآلي: نشط يومياً الساعة 3:00 فجراً</span>
+            <button type="button" onclick="closeMaintenanceModal()" class="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition">
+                إغلاق
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openMaintenanceModal() {
+        const modal = document.getElementById('maintenanceModal');
+        if (modal) modal.classList.remove('hidden');
+    }
+    function closeMaintenanceModal() {
+        const modal = document.getElementById('maintenanceModal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    async function executeInstantBackup(btn) {
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري النسخ...';
+        const alertBox = document.getElementById('maintStatusAlert');
+        try {
+            const res = await fetch('/api/backup/manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            alertBox.classList.remove('hidden', 'bg-rose-500/20', 'border-rose-500/40', 'text-rose-300', 'bg-emerald-500/20', 'border-emerald-500/40', 'text-emerald-300');
+            if (data.success) {
+                alertBox.classList.add('bg-emerald-500/20', 'border-emerald-500/40', 'text-emerald-300');
+                alertBox.innerHTML = `✓ ${data.message} <br><span class="font-mono text-[10px] text-slate-300">الملف: ${data.file || ''}</span>`;
+            } else {
+                alertBox.classList.add('bg-rose-500/20', 'border-rose-500/40', 'text-rose-300');
+                alertBox.innerHTML = `✕ ${data.message}`;
+            }
+        } catch (e) {
+            alertBox.classList.remove('hidden');
+            alertBox.classList.add('bg-rose-500/20', 'border-rose-500/40', 'text-rose-300');
+            alertBox.innerHTML = `✕ خطأ أثناء الاتصال: ${e}`;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    async function executeDatabaseOptimize(btn) {
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري التحسين...';
+        const alertBox = document.getElementById('maintStatusAlert');
+        try {
+            const res = await fetch('/api/maintenance/optimize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            alertBox.classList.remove('hidden', 'bg-rose-500/20', 'border-rose-500/40', 'text-rose-300', 'bg-emerald-500/20', 'border-emerald-500/40', 'text-emerald-300');
+            if (data.success) {
+                alertBox.classList.add('bg-emerald-500/20', 'border-emerald-500/40', 'text-emerald-300');
+                alertBox.innerHTML = `✓ ${data.message}`;
+            } else {
+                alertBox.classList.add('bg-rose-500/20', 'border-rose-500/40', 'text-rose-300');
+                alertBox.innerHTML = `✕ ${data.message}`;
+            }
+        } catch (e) {
+            alertBox.classList.remove('hidden');
+            alertBox.classList.add('bg-rose-500/20', 'border-rose-500/40', 'text-rose-300');
+            alertBox.innerHTML = `✕ خطأ أثناء الاتصال: ${e}`;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    async function executeIntegrityCheck(btn) {
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري الفحص...';
+        const alertBox = document.getElementById('maintStatusAlert');
+        try {
+            const res = await fetch('/api/backup/integrity', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            alertBox.classList.remove('hidden', 'bg-rose-500/20', 'border-rose-500/40', 'text-rose-300', 'bg-emerald-500/20', 'border-emerald-500/40', 'text-emerald-300');
+            if (data.success && data.healthy) {
+                alertBox.classList.add('bg-emerald-500/20', 'border-emerald-500/40', 'text-emerald-300');
+                alertBox.innerHTML = `✓ ${data.message}`;
+            } else {
+                alertBox.classList.add('bg-rose-500/20', 'border-rose-500/40', 'text-rose-300');
+                alertBox.innerHTML = `✕ ${data.message}`;
+            }
+        } catch (e) {
+            alertBox.classList.remove('hidden');
+            alertBox.classList.add('bg-rose-500/20', 'border-rose-500/40', 'text-rose-300');
+            alertBox.innerHTML = `✕ خطأ أثناء الاتصال: ${e}`;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+</script>
+
+<!-- 🤖 STARGATE AI COPILOT MODAL (المساعد الذكي التفاعلي المتكامل) -->
+<div id="aiCopilotModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
+    <div class="bg-slate-900 border-2 border-indigo-500/70 rounded-3xl max-w-xl w-full h-[600px] max-h-[90vh] flex flex-col shadow-2xl relative overflow-hidden">
+        
+        <!-- Header -->
+        <div class="p-4 border-b border-slate-800 bg-slate-950/80 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center text-xl font-black shadow-lg shadow-indigo-600/30 border border-white/20">
+                    🤖
+                </div>
+                <div>
+                    <h3 class="text-sm font-black text-white flex items-center gap-2">
+                        <span>مساعد STARGATE الذكي</span>
+                        <span class="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/40 font-mono">متصل ومباشر</span>
+                    </h3>
+                    <p class="text-[11px] text-slate-400">يجيب عن الحسابات، الأرباح، الصناديق، المخزون، وطرق استخدام النظام</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeCopilotModal()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-xs transition cursor-pointer">
+                ✕
+            </button>
+        </div>
+
+        <!-- Chat Messages Container -->
+        <div id="copilotChatMessages" class="flex-1 overflow-y-auto p-4 space-y-3.5 custom-scrollbar text-xs leading-relaxed">
+            <!-- Welcome message from Copilot -->
+            <div class="flex items-start gap-2.5">
+                <div class="w-7 h-7 rounded-xl bg-indigo-600/30 text-indigo-400 flex items-center justify-center text-xs shrink-0 border border-indigo-500/40">
+                    🤖
+                </div>
+                <div class="bg-slate-800/80 border border-slate-700/70 p-3.5 rounded-2xl rounded-tr-none max-w-[85%] space-y-1 text-slate-200 shadow-sm">
+                    <p class="font-bold text-white">أهلاً بك! أنا مساعد STARGATE الذكي المتكامل ☕✨</p>
+                    <p class="text-slate-300">يمكنك سؤالي عن أي شيء في البرنامج أو النقر على أحد الأسئلة السريعة أدناه:</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Questions Chips -->
+        <div class="p-2.5 bg-slate-950/60 border-t border-slate-800/80 flex items-center gap-1.5 overflow-x-auto custom-scrollbar shrink-0">
+            <button type="button" onclick="askCopilot('كم مبيعات وأرباح اليوم؟')" class="whitespace-nowrap px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-indigo-900/60 text-slate-300 hover:text-indigo-200 text-[11px] font-bold border border-slate-700 hover:border-indigo-500/50 transition cursor-pointer">
+                📊 مبيعات اليوم
+            </button>
+            <button type="button" onclick="askCopilot('هل توجد بضاعة ناقصة في المخزون؟')" class="whitespace-nowrap px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-amber-900/60 text-slate-300 hover:text-amber-200 text-[11px] font-bold border border-slate-700 hover:border-amber-500/50 transition cursor-pointer">
+                📦 النواقص في المخزون
+            </button>
+            <button type="button" onclick="askCopilot('ما هو رصيد الخزنة والصندوق؟')" class="whitespace-nowrap px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-emerald-900/60 text-slate-300 hover:text-emerald-200 text-[11px] font-bold border border-slate-700 hover:border-emerald-500/50 transition cursor-pointer">
+                🏦 رصيد الخزنة والدرج
+            </button>
+            <button type="button" onclick="askCopilot('كيف أقفل حساب الوردية؟')" class="whitespace-nowrap px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-purple-900/60 text-slate-300 hover:text-purple-200 text-[11px] font-bold border border-slate-700 hover:border-purple-500/50 transition cursor-pointer">
+                📋 طريقة تسكير الوردية
+            </button>
+            <button type="button" onclick="askCopilot('كيف أضبط مقاس طباعة الفاتورة؟')" class="whitespace-nowrap px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-cyan-900/60 text-slate-300 hover:text-cyan-200 text-[11px] font-bold border border-slate-700 hover:border-cyan-500/50 transition cursor-pointer">
+                🖨️ رول الطباعة (80/58)
+            </button>
+        </div>
+
+        <!-- Chat Input Form -->
+        <div class="p-3 bg-slate-950 border-t border-slate-800 flex items-center gap-2 shrink-0">
+            <input type="text" id="copilotInput" placeholder="اكتب سؤالك هنا... (مثال: كم مبيعات اليوم؟ أو كيف أسجل مصروف؟)"
+                   class="flex-1 bg-slate-900 border border-slate-700 focus:border-indigo-500 text-white text-xs px-4 py-3 rounded-2xl outline-none transition"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();submitCopilotMsg();}">
+            <button type="button" onclick="submitCopilotMsg()" id="copilotSendBtn" class="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black px-4 py-3 rounded-2xl text-xs transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
+                <span>إرسال</span>
+                <i class="fa-solid fa-paper-plane text-xs"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openCopilotModal() {
+        const modal = document.getElementById('aiCopilotModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            setTimeout(() => document.getElementById('copilotInput')?.focus(), 100);
+        }
+    }
+    function closeCopilotModal() {
+        const modal = document.getElementById('aiCopilotModal');
+        if (modal) modal.classList.add('hidden');
+    }
+
+    // Global F1 Hotkey for AI Copilot
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'F1') {
+            e.preventDefault();
+            openCopilotModal();
+        } else if (e.key === 'Escape') {
+            closeCopilotModal();
+        }
+    });
+
+    function askCopilot(text) {
+        document.getElementById('copilotInput').value = text;
+        submitCopilotMsg();
+    }
+
+    function stargateEscapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, function (ch) {
+            return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+        });
+    }
+
+    async function submitCopilotMsg() {
+        const input = document.getElementById('copilotInput');
+        const query = (input.value || '').trim();
+        if (!query) return;
+
+        const chatBox = document.getElementById('copilotChatMessages');
+        const sendBtn = document.getElementById('copilotSendBtn');
+
+        // Append User Bubble
+        chatBox.innerHTML += `
+            <div class="flex items-start gap-2.5 justify-end">
+                <div class="bg-indigo-600 text-white p-3 rounded-2xl rounded-tl-none max-w-[85%] shadow-sm">
+                    ${stargateEscapeHtml(query)}
+                </div>
+            </div>
+        `;
+        input.value = '';
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        // Append Typing Indicator
+        const typingId = 'typing_' + Date.now();
+        chatBox.innerHTML += `
+            <div id="${typingId}" class="flex items-start gap-2.5">
+                <div class="w-7 h-7 rounded-xl bg-indigo-600/30 text-indigo-400 flex items-center justify-center text-xs shrink-0 border border-indigo-500/40">
+                    🤖
+                </div>
+                <div class="bg-slate-800/80 border border-slate-700/70 p-3 rounded-2xl rounded-tr-none text-slate-400 flex items-center gap-2">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    <span>جاري التفكير وجلب البيانات...</span>
+                </div>
+            </div>
+        `;
+        chatBox.scrollTop = chatBox.scrollHeight;
+        sendBtn.disabled = true;
+
+        try {
+            const resp = await fetch('/api/copilot/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: query })
+            });
+            const data = await resp.json();
+            const typingEl = document.getElementById(typingId);
+            if (typingEl) typingEl.remove();
+
+            const formattedReply = stargateEscapeHtml(data.reply || 'عذراً، لم أتمكن من معالجة الطلب.')
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code class="bg-slate-950 px-1 py-0.5 rounded text-amber-300 font-mono text-[11px]">$1</code>');
+
+            chatBox.innerHTML += `
+                <div class="flex items-start gap-2.5">
+                    <div class="w-7 h-7 rounded-xl bg-indigo-600/30 text-indigo-400 flex items-center justify-center text-xs shrink-0 border border-indigo-500/40">
+                        🤖
+                    </div>
+                    <div class="bg-slate-800/90 border border-slate-700/80 p-3.5 rounded-2xl rounded-tr-none max-w-[85%] space-y-1 text-slate-200 shadow-md">
+                        ${formattedReply}
+                    </div>
+                </div>
+            `;
+        } catch (err) {
+            const typingEl = document.getElementById(typingId);
+            if (typingEl) typingEl.remove();
+            chatBox.innerHTML += `
+                <div class="flex items-start gap-2.5">
+                    <div class="w-7 h-7 rounded-xl bg-rose-600/30 text-rose-400 flex items-center justify-center text-xs shrink-0 border border-rose-500/40">
+                        ⚠️
+                    </div>
+                    <div class="bg-rose-950/60 border border-rose-800 p-3 rounded-2xl rounded-tr-none text-rose-300">
+                        تعذر الاتصال بالمساعد الذكي: ${stargateEscapeHtml(err)}
+                    </div>
+                </div>
+            `;
+        } finally {
+            sendBtn.disabled = false;
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+    }
+</script>
+</body>
+</html>

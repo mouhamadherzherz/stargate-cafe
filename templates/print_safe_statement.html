@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>كشف الخزنة - {{ settings.company_name or 'STARGATE' }}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Tajawal', Arial, sans-serif; background: #fff; color: #1e293b; direction: rtl; }
+    .page { max-width: 700px; margin: 0 auto; padding: 24px; }
+    .header { text-align: center; border-bottom: 3px solid #f59e0b; padding-bottom: 16px; margin-bottom: 20px; }
+    .header h1 { font-size: 28px; font-weight: 900; color: #1e293b; }
+    .header .sub { font-size: 14px; color: #64748b; margin-top: 4px; }
+    .vault-badge { display: inline-block; background: #f59e0b; color: #1e293b; font-weight: 900; font-size: 16px; padding: 6px 20px; border-radius: 999px; margin: 8px 0; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
+    .kpi-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; text-align: center; }
+    .kpi-card .label { font-size: 11px; color: #94a3b8; font-weight: 700; margin-bottom: 6px; }
+    .kpi-card .value { font-size: 20px; font-weight: 900; color: #1e293b; }
+    .kpi-card .usd { font-size: 13px; color: #f59e0b; font-weight: 700; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th { background: #1e293b; color: #f59e0b; font-weight: 900; padding: 10px 12px; font-size: 13px; }
+    td { padding: 9px 12px; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+    tr:nth-child(even) td { background: #f8fafc; }
+    .total-row { background: #fef3c7 !important; font-weight: 900; font-size: 14px; border-top: 2px solid #f59e0b; }
+    .lbp { color: #92400e; font-weight: 900; }
+    .usd { color: #059669; font-weight: 700; }
+    .footer { text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 12px; }
+    @media print { button { display: none !important; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <h1>🏦 {{ settings.company_name or 'STARGATE' }}</h1>
+    <div class="vault-badge">كشف الخزنة الخاصة</div>
+    <div class="sub">
+      التاريخ: {{ target_date }}
+      &nbsp;|&nbsp;
+      سعر الصرف: {{ "{:,.0f}".format(rate or 89500) }} ل.ل/$
+    </div>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="label">رصيد الخزنة الإجمالي</div>
+      <div class="value lbp">{{ "{:,.0f}".format(balance.total_lbp or 0) }}</div>
+      <div class="usd">${{ "{:,.2f}".format(balance.total_usd or 0) }}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">منقول اليوم</div>
+      <div class="value lbp">{{ "{:,.0f}".format(daily.day_total_lbp or 0) }}</div>
+      <div class="usd">${{ "{:,.2f}".format(daily.day_total_usd or 0) }}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="label">عدد عمليات اليوم</div>
+      <div class="value">{{ daily.transfers_count or 0 }}</div>
+      <div class="usd">عملية</div>
+    </div>
+  </div>
+
+  <!-- Transfers Table -->
+  <table>
+    <thead>
+      <tr>
+        <th>الوقت</th>
+        <th>النوع</th>
+        <th>المبلغ ل.ل</th>
+        <th>بالدولار</th>
+        <th>البيان</th>
+        <th>بواسطة</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if transfers %}
+        {% for t in transfers %}
+        <tr>
+          <td style="font-family: monospace; font-size: 12px;">{{ t.created_at[:16] if t.created_at else '—' }}</td>
+          <td style="font-weight: bold; color: {{ '#dc2626' if t.is_withdraw else '#16a34a' }};">{{ t.type_label }}</td>
+          <td class="lbp">{{ '-' if t.is_withdraw else '+' }}{{ "{:,.0f}".format(t.amount_lbp or 0) }} ل.ل</td>
+          <td class="usd">${{ "{:,.2f}".format(t.amount_usd or 0) }}</td>
+          <td>{{ t.note or '—' }}</td>
+          <td>{{ t.transferred_by or 'المدير' }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="total-row">
+          <td>المجموع</td>
+          <td class="lbp">{{ "{:,.0f}".format(transfers | sum(attribute='amount_lbp')) }} ل.ل</td>
+          <td class="usd">${{ "{:,.2f}".format(transfers | sum(attribute='amount_usd')) }}</td>
+          <td colspan="2">{{ transfers | length }} عملية</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" style="text-align:center; padding:24px; color:#94a3b8;">لا توجد عمليات في هذا اليوم</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    <p>طُبع بتاريخ: {{ target_date }} &nbsp;|&nbsp; STARGATE System</p>
+  </div>
+</div>
+<script>window.onload = function() { window.print(); }</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+/* STARGATE CAFE — Pro visual system v6.1.0
+   Local/offline-first; CSS-only enhancements that preserve existing page logic. */
+:root {
+  --sg-bg: #080b12;
+  --sg-surface: rgba(16, 22, 34, .88);
+  --sg-surface-2: rgba(20, 28, 43, .92);
+  --sg-line: rgba(226, 184, 108, .20);
+  --sg-gold: #e9b86b;
+  --sg-gold-bright: #ffd995;
+  --sg-text: #f5f7fb;
+  --sg-muted: #a9b4c6;
+  --sg-radius: 18px;
+  --sg-shadow: 0 18px 50px rgba(0,0,0,.28);
+}
+html { scroll-behavior: smooth; }
+body {
+  color: var(--sg-text);
+  background-color: var(--sg-bg) !important;
+  background-image:
+    radial-gradient(ellipse at 12% 0%, rgba(213,153,65,.22), transparent 45%),
+    radial-gradient(ellipse at 92% 12%, rgba(95,76,170,.24), transparent 42%),
+    linear-gradient(140deg, rgba(8, 11, 18, 0.86) 0%, rgba(11, 16, 32, 0.90) 54%, rgba(10, 13, 21, 0.94) 100%),
+    url('../images/bg_coffee_gaming.jpg') !important;
+  background-size: auto, auto, auto, cover !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: -1; opacity: .16;
+  background-image: radial-gradient(rgba(255,255,255,.12) .65px, transparent .65px);
+  background-size: 22px 22px;
+}
+header {
+  background: rgba(7, 10, 17, .88) !important;
+  border-bottom: 1px solid var(--sg-line) !important;
+  box-shadow: 0 8px 30px rgba(0,0,0,.2) !important;
+  backdrop-filter: blur(18px) saturate(135%) !important;
+}
+main { min-height: calc(100vh - 68px); }
+.classic-luxury-card, .glass-panel, .gaming-card,
+main .rounded-3xl.border, main .rounded-2xl.border {
+  border-color: var(--sg-line) !important;
+  box-shadow: var(--sg-shadow) !important;
+  border-radius: var(--sg-radius) !important;
+}
+.classic-luxury-card, .glass-panel {
+  background: linear-gradient(145deg, rgba(21,28,42,.92), rgba(10,15,25,.94)) !important;
+  backdrop-filter: blur(16px) saturate(125%) !important;
+}
+button, a[role="button"], input[type="submit"] {
+  transition: transform .18s ease, box-shadow .18s ease, filter .18s ease, border-color .18s ease;
+}
+button:not(:disabled):hover, input[type="submit"]:not(:disabled):hover { filter: brightness(1.08); }
+button:not(:disabled):active, input[type="submit"]:not(:disabled):active { transform: translateY(1px) scale(.99); }
+input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+  min-height: 40px; border-radius: 12px !important;
+  border-color: rgba(148,163,184,.25) !important;
+  background-color: rgba(7,12,22,.88) !important;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--sg-gold) !important; outline-offset: 2px;
+}
+select option { background: #101827; color: #f5f7fb; }
+table { border-collapse: separate; border-spacing: 0; }
+thead th { color: #f5d7a1 !important; background: rgba(233,184,107,.08); }
+tbody tr { transition: background-color .15s ease; }
+tbody tr:hover { background-color: rgba(233,184,107,.045); }
+.alert, [role="alert"] { border-radius: 14px; }
+::selection { color: #10131a; background: var(--sg-gold-bright); }
+::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #e9b86b, #85602d) !important; }
+/* Icon alignment: maintain existing local Font Awesome and emoji choices. */
+i[class*="fa-"] { vertical-align: -0.06em; }
+/* Smaller screens: readable tables, touch-friendly controls, no hover-only affordances. */
+@media (max-width: 768px) {
+  header { padding-inline: .75rem !important; }
+  main { overflow-x: clip; }
+  main .max-w-7xl, main .max-w-6xl, main .max-w-5xl { padding-inline: .75rem !important; }
+  button, input[type="submit"], a[role="button"] { min-height: 40px; }
+  table { font-size: 12px; }
+  th, td { padding: .55rem .5rem !important; }
+  .glass-panel, .classic-luxury-card { backdrop-filter: blur(10px) !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+@media print {
+  body { background: #fff !important; color: #111 !important; }
+  body::before { display: none !important; }
+  .classic-luxury-card, .glass-panel, .gaming-card { box-shadow: none !important; backdrop-filter: none !important; }
+}

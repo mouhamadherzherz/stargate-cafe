@@ -1,0 +1,43 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large binaries and archives
+*.exe
+*.zip
+*.tar.gz
+*.rar
+dist/
+build/
+_internal/
+
+# Databases & local dynamic data
+*.db
+*.sqlite
+*.sqlite3
+data/
+Safe_Backups/
+backups/
+archive/
+logs/
+*.log
+
+# Sensitive credentials & environment variables
+.env
+.secret_key
+*.key
+INITIAL_ADMIN_CREDENTIALS.txt
+*MAINTENANCE*.txt
+
+# IDE & Editor temporary folders
+.vscode/
+.idea/
+.windsurf/
+.locust_env/
+
+# Scratch & temporary migration scripts
+scratch/
+scratch_archive/
+Update_Package/
+FlashDrive_Release_v3.5/

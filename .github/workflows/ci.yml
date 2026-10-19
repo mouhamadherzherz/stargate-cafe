@@ -1,0 +1,27 @@
+name: CI - Python import & endpoint check
+
+on:
+  push:
+    branches: [ dev/cafe-enhancements, master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  lint-and-import:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.10]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Syntax and endpoint test
+        run: |
+          python -c "import os; os.environ['ENABLE_OTA_CHECKS']='0'; import app; client = app.app.test_client(); res = client.get('/api/check_update'); assert res.status_code == 200, f'Status {res.status_code}'; print('CI test passed: /api/check_update returned 200 OK')"

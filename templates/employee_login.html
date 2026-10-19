@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#090d16">
+    <title>تسجيل دخول الموظف - {{ company_name or 'STARGATE CAFE' }} v6.0 PRO</title>
+    
+    <script src="{{ url_for('static', filename='js/tailwindcss.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/font-awesome.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/stargate-luxury.css') }}?v=6.2.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/stargate-pro.css') }}?v=6.2.0">
+    
+    <style>
+        :root { color-scheme: dark; }
+        body {
+            font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+            background-color: #06090e !important;
+            background: 
+                /* ☕ Dark luxury coffee & gaming ambient vignette overlays */
+                linear-gradient(to bottom, rgba(7, 10, 16, 0.66) 0%, rgba(5, 7, 12, 0.74) 50%, rgba(4, 6, 10, 0.85) 100%),
+                radial-gradient(circle at 15% 15%, rgba(245, 158, 11, 0.22) 0%, transparent 45%),
+                radial-gradient(circle at 85% 25%, rgba(139, 92, 246, 0.24) 0%, transparent 50%),
+                /* 📸 Realistic Photorealistic Coffee Lounge & Gaming PC Battle Station Wallpaper */
+                url("{{ url_for('static', filename='images/bg_coffee_gaming.jpg') }}?v=6.1.5") no-repeat center center fixed !important;
+            background-size: cover !important;
+            background-attachment: fixed !important;
+            color: #f1f5f9;
+        }
+        .glass-panel {
+            background: linear-gradient(145deg, rgba(16, 20, 31, 0.94) 0%, rgba(9, 12, 20, 0.97) 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(245, 158, 11, 0.24);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 30px rgba(245, 158, 11, 0.08);
+        }
+        .numpad-btn {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%) !important;
+            backdrop-filter: blur(14px) !important;
+            -webkit-backdrop-filter: blur(14px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.18) !important;
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35), 0 6px 16px -2px rgba(0, 0, 0, 0.5) !important;
+            transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        }
+        .numpad-btn:hover {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.35) 0%, rgba(180, 83, 9, 0.15) 100%) !important;
+            border-color: rgba(245, 158, 11, 0.7) !important;
+            color: #fbbf24 !important;
+            transform: translateY(-2px) scale(1.04) !important;
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.5) !important;
+        }
+        .numpad-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4 selection:bg-amber-500 selection:text-slate-950 relative overflow-x-hidden">
+
+    <!-- Ambient Glowing Orbs -->
+    <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-amber-600/10 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
+    <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+    <!-- Main Container -->
+    <div class="max-w-md w-full glass-panel rounded-3xl p-6 sm:p-8 space-y-5 relative z-10">
+        
+        <!-- Top Status Pill (System v6.0 PRO) -->
+        <div class="flex items-center justify-between bg-slate-950/80 px-3.5 py-1.5 rounded-2xl border border-slate-800 text-[10px] font-bold">
+            <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span class="text-emerald-400 font-mono">ONLINE</span>
+                <span class="text-slate-500">•</span>
+                <span class="text-amber-300 font-bold">☕ CAFE & GAMING 🎮</span>
+            </div>
+            <div class="flex items-center gap-1.5 text-indigo-300 font-mono">
+                <i class="fa-solid fa-shield-halved text-[9px]"></i>
+                <span>محمي ومؤمن 100%</span>
+            </div>
+        </div>
+
+        <!-- Brand Header -->
+        <div class="text-center space-y-1.5 pt-1">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-600 via-purple-700 to-indigo-600 p-[2px] shadow-lg shadow-amber-900/40 mx-auto">
+                <div class="w-full h-full bg-slate-950 rounded-2xl flex items-center justify-center text-2xl gap-1">
+                    <span>☕</span><span class="text-base">🎮</span>
+                </div>
+            </div>
+            <h1 class="text-xl font-black text-white tracking-wider flex items-center justify-center gap-1.5">
+                <span class="text-amber-400">⚡</span> {{ company_name or 'STARGATE CAFE' }}
+                <span class="text-[9px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">LOUNGE</span>
+            </h1>
+            <p class="text-xs text-slate-300 font-medium">تسجيل الدخول وبدء وردية الكاشير والمبيعات</p>
+        </div>
+
+        <!-- Shift Handover Notice if coming from closed shift -->
+        {% if session.get('handover_prev_employee') %}
+        <div class="bg-emerald-950/90 border border-emerald-500/50 p-3 rounded-2xl text-center space-y-1">
+            <div class="text-xs text-emerald-300 font-black flex items-center justify-center gap-1.5">
+                <span>✅</span> تم تسليم وردية [{{ session.get('handover_prev_employee') }}] بنجاح
+            </div>
+            <div class="text-[11px] text-emerald-200/90 font-mono">
+                كاش الصندوق المسلّم: {{ session.get('handover_actual_cash', 0)|format_currency }} ل.ل
+            </div>
+            <div class="text-[10px] text-slate-400">
+                يرجى من الموظف المستلم إدخال رمز PIN لبدء الوردية
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="p-3 rounded-2xl text-xs font-bold text-center border {% if category == 'danger' %}bg-rose-950/80 text-rose-300 border-rose-800{% else %}bg-amber-950/80 text-amber-300 border-amber-800{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Login Mode Switcher Tabs -->
+        <div class="flex items-center justify-center bg-slate-950/80 p-1 rounded-2xl border border-slate-800 max-w-xs mx-auto text-xs font-bold">
+            <button type="button" id="tabBtnPin" onclick="switchLoginMode('pin')" class="flex-1 py-2 px-3 rounded-xl transition bg-indigo-600 text-white shadow-md flex items-center justify-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-key"></i>
+                <span>رمز PIN السريع</span>
+            </button>
+            <button type="button" id="tabBtnUser" onclick="switchLoginMode('user')" class="flex-1 py-2 px-3 rounded-xl transition text-slate-400 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-user-lock"></i>
+                <span>اسم الدخول وكلمة السر</span>
+            </button>
+        </div>
+
+        <!-- 1. Quick PIN Form with Numpad -->
+        <form method="POST" action="{{ url_for('employee_login') }}" class="space-y-4" id="loginFormPin">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1.5 text-center">أدخل رمز الدخول السريع (PIN)</label>
+                <div class="relative max-w-xs mx-auto">
+                    <input type="password" name="pin" id="pinDisplay" autofocus autocomplete="off" placeholder="••••" maxlength="8"
+                           class="w-full bg-slate-950/90 border-2 border-slate-700 focus:border-indigo-500 text-white text-center text-2xl font-mono tracking-widest py-3 rounded-2xl focus:outline-none transition shadow-inner">
+                    <button type="button" onclick="clearPin()" class="absolute left-3 top-3.5 text-slate-400 hover:text-white text-xs font-bold px-2 py-0.5 rounded-lg bg-slate-800 transition">
+                        مسح
+                    </button>
+                </div>
+            </div>
+
+            <!-- On-screen Quick Numpad -->
+            <div class="grid grid-cols-3 gap-2.5 pt-1 max-w-[280px] mx-auto">
+                {% for n in [1,2,3,4,5,6,7,8,9] %}
+                <button type="button" onclick="appendPin('{{ n }}')" class="numpad-btn h-12 rounded-2xl text-white font-black text-lg font-mono shadow-sm cursor-pointer">
+                    {{ n }}
+                </button>
+                {% endfor %}
+                <button type="button" onclick="clearPin()" class="numpad-btn h-12 rounded-2xl bg-slate-800 text-rose-400 font-bold text-xs cursor-pointer">
+                    C
+                </button>
+                <button type="button" onclick="appendPin('0')" class="numpad-btn h-12 rounded-2xl text-white font-black text-lg font-mono shadow-sm cursor-pointer">
+                    0
+                </button>
+                <button type="button" onclick="backspacePin()" class="numpad-btn h-12 rounded-2xl bg-slate-800 text-amber-400 font-bold text-xs cursor-pointer">
+                    ⌫
+                </button>
+            </div>
+
+            <div class="pt-2">
+                <button type="submit" class="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black py-3.5 rounded-2xl text-sm transition shadow-lg shadow-indigo-600/30 active:scale-95 flex items-center justify-center gap-2 cursor-pointer border border-indigo-400/30">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    <span>فتح الوردية والدخول للكاشير</span>
+                </button>
+            </div>
+        </form>
+
+        <!-- 2. Username & Password Form -->
+        <form method="POST" action="{{ url_for('employee_login') }}" class="space-y-4 hidden text-right" id="loginFormUser">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">اسم المستخدم (Username):</label>
+                <input type="text" name="username" id="userNameInput" placeholder="أدخل اسم المستخدم"
+                       class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 text-white rounded-2xl py-3 px-3.5 text-xs focus:outline-none transition font-mono">
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">كلمة المرور (Password):</label>
+                <input type="password" name="password" id="userPassInput" placeholder="••••••••"
+                       class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-500 text-white rounded-2xl py-3 px-3.5 text-xs focus:outline-none transition font-mono">
+            </div>
+
+            <div class="pt-2">
+                <button type="submit" class="w-full bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black py-3.5 rounded-2xl text-sm transition shadow-lg shadow-indigo-600/30 active:scale-95 flex items-center justify-center gap-2 cursor-pointer border border-indigo-400/30">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    <span>تسجيل الدخول للكاشير</span>
+                </button>
+            </div>
+        </form>
+
+        <!-- Footer link to Admin Login -->
+        <div class="text-center pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+            <a href="{{ url_for('admin_login') }}" class="text-purple-400 hover:text-purple-300 font-bold transition flex items-center gap-1.5">
+                <i class="fa-solid fa-shield-halved"></i>
+                <span>لوحة تحكم الإدارة</span>
+            </a>
+            <span class="text-[10px] text-slate-500 font-mono">STARGATE CAFE & GAMING</span>
+        </div>
+    </div>
+
+    <script>
+        function switchLoginMode(mode) {
+            const formPin = document.getElementById('loginFormPin');
+            const formUser = document.getElementById('loginFormUser');
+            const tabPin = document.getElementById('tabBtnPin');
+            const tabUser = document.getElementById('tabBtnUser');
+            if (mode === 'pin') {
+                formPin.classList.remove('hidden');
+                formUser.classList.add('hidden');
+                tabPin.className = 'flex-1 py-2 px-3 rounded-xl transition bg-indigo-600 text-white shadow-md flex items-center justify-center gap-1.5 cursor-pointer';
+                tabUser.className = 'flex-1 py-2 px-3 rounded-xl transition text-slate-400 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer';
+                document.getElementById('pinDisplay')?.focus();
+            } else {
+                formPin.classList.add('hidden');
+                formUser.classList.remove('hidden');
+                tabUser.className = 'flex-1 py-2 px-3 rounded-xl transition bg-indigo-600 text-white shadow-md flex items-center justify-center gap-1.5 cursor-pointer';
+                tabPin.className = 'flex-1 py-2 px-3 rounded-xl transition text-slate-400 hover:text-white flex items-center justify-center gap-1.5 cursor-pointer';
+                document.getElementById('userNameInput')?.focus();
+            }
+        }
+
+        function appendPin(num) {
+            const inp = document.getElementById('pinDisplay');
+            if (inp.value.length < 8) {
+                inp.value += num;
+            }
+        }
+        function clearPin() {
+            const inp = document.getElementById('pinDisplay');
+            inp.value = '';
+            inp.focus();
+        }
+        function backspacePin() {
+            const inp = document.getElementById('pinDisplay');
+            inp.value = inp.value.slice(0, -1);
+            inp.focus();
+        }
+    </script>
+</body>
+</html>

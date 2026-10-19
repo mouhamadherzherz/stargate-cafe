@@ -1,0 +1,194 @@
+{% extends 'base.html' %}
+
+{% block title %}دليل الاستخدام الشامل والتعليمات | STARGATE CAFE{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-6xl mx-auto pb-16">
+
+    <!-- Hero Header -->
+    <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 sm:p-8 rounded-3xl shadow-2xl border border-indigo-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden">
+        <div class="space-y-2 relative z-10">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-400/30">
+                <span>📖</span>
+                <span>دليل الاستخدام والتشغيل القياسي للمنظومة</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-black text-white flex items-center gap-2.5">
+                <span>دليل استخدام نظام STARGATE CAFE</span>
+                <span class="text-xs bg-amber-500 text-slate-950 font-bold px-2.5 py-1 rounded-xl font-mono">v6.0 PRO</span>
+            </h1>
+            <p class="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
+                مرجع مبسط وشامل يشرح لكافة الموظفين والإدارة كيفية تشغيل المنظومة باحترافية، وإدارة المبيعات، ومطابقة الصناديق، وتتبع المخزون والقهوة بدون تعقيدات.
+            </p>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0 relative z-10">
+            <button type="button" onclick="openCopilotModal()" class="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-700 hover:from-indigo-500 hover:to-purple-500 text-white font-black px-4 py-3 rounded-2xl text-xs transition shadow-lg shadow-indigo-600/30 flex items-center gap-2 cursor-pointer border border-indigo-400/30">
+                <span class="text-base">🤖</span>
+                <span>اسأل المساعد الذكي الآن</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Quick Navigation Index Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <a href="#section-pos" class="bg-slate-900 hover:bg-slate-800/90 border border-slate-800 hover:border-amber-500/50 p-4 rounded-2xl text-center transition group flex flex-col items-center justify-center space-y-1.5 shadow-sm">
+            <span class="text-2xl group-hover:scale-110 transition-transform">☕</span>
+            <span class="text-xs font-black text-white group-hover:text-amber-400">شاشة الكاشير</span>
+            <span class="text-[10px] text-slate-400">البيع والطلبات</span>
+        </a>
+        <a href="#section-shift" class="bg-slate-900 hover:bg-slate-800/90 border border-slate-800 hover:border-amber-500/50 p-4 rounded-2xl text-center transition group flex flex-col items-center justify-center space-y-1.5 shadow-sm">
+            <span class="text-2xl group-hover:scale-110 transition-transform">📋</span>
+            <span class="text-xs font-black text-white group-hover:text-amber-400">تسكير الوردية</span>
+            <span class="text-[10px] text-slate-400">مطابقة الصندوق</span>
+        </a>
+        <a href="#section-coffee" class="bg-slate-900 hover:bg-slate-800/90 border border-slate-800 hover:border-amber-500/50 p-4 rounded-2xl text-center transition group flex flex-col items-center justify-center space-y-1.5 shadow-sm">
+            <span class="text-2xl group-hover:scale-110 transition-transform">🌱</span>
+            <span class="text-xs font-black text-white group-hover:text-amber-400">حبوب القهوة</span>
+            <span class="text-[10px] text-slate-400">الأكياس والهدر</span>
+        </a>
+        <a href="#section-expenses" class="bg-slate-900 hover:bg-slate-800/90 border border-slate-800 hover:border-amber-500/50 p-4 rounded-2xl text-center transition group flex flex-col items-center justify-center space-y-1.5 shadow-sm">
+            <span class="text-2xl group-hover:scale-110 transition-transform">💸</span>
+            <span class="text-xs font-black text-white group-hover:text-amber-400">المصاريف</span>
+            <span class="text-[10px] text-slate-400">من الدرج</span>
+        </a>
+        <a href="#section-safe" class="bg-slate-900 hover:bg-slate-800/90 border border-slate-800 hover:border-amber-500/50 p-4 rounded-2xl text-center transition group flex flex-col items-center justify-center space-y-1.5 shadow-sm">
+            <span class="text-2xl group-hover:scale-110 transition-transform">🏦</span>
+            <span class="text-xs font-black text-white group-hover:text-amber-400">الخزنة الخاصة</span>
+            <span class="text-[10px] text-slate-400">ترحيل الأرباح</span>
+        </a>
+        <a href="#section-shortcuts" class="bg-slate-900 hover:bg-slate-800/90 border border-slate-800 hover:border-amber-500/50 p-4 rounded-2xl text-center transition group flex flex-col items-center justify-center space-y-1.5 shadow-sm">
+            <span class="text-2xl group-hover:scale-110 transition-transform">⌨️</span>
+            <span class="text-xs font-black text-white group-hover:text-amber-400">الاختصارات</span>
+            <span class="text-[10px] text-slate-400">سرعة العمل</span>
+        </a>
+    </div>
+
+    <!-- Detailed Guide Chapters -->
+    <div class="space-y-6">
+
+        <!-- 1. Cashier & POS -->
+        <section id="section-pos" class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-4 shadow-lg">
+            <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+                <div class="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-xl font-black">☕</div>
+                <div>
+                    <h2 class="text-lg font-black text-white">1. شاشة الكاشير والمبيعات السريعة</h2>
+                    <p class="text-xs text-slate-400">إدارة الطلبات، اختيار الطاولة، البيع النقدي، وطباعة الفواتير الحرارية</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs leading-relaxed text-slate-300">
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800/80 space-y-2">
+                    <span class="text-amber-400 font-black block text-sm">أ. إضافة الطلبات</span>
+                    <p>انقر على الأصناف لإضافتها مباشرة إلى الفاتورة، أو استخدم شريط البحث السريع أعلى الشاشة للعثور على أي صنف فوراً.</p>
+                </div>
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800/80 space-y-2">
+                    <span class="text-amber-400 font-black block text-sm">ب. الطاولات أو سفري</span>
+                    <p>يمكنك اختيار رقم الطاولة أو وضع الطلب كـ "سفري"، مع إمكانية تعليق الطلب وإكماله لاحقاً عند مغادرة الزبون.</p>
+                </div>
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800/80 space-y-2">
+                    <span class="text-amber-400 font-black block text-sm">ج. الطباعة والـ QR</span>
+                    <p>يدعم النظام رولات 80mm و 58mm مع زر للتبديل السريع، بالإضافة إلى رمز QR مشفر للتحقق المباشر بدون إنترنت.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Shift Closing -->
+        <section id="section-shift" class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-4 shadow-lg">
+            <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+                <div class="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl font-black">📋</div>
+                <div>
+                    <h2 class="text-lg font-black text-white">2. تسكير حساب الوردية ومطابقة الصندوق</h2>
+                    <p class="text-xs text-slate-400">الإجراء السليم لمنع العجز والتحقق من النقدية بين الورديات</p>
+                </div>
+            </div>
+
+            <div class="space-y-3 text-xs leading-relaxed text-slate-300">
+                <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                    <ol class="list-decimal list-inside space-y-2 text-slate-300">
+                        <li>انقر على تبويب <strong>الكاشير والطلبات</strong> ثم اختر <strong>تسكير حساب الوردية</strong>.</li>
+                        <li>قم بعدّ النقدية الموجودة في درج الكاشير بالكامل (بالليرة والدولار).</li>
+                        <li>أدخل المبلغ في خانة <strong>"الكاش الفعلي في الدرج"</strong>.</li>
+                        <li>سيقوم النظام بحساب الفرق (عجز أو زيادة) تلقائياً، وإذا كان هناك فرق اكتب سببه في خانة الملاحظات.</li>
+                        <li>اختر الموظف المستلم للوردية التالية واضغط <strong>"تأكيد تسكير الحساب"</strong>.</li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Coffee Beans Hub -->
+        <section id="section-coffee" class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-4 shadow-lg">
+            <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+                <div class="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-xl font-black">🌱</div>
+                <div>
+                    <h2 class="text-lg font-black text-white">3. إدارة أكياس القهوة وحساب تكلفة الفنجان</h2>
+                    <p class="text-xs text-slate-400">تتبع دقيق لإنتاجية كل كغ قهوة ومعدل الفناجين المبيعة والتالف</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs leading-relaxed text-slate-300">
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
+                    <h4 class="font-bold text-white text-sm">فتح كيس قهوة جديد:</h4>
+                    <p>عند فتح كيس بن جديد، ادخل إلى <strong>إنتاجية القهوة</strong> واضغط <strong>"فتح كيس قهوة جديد"</strong>. سيتم ربط مبيعات القهوة آلياً بهذا الكيس حتى ينتهي ويتم إغلاقه.</p>
+                </div>
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
+                    <h4 class="font-bold text-white text-sm">تسجيل الهدر والتوالف:</h4>
+                    <p>إذا تلف فنجان أثناء التحضير أو انسكب، اضغط على <strong>"تسجيل فنجان تالف"</strong> لخصم تكلفته من الأرباح وتوثيق دقة الجرد دون التأثير على الكاش.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Quick Expenses & Safe Transfers -->
+        <section id="section-expenses" class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-4 shadow-lg">
+            <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+                <div class="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-xl font-black">💸</div>
+                <div>
+                    <h2 class="text-lg font-black text-white">4. المصروفات اليومية وترحيل الخزنة</h2>
+                    <p class="text-xs text-slate-400">تسجيل أي خروج نقدي من الدرج لمنع وجود فروقات في الصندوق</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs leading-relaxed text-slate-300">
+                <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
+                    <h4 class="font-bold text-rose-400 text-sm">المصروفات النثرية (من الدرج):</h4>
+                    <p>أي مبلغ يُدفع من صندوق الكاشير (ثلج، حليب، مياه، غسيل، ضيافة) اضغط على <strong>"تسجيل مصروف 💸"</strong> في الشريط العلوي لتسجيله وخصمه فورياً من حساب الصندوق.</p>
+                </div>
+                <div id="section-safe" class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
+                    <h4 class="font-bold text-amber-400 text-sm">الترحيل إلى الخزنة الخاصة:</h4>
+                    <p>عند امتلاء الدرج بالسيولة أو عند نهاية اليوم، يتم ترحيل النقدية إلى <strong>الخزنة الخاصة</strong> لحفظ أرباح المحل في صندوق الإدارة بعيداً عن كاش العمل اليومي.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. Keyboard Shortcuts -->
+        <section id="section-shortcuts" class="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 space-y-4 shadow-lg">
+            <div class="flex items-center gap-3 border-b border-slate-800 pb-3">
+                <div class="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xl font-black">⌨️</div>
+                <div>
+                    <h2 class="text-lg font-black text-white">5. اختصارات لوحة المفاتيح السريعة</h2>
+                    <p class="text-xs text-slate-400">لإنجاز الطلبات بأقصى سرعة ممكنة أثناء ساعات الذروة</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+                <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between">
+                    <span class="text-slate-400 font-sans">طباعة فورية:</span>
+                    <span class="bg-indigo-600/30 text-indigo-300 px-2 py-0.5 rounded font-bold border border-indigo-500/40">Ctrl + P</span>
+                </div>
+                <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between">
+                    <span class="text-slate-400 font-sans">تبديل مقاس الورق:</span>
+                    <span class="bg-amber-600/30 text-amber-300 px-2 py-0.5 rounded font-bold border border-amber-500/40">W</span>
+                </div>
+                <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between">
+                    <span class="text-slate-400 font-sans">إغلاق النوافذ:</span>
+                    <span class="bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-bold border border-slate-700">Esc</span>
+                </div>
+                <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between">
+                    <span class="text-slate-400 font-sans">المساعد الذكي:</span>
+                    <span class="bg-purple-600/30 text-purple-300 px-2 py-0.5 rounded font-bold border border-purple-500/40">F1</span>
+                </div>
+            </div>
+        </section>
+
+    </div>
+</div>
+{% endblock %}

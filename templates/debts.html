@@ -1,0 +1,399 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto w-full p-4 lg:p-6 space-y-6">
+    
+    <!-- Top Header & Summary KPIs -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2.5">
+                <span class="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-xl font-black shadow-inner">
+                    📒
+                </span>
+                <div>
+                    <h2 class="text-xl font-black text-white">سجل ديون الزبائن (الحسابات الآجلة)</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">متابعة حسابات الزبائن، الديون المعلقة في السوق، وتسجيل دفعات السداد</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button type="button" onclick="openModal('addManualDebtModal')" class="bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-black px-4 py-2.5 rounded-2xl text-xs transition flex items-center gap-2 shadow-lg shadow-rose-600/30">
+                <i class="fa-solid fa-plus-circle"></i>
+                <span>+ تسجيل دين جديد يدوياً</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- KPI Summary Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+        
+        <!-- Total Active Debts -->
+        <div class="bg-gradient-to-tr from-slate-900 to-rose-950/60 border border-rose-500/40 p-4 rounded-3xl shadow-sm flex items-center justify-between">
+            <div>
+                <span class="text-xs text-rose-400 font-bold block">إجمالي الديون المعلقة في السوق:</span>
+                <div class="text-2xl font-black font-mono text-rose-400 mt-1">
+                    {{ summary.total_remaining_lbp|format_currency }} <span class="text-xs font-normal text-slate-400">ل.ل</span>
+                </div>
+                <span class="text-xs text-rose-300/80 font-mono font-bold">{{ summary.total_remaining_usd|to_usd }}</span>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-2xl">
+                💸
+            </div>
+        </div>
+
+        <!-- Distinct Debtors Count -->
+        <div class="bg-slate-900/90 border border-slate-800 p-4 rounded-3xl shadow-sm flex items-center justify-between">
+            <div>
+                <span class="text-xs text-slate-400 font-bold block">عدد الزبائن المديونين حالياً:</span>
+                <div class="text-2xl font-black font-mono text-white mt-1">
+                    {{ summary.customers_count }} <span class="text-xs font-normal text-slate-400">زبون</span>
+                </div>
+                <span class="text-xs text-slate-500 font-mono font-bold">{{ summary.total_debts_count }} فواتير وسجلات</span>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-slate-800 text-slate-300 flex items-center justify-center text-2xl">
+                👥
+            </div>
+        </div>
+
+        <!-- Repayments Collected Today -->
+        <div class="bg-gradient-to-tr from-slate-900 to-emerald-950/60 border border-emerald-500/30 p-4 rounded-3xl shadow-sm flex items-center justify-between">
+            <div>
+                <span class="text-xs text-emerald-400 font-bold block">تحصيلات وسداد اليوم:</span>
+                <div class="text-2xl font-black font-mono text-emerald-400 mt-1">
+                    {{ summary.collected_today_lbp|format_currency }} <span class="text-xs font-normal text-slate-400">ل.ل</span>
+                </div>
+                <span class="text-xs text-emerald-300/80 font-mono font-bold">{{ summary.collected_today_usd|to_usd }}</span>
+            </div>
+            <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl">
+                📥
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Filters -->
+    <div class="bg-slate-900 border border-slate-800 p-4 rounded-3xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+        <form method="GET" action="{{ url_for('debts_page') }}" class="flex-1 w-full flex items-center gap-2">
+            <div class="relative flex-1">
+                <i class="fa-solid fa-search absolute right-3.5 top-3 text-slate-500 text-xs"></i>
+                <input type="text" name="q" value="{{ request.args.get('q', '') }}" placeholder="بحث باسم الزبون، رقم الفاتورة، أو الملاحظات..." class="w-full bg-slate-950 border border-slate-700 text-white rounded-2xl pr-9 pl-3 py-2 text-xs focus:border-rose-500 focus:outline-none placeholder-slate-500">
+            </div>
+            <button type="submit" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-2xl text-xs transition">
+                بحث
+            </button>
+            {% if request.args.get('q') %}
+            <a href="{{ url_for('debts_page') }}" class="bg-slate-800 hover:bg-slate-700 text-slate-400 px-3 py-2 rounded-2xl text-xs">
+                إلغاء
+            </a>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- Customer Balances Grid (بطاقات الزبائن المديونين) -->
+    <div class="space-y-3">
+        <div class="flex items-center justify-between">
+            <h3 class="font-black text-sm text-white flex items-center gap-2">
+                <span>👤 حسابات الزبائن المديونين:</span>
+                <span class="text-xs font-mono font-bold bg-rose-950 text-rose-300 px-2 py-0.5 rounded-lg border border-rose-800">
+                    {{ customer_balances|length }} زبون
+                </span>
+            </h3>
+        </div>
+
+        {% if customer_balances %}
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {% for c in customer_balances %}
+            <div class="bg-slate-900 border border-slate-800 hover:border-rose-500/50 p-4 rounded-3xl transition shadow-md flex flex-col justify-between space-y-3">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-lg font-black">
+                            👤
+                        </div>
+                        <div>
+                            <h4 class="font-black text-sm text-white">{{ c.customer_name }}</h4>
+                            {% if c.phone %}
+                            <span class="text-[11px] text-slate-400 font-mono"><i class="fa-solid fa-phone text-[9px]"></i> {{ c.phone }}</span>
+                            {% else %}
+                            <span class="text-[10px] text-slate-500">{{ c.debts_count }} فواتير معلقة</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <span class="text-[10px] bg-rose-950 text-rose-300 font-bold px-2 py-0.5 rounded-md border border-rose-800">
+                        مطلوب منه
+                    </span>
+                </div>
+
+                <div class="p-3 bg-slate-950 rounded-2xl border border-slate-800 flex items-baseline justify-between">
+                    <div>
+                        <span class="text-[10px] text-slate-400 block font-bold">المبلغ المستحق للدفع:</span>
+                        <div class="text-lg font-black font-mono text-rose-400">
+                            {{ c.balance_lbp|format_currency }} <span class="text-xs font-normal text-slate-400">ل.ل</span>
+                        </div>
+                    </div>
+                    <div class="text-left font-mono">
+                        <span class="text-xs font-black text-amber-300">{{ c.balance_usd|to_usd }}</span>
+                    </div>
+                </div>
+
+                <!-- Action: Pay off balance -->
+                <div class="pt-1">
+                    <button type="button" 
+                            onclick="openPayCustomerModal('{{ c.customer_name }}', {{ c.balance_lbp }})"
+                            class="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-slate-950 font-black py-2 px-3 rounded-2xl text-xs transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20">
+                        <i class="fa-solid fa-hand-holding-dollar"></i>
+                        <span>تسجيل سداد دفعة من الحساب</span>
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-slate-900 border border-slate-800 p-8 rounded-3xl text-center text-slate-400 space-y-2">
+            <span class="text-4xl block opacity-40">🎉</span>
+            <p class="font-bold text-sm text-white">لا توجد ديون معلقة حالياً!</p>
+            <p class="text-xs text-slate-500">جميع حسابات الزبائن مسددة بالكامل أو لم يتم تسجيل ديون بعد.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Detailed Debts Ledger Table (جدول تفاصيل كل الديون) -->
+    <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-md overflow-hidden space-y-3">
+        <div class="p-4 bg-slate-950/70 border-b border-slate-800 flex items-center justify-between">
+            <h3 class="font-black text-sm text-white flex items-center gap-2">
+                <i class="fa-solid fa-list-check text-amber-400"></i>
+                <span>تفاصيل سجل الديون والعمليات:</span>
+            </h3>
+            <span class="text-xs text-slate-400 font-mono">{{ all_debts|length }} سجل</span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-right text-xs">
+                <thead class="bg-slate-950 text-slate-400 font-bold border-b border-slate-800">
+                    <tr>
+                        <th class="p-3">#</th>
+                        <th class="p-3">التاريخ</th>
+                        <th class="p-3">اسم الزبون</th>
+                        <th class="p-3">رقم الفاتورة</th>
+                        <th class="p-3">المبلغ الأصلي</th>
+                        <th class="p-3">المسدد</th>
+                        <th class="p-3">المتبقي المطلوب</th>
+                        <th class="p-3">الحالة</th>
+                        <th class="p-3">ملاحظات</th>
+                        <th class="p-3 text-center">إجراءات</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800 font-mono">
+                    {% for d in all_debts %}
+                    <tr class="hover:bg-slate-800/50 transition">
+                        <td class="p-3 text-slate-500 font-bold">{{ d.id }}</td>
+                        <td class="p-3 text-slate-300">{{ d.created_at|format_date }}</td>
+                        <td class="p-3 font-sans font-black text-white">
+                            {{ d.customer_name }}
+                            {% if d.phone %}<span class="text-[10px] text-slate-400 block font-mono">{{ d.phone }}</span>{% endif %}
+                        </td>
+                        <td class="p-3 text-amber-400 font-bold">
+                            {{ d.order_number or 'دين يدوي' }}
+                        </td>
+                        <td class="p-3 text-white font-black">{{ d.amount_lbp|format_currency }} ل.ل</td>
+                        <td class="p-3 text-emerald-400 font-bold">{{ d.paid_lbp|format_currency }} ل.ل</td>
+                        <td class="p-3 text-rose-400 font-black text-sm">
+                            {{ d.remaining_lbp|format_currency }} ل.ل
+                        </td>
+                        <td class="p-3 font-sans">
+                            {% if d.status == 'paid' or d.remaining_lbp <= 0 %}
+                            <span class="bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-lg text-[10px] font-bold">
+                                مسدد بالكامل ✅
+                            </span>
+                            {% elif d.status == 'partial' %}
+                            <span class="bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded-lg text-[10px] font-bold">
+                                مسدد جزئياً ⏳
+                            </span>
+                            {% else %}
+                            <span class="bg-rose-950 text-rose-300 border border-rose-800 px-2 py-0.5 rounded-lg text-[10px] font-bold">
+                                غير مسدد ❌
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="p-3 font-sans text-slate-400 max-w-xs truncate">{{ d.notes or '-' }}</td>
+                        <td class="p-3 font-sans text-center">
+                            <div class="flex items-center justify-center gap-1.5">
+                                {% if d.remaining_lbp > 0 %}
+                                <button type="button" onclick="openPaySingleDebtModal({{ d.id }}, '{{ d.customer_name }}', {{ d.remaining_lbp }})" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-2.5 py-1 rounded-xl text-[11px] shadow-sm" title="تسديد">
+                                    سداد
+                                </button>
+                                {% endif %}
+                                <form method="POST" action="{{ url_for('debt_delete', debt_id=d.id) }}" onsubmit="return confirm('هل أنت متأكد من حذف هذا السجل؟')" class="inline">
+                                    <button type="submit" class="bg-rose-950 hover:bg-rose-900 text-rose-400 p-1.5 rounded-xl text-xs border border-rose-800" title="حذف">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: ADD MANUAL DEBT (تسجيل دين جديد) -->
+<div id="addManualDebtModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="text-rose-400 text-lg">📝</span>
+                <h3 class="font-black text-base text-white">تسجيل دين جديد على زبون</h3>
+            </div>
+            <button type="button" onclick="closeModal('addManualDebtModal')" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('debt_create_manual') }}" class="space-y-3">
+            <div>
+                <label class="block text-xs text-slate-300 font-bold mb-1">اسم الزبون: *</label>
+                <input type="text" name="customer_name" required placeholder="مثال: أبو علي، سامر..." class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:border-rose-500 focus:outline-none">
+            </div>
+
+            <div>
+                <label class="block text-xs text-slate-300 font-bold mb-1">رقم الهاتف (اختياري):</label>
+                <input type="text" name="phone" placeholder="03-xxxxxx / 70-xxxxxx" class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:border-rose-500 focus:outline-none">
+            </div>
+
+            <div>
+                <label class="block text-xs text-slate-300 font-bold mb-1">المبلغ المطلوب بالليرة اللبنانية (ل.ل): *</label>
+                <input type="number" step="any" min="1" name="amount_lbp" required placeholder="مثال: 150000" class="w-full bg-slate-950 border border-slate-700 text-rose-300 font-mono font-bold rounded-xl px-3 py-2 text-xs focus:border-rose-500 focus:outline-none">
+            </div>
+
+            <div>
+                <label class="block text-xs text-slate-300 font-bold mb-1">ملاحظات / سبب الدين:</label>
+                <input type="text" name="notes" placeholder="مشروبات سابقة، حساب قديم..." class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:border-rose-500 focus:outline-none">
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <button type="button" onclick="closeModal('addManualDebtModal')" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-xl text-xs">
+                    إلغاء
+                </button>
+                <button type="submit" class="bg-rose-600 hover:bg-rose-500 text-white font-black px-5 py-2 rounded-xl text-xs shadow-md shadow-rose-600/30">
+                    حفظ الدين في السجل
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL: PAY CUSTOMER TOTAL DEBT -->
+<div id="payCustomerModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="text-emerald-400 text-lg">💰</span>
+                <h3 class="font-black text-base text-white">تسجيل سداد دفعة للزبون</h3>
+            </div>
+            <button type="button" onclick="closeModal('payCustomerModal')" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('debt_pay_customer') }}" class="space-y-3">
+            <input type="hidden" id="payModalCustomerName" name="customer_name">
+
+            <div class="p-3 bg-slate-950 rounded-2xl border border-slate-800">
+                <span class="text-[11px] text-slate-400 block">حساب الزبون:</span>
+                <h4 id="payModalCustomerDisplayName" class="font-black text-sm text-white mt-0.5">...</h4>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-[11px] text-rose-400 font-bold">إجمالي المستحق عليه:</span>
+                    <span id="payModalMaxAmountDisplay" class="font-mono font-black text-rose-400 text-sm">0 ل.ل</span>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs text-slate-300 font-bold mb-1">المبلغ المسدد الآن (ل.ل): *</label>
+                <input type="number" step="any" min="1" id="payModalAmountInput" name="amount_lbp" required class="w-full bg-slate-950 border-2 border-emerald-500 text-emerald-300 font-mono font-black rounded-xl px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none">
+            </div>
+
+            <div>
+                <label class="block text-xs text-slate-300 font-bold mb-1">ملاحظة على الدفعة (اختياري):</label>
+                <input type="text" name="notes" placeholder="دفعة نقدية، تسديد كامل..." class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:border-emerald-500 focus:outline-none">
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <button type="button" onclick="closeModal('payCustomerModal')" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-xl text-xs">
+                    إلغاء
+                </button>
+                <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black px-5 py-2 rounded-xl text-xs shadow-md shadow-emerald-600/30">
+                    تأكيد استلام الدفعة 💰
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL: PAY SINGLE DEBT RECORD -->
+<div id="paySingleDebtModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+                <span class="text-emerald-400 text-lg">💰</span>
+                <h3 class="font-black text-base text-white">تسديد فاتورة / دين محدد</h3>
+            </div>
+            <button type="button" onclick="closeModal('paySingleDebtModal')" class="text-slate-400 hover:text-white">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <form method="POST" action="{{ url_for('debt_pay_single') }}" class="space-y-3">
+            <input type="hidden" id="singleDebtIdInput" name="debt_id">
+
+            <div class="p-3 bg-slate-950 rounded-2xl border border-slate-800">
+                <span class="text-[11px] text-slate-400 block">الزبون:</span>
+                <h4 id="singleDebtCustomerNameDisplay" class="font-black text-sm text-white mt-0.5">...</h4>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-[11px] text-rose-400 font-bold">المتبقي في هذا السجل:</span>
+                    <span id="singleDebtRemainingDisplay" class="font-mono font-black text-rose-400 text-sm">0 ل.ل</span>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs text-slate-300 font-bold mb-1">المبلغ المسدد (ل.ل): *</label>
+                <input type="number" step="any" min="1" id="singleDebtAmountInput" name="amount_lbp" required class="w-full bg-slate-950 border-2 border-emerald-500 text-emerald-300 font-mono font-black rounded-xl px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none">
+            </div>
+
+            <div>
+                <label class="block text-xs text-slate-300 font-bold mb-1">ملاحظة:</label>
+                <input type="text" name="notes" placeholder="دفعة كاش..." class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:border-emerald-500 focus:outline-none">
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <button type="button" onclick="closeModal('paySingleDebtModal')" class="bg-slate-800 hover:bg-slate-700 text-white font-bold px-4 py-2 rounded-xl text-xs">
+                    إلغاء
+                </button>
+                <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black px-5 py-2 rounded-xl text-xs shadow-md shadow-emerald-600/30">
+                    تأكيد السداد 💰
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function openPayCustomerModal(name, maxAmount) {
+        document.getElementById('payModalCustomerName').value = name;
+        document.getElementById('payModalCustomerDisplayName').innerText = name;
+        document.getElementById('payModalMaxAmountDisplay').innerText = maxAmount.toLocaleString() + ' ل.ل';
+        document.getElementById('payModalAmountInput').value = maxAmount;
+        document.getElementById('payModalAmountInput').max = maxAmount;
+        openModal('payCustomerModal');
+    }
+
+    function openPaySingleDebtModal(debtId, name, remaining) {
+        document.getElementById('singleDebtIdInput').value = debtId;
+        document.getElementById('singleDebtCustomerNameDisplay').innerText = name;
+        document.getElementById('singleDebtRemainingDisplay').innerText = remaining.toLocaleString() + ' ل.ل';
+        document.getElementById('singleDebtAmountInput').value = remaining;
+        document.getElementById('singleDebtAmountInput').max = remaining;
+        openModal('paySingleDebtModal');
+    }
+</script>
+{% endblock %}

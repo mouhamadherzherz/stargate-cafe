@@ -1,0 +1,1257 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="space-y-5 max-w-[1780px] mx-auto pb-14 font-sans select-none" dir="rtl">
+
+    <!-- ========================================================= -->
+    <!-- 1. TOP BRAND, LIVE CONTROLS & FAST ACTIONS BAR            -->
+    <!-- ========================================================= -->
+    <div class="pos-emerald-card p-4 rounded-3xl flex flex-col lg:flex-row items-center justify-between gap-4 shadow-2xl border border-[#303A32]">
+        <div class="flex items-center gap-3.5 w-full lg:w-auto">
+            <div class="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#0E8F65] via-[#191F1B] to-[#D6B875] p-[2px] shadow-lg shadow-[#0E8F65]/25 shrink-0">
+                <div class="w-full h-full bg-[#101411] rounded-2xl flex items-center justify-center text-2xl">
+                    <i class="fa-solid fa-rectangle-list text-[#35C995]"></i>
+                </div>
+            </div>
+            <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h1 class="font-black text-xl text-[#F5F5F0] tracking-tight">
+                        إدارة ومتابعة الطلبات المباشرة
+                    </h1>
+                    <span class="text-[11px] bg-[#0E8F65]/20 text-[#35C995] font-bold px-3 py-0.5 rounded-full border border-[#0E8F65]/40 flex items-center gap-1.5 shadow-sm">
+                        <span class="w-2 h-2 rounded-full bg-[#35C995] animate-ping"></span>
+                        <span>مزامنة حية (Live Engine)</span>
+                    </span>
+                    <span class="text-[11px] bg-[#D6B875]/20 text-[#D6B875] font-mono font-bold px-2.5 py-0.5 rounded-full border border-[#D6B875]/40">
+                        1$ = {{ exchange_rate|format_currency }} ل.ل
+                    </span>
+                </div>
+                <p class="text-xs text-[#A7B0A8] mt-1">
+                    لوحة تحكم مركزية لمتابعة دورة الطلب من الكاشير إلى البار والصالة، مع تحديث فوري للحالات وإدارة متكاملة
+                </p>
+            </div>
+        </div>
+
+        <!-- Live Controls & View Modes -->
+        <div class="flex items-center gap-2.5 w-full lg:w-auto flex-wrap justify-end">
+            <!-- View Mode Switcher -->
+            <div class="bg-[#101411] p-1.5 rounded-2xl border border-[#303A32] flex items-center gap-1 shadow-inner">
+                <button type="button" onclick="switchOrdersView('cards')" id="viewBtn-cards" class="orders-view-btn active px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer bg-[#0E8F65] text-white shadow-sm">
+                    <i class="fa-solid fa-grip"></i>
+                    <span>كروت</span>
+                </button>
+                <button type="button" onclick="switchOrdersView('table')" id="viewBtn-table" class="orders-view-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer text-[#A7B0A8] hover:text-white">
+                    <i class="fa-solid fa-table-list"></i>
+                    <span>جدول</span>
+                </button>
+                <button type="button" onclick="switchOrdersView('kanban')" id="viewBtn-kanban" class="orders-view-btn px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer text-[#A7B0A8] hover:text-white">
+                    <i class="fa-solid fa-chart-gantt"></i>
+                    <span>كانبان</span>
+                </button>
+            </div>
+
+            <!-- Auto-refresh Indicator & Button -->
+            <button type="button" onclick="manualRefreshOrders()" id="refreshBtn" class="bg-[#191F1B] hover:bg-[#222A24] text-[#F5F5F0] font-bold px-3.5 py-2.5 rounded-2xl text-xs border border-[#303A32] flex items-center gap-2 transition cursor-pointer shadow-sm" title="تحديث يدوي فوري للبيانات">
+                <i class="fa-solid fa-arrows-rotate text-[#35C995]" id="refreshIcon"></i>
+                <span id="lastUpdatedTime" class="text-[11px] font-mono text-[#A7B0A8]">محدث الآن</span>
+            </button>
+
+            <!-- Direct Back to POS -->
+            <a href="{{ url_for('index') }}" class="pos-emerald-btn-main px-4 py-2.5 text-xs flex items-center gap-2 cursor-pointer font-black shadow-lg">
+                <i class="fa-solid fa-cash-register"></i>
+                <span>الكاشير (POS)</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- 2. ORDERS SUMMARY & KPI DASHBOARD                         -->
+    <!-- ========================================================= -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5">
+        <!-- 1. Total Orders -->
+        <div class="pos-emerald-card p-3 rounded-2xl border border-[#303A32] flex flex-col justify-between hover:border-[#D6B875]/70 transition shadow-sm">
+            <div class="flex items-center justify-between text-[#A7B0A8] text-[11px] font-bold mb-1">
+                <span>إجمالي الطلبات</span>
+                <i class="fa-solid fa-receipt text-[#D6B875]"></i>
+            </div>
+            <div class="text-2xl font-black font-mono text-[#F5F5F0]" id="kpiTotalOrders">
+                {{ kpis.total_orders|default(0) }}
+            </div>
+            <div class="text-[10px] text-[#A7B0A8] mt-0.5 font-mono">
+                للفترة المحددة
+            </div>
+        </div>
+
+        <!-- 2. New / Pending -->
+        <div class="pos-emerald-card p-3 rounded-2xl border border-sky-500/30 bg-sky-950/20 flex flex-col justify-between hover:border-sky-400 transition shadow-sm">
+            <div class="flex items-center justify-between text-sky-300 text-[11px] font-bold mb-1">
+                <span>طلب جديد / معلق</span>
+                <span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
+            </div>
+            <div class="text-2xl font-black font-mono text-sky-300" id="kpiNewOrders">
+                {{ kpis.new_orders|default(0) }}
+            </div>
+            <div class="text-[10px] text-sky-400/80 mt-0.5">
+                بانتظار البدء في البار
+            </div>
+        </div>
+
+        <!-- 3. Preparing -->
+        <div class="pos-emerald-card p-3 rounded-2xl border border-amber-500/30 bg-amber-950/20 flex flex-col justify-between hover:border-amber-400 transition shadow-sm">
+            <div class="flex items-center justify-between text-amber-300 text-[11px] font-bold mb-1">
+                <span>قيد التحضير</span>
+                <i class="fa-solid fa-fire-burner text-amber-400 text-xs"></i>
+            </div>
+            <div class="text-2xl font-black font-mono text-amber-300" id="kpiPreparingOrders">
+                {{ kpis.preparing_orders|default(0) }}
+            </div>
+            <div class="text-[10px] text-amber-400/80 mt-0.5">
+                جاري التجهيز والسكب
+            </div>
+        </div>
+
+        <!-- 4. Ready -->
+        <div class="pos-emerald-card p-3 rounded-2xl border border-teal-500/30 bg-teal-950/20 flex flex-col justify-between hover:border-teal-400 transition shadow-sm">
+            <div class="flex items-center justify-between text-teal-300 text-[11px] font-bold mb-1">
+                <span>جاهز للتسليم</span>
+                <i class="fa-solid fa-bell-concierge text-teal-400 text-xs"></i>
+            </div>
+            <div class="text-2xl font-black font-mono text-teal-300" id="kpiReadyOrders">
+                {{ kpis.ready_orders|default(0) }}
+            </div>
+            <div class="text-[10px] text-teal-400/80 mt-0.5">
+                بانتظار التقديم أو الاستلام
+            </div>
+        </div>
+
+        <!-- 5. Completed / Paid -->
+        <div class="pos-emerald-card p-3 rounded-2xl border border-[#0E8F65]/40 bg-[#0E8F65]/10 flex flex-col justify-between hover:border-[#35C995] transition shadow-sm">
+            <div class="flex items-center justify-between text-[#35C995] text-[11px] font-bold mb-1">
+                <span>مكتمل ومدفوع</span>
+                <i class="fa-solid fa-circle-check text-[#35C995] text-xs"></i>
+            </div>
+            <div class="text-2xl font-black font-mono text-[#35C995]" id="kpiCompletedOrders">
+                {{ kpis.completed_orders|default(0) }}
+            </div>
+            <div class="text-[10px] text-[#35C995]/80 mt-0.5">
+                تمت المحاسبة والتسليم
+            </div>
+        </div>
+
+        <!-- 6. Cancelled -->
+        <div class="pos-emerald-card p-3 rounded-2xl border border-rose-500/30 bg-rose-950/20 flex flex-col justify-between hover:border-rose-400 transition shadow-sm">
+            <div class="flex items-center justify-between text-rose-300 text-[11px] font-bold mb-1">
+                <span>ملغي / مسترجع</span>
+                <i class="fa-solid fa-ban text-rose-400 text-xs"></i>
+            </div>
+            <div class="text-2xl font-black font-mono text-rose-400" id="kpiCancelledOrders">
+                {{ kpis.cancelled_orders|default(0) }}
+            </div>
+            <div class="text-[10px] text-rose-400/80 mt-0.5">
+                مسترجع المخزون والمحاسبة
+            </div>
+        </div>
+    </div>
+
+    <!-- Revenue Snapshot Banner -->
+    <div class="pos-emerald-card-subtle p-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-sm border border-[#303A32]">
+        <div class="flex items-center gap-3 text-xs">
+            <span class="text-[#A7B0A8] font-bold">💰 إجمالي مبيعات الفترة المكتملة:</span>
+            <span class="font-mono font-black text-sm text-[#35C995]">
+                {{ kpis.revenue_lbp|format_currency }} ل.ل
+            </span>
+            <span class="text-[#303A32]">|</span>
+            <span class="font-mono font-black text-xs text-[#D6B875]">
+                ${{ kpis.revenue_usd|format_currency }}
+            </span>
+        </div>
+        <div class="text-[11px] text-[#A7B0A8] flex items-center gap-2">
+            <span>💡 يتم احتساب كل طلب بدقة في حالة واحدة دون أي تكرار محاسبي</span>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- 3. ADVANCED SEARCH & MULTI-FILTER RIBBON                  -->
+    <!-- ========================================================= -->
+    <div class="pos-emerald-card p-4 rounded-3xl border border-[#303A32] shadow-lg space-y-3">
+        <form method="GET" action="{{ url_for('orders_page') }}" id="ordersFilterForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+            <!-- Search Text -->
+            <div class="lg:col-span-2">
+                <label class="block text-[11px] font-bold text-[#A7B0A8] mb-1">
+                    🔍 البحث السريع (رقم الطلب، اسم الزبون، ملاحظات):
+                </label>
+                <div class="relative">
+                    <input type="text" name="q" id="ordersSearchInput" value="{{ search or '' }}" placeholder="ابحث برقم التتبع (TRK-...) أو رقم الطلب أو الزبون..."
+                           class="w-full bg-[#101411] border border-[#303A32] focus:border-[#0E8F65] text-[#F5F5F0] rounded-2xl py-2.5 px-3.5 pl-8 text-xs focus:outline-none transition shadow-inner">
+                    {% if search %}
+                    <button type="button" onclick="clearOrdersSearch()" class="absolute left-2.5 top-2.5 text-slate-500 hover:text-white text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Period Filter -->
+            <div>
+                <label class="block text-[11px] font-bold text-[#A7B0A8] mb-1">الفترة الزمنية:</label>
+                <select name="period" id="ordersPeriodSelect" onchange="this.form.submit()"
+                        class="w-full bg-[#101411] border border-[#303A32] focus:border-[#0E8F65] text-[#F5F5F0] rounded-2xl py-2.5 px-3 text-xs focus:outline-none transition cursor-pointer">
+                    <option value="today" {% if period == 'today' %}selected{% endif %}>📅 اليوم</option>
+                    <option value="yesterday" {% if period == 'yesterday' %}selected{% endif %}>📅 الأمس</option>
+                    <option value="week" {% if period == 'week' %}selected{% endif %}>📅 آخر 7 أيام</option>
+                    <option value="month" {% if period == 'month' %}selected{% endif %}>📅 هذا الشهر (30 يوم)</option>
+                    <option value="all" {% if period == 'all' %}selected{% endif %}>📂 كل السجل التاريخي</option>
+                </select>
+            </div>
+
+            <!-- Status Filter -->
+            <div>
+                <label class="block text-[11px] font-bold text-[#A7B0A8] mb-1">حالة الطلب:</label>
+                <select name="status" id="ordersStatusSelect" onchange="this.form.submit()"
+                        class="w-full bg-[#101411] border border-[#303A32] focus:border-[#0E8F65] text-[#F5F5F0] rounded-2xl py-2.5 px-3 text-xs focus:outline-none transition cursor-pointer">
+                    <option value="all" {% if status == 'all' %}selected{% endif %}>جميع الحالات</option>
+                    <option value="new" {% if status == 'new' %}selected{% endif %}>📥 جديد / معلق</option>
+                    <option value="preparing" {% if status == 'preparing' %}selected{% endif %}>⏳ قيد التحضير</option>
+                    <option value="ready" {% if status == 'ready' %}selected{% endif %}>🛎️ جاهز للتسليم</option>
+                    <option value="completed" {% if status == 'completed' %}selected{% endif %}>✅ مكتمل / مدفوع</option>
+                    <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>❌ ملغي / مسترجع</option>
+                </select>
+            </div>
+
+            <!-- Order Type -->
+            <div>
+                <label class="block text-[11px] font-bold text-[#A7B0A8] mb-1">نوع الطلب:</label>
+                <select name="order_type" id="ordersTypeSelect" onchange="this.form.submit()"
+                        class="w-full bg-[#101411] border border-[#303A32] focus:border-[#0E8F65] text-[#F5F5F0] rounded-2xl py-2.5 px-3 text-xs focus:outline-none transition cursor-pointer">
+                    <option value="all" {% if order_type == 'all' %}selected{% endif %}>الكل (صالة وسفري)</option>
+                    <option value="takeaway" {% if order_type == 'takeaway' %}selected{% endif %}>🥡 سفري (Takeaway)</option>
+                    <option value="dine_in" {% if order_type == 'dine_in' %}selected{% endif %}>🍽️ صالة (طاولة)</option>
+                    <option value="delivery" {% if order_type == 'delivery' %}selected{% endif %}>🛵 دليفري (توصيل)</option>
+                </select>
+            </div>
+
+            <!-- Sort & Reset -->
+            <div class="flex items-center gap-2">
+                <div class="flex-1">
+                    <label class="block text-[11px] font-bold text-[#A7B0A8] mb-1">الترتيب:</label>
+                    <select name="sort" id="ordersSortSelect" onchange="this.form.submit()"
+                            class="w-full bg-[#101411] border border-[#303A32] focus:border-[#0E8F65] text-[#F5F5F0] rounded-2xl py-2.5 px-3 text-xs focus:outline-none transition cursor-pointer">
+                        <option value="latest" {% if sort_by == 'latest' %}selected{% endif %}>الأحدث أولاً</option>
+                        <option value="oldest" {% if sort_by == 'oldest' %}selected{% endif %}>الأقدم أولاً</option>
+                        <option value="highest" {% if sort_by == 'highest' %}selected{% endif %}>الأعلى سعراً</option>
+                        <option value="lowest" {% if sort_by == 'lowest' %}selected{% endif %}>الأقل سعراً</option>
+                    </select>
+                </div>
+                <a href="{{ url_for('orders_page') }}" class="bg-[#222A24] hover:bg-[#303A32] text-[#A7B0A8] hover:text-white px-3.5 py-2.5 rounded-2xl text-xs font-bold transition flex items-center justify-center border border-[#303A32] self-end h-[42px]" title="إعادة ضبط الفلاتر">
+                    <i class="fa-solid fa-arrow-rotate-left"></i>
+                </a>
+            </div>
+        </form>
+
+        <!-- Quick Status Pills Filter -->
+        <div class="flex items-center gap-2 overflow-x-auto pt-2.5 border-t border-[#303A32]/60 custom-scrollbar text-xs font-bold">
+            <span class="text-[11px] text-[#A7B0A8] shrink-0">تصفية سريعة:</span>
+            <a href="{{ url_for('orders_page', period=period, status='all', order_type=order_type) }}" class="pos-cat-pill {% if status == 'all' %}active{% endif %} shrink-0">
+                الكل ({{ kpis.total_orders }})
+            </a>
+            <a href="{{ url_for('orders_page', period=period, status='new', order_type=order_type) }}" class="pos-cat-pill {% if status == 'new' %}active{% endif %} shrink-0 text-sky-400">
+                📥 جديد ({{ kpis.new_orders }})
+            </a>
+            <a href="{{ url_for('orders_page', period=period, status='preparing', order_type=order_type) }}" class="pos-cat-pill {% if status == 'preparing' %}active{% endif %} shrink-0 text-amber-400">
+                ⏳ تحضير ({{ kpis.preparing_orders }})
+            </a>
+            <a href="{{ url_for('orders_page', period=period, status='ready', order_type=order_type) }}" class="pos-cat-pill {% if status == 'ready' %}active{% endif %} shrink-0 text-teal-400">
+                🛎️ جاهز ({{ kpis.ready_orders }})
+            </a>
+            <a href="{{ url_for('orders_page', period=period, status='completed', order_type=order_type) }}" class="pos-cat-pill {% if status == 'completed' %}active{% endif %} shrink-0 text-[#35C995]">
+                ✅ مكتمل ({{ kpis.completed_orders }})
+            </a>
+            <a href="{{ url_for('orders_page', period=period, status='cancelled', order_type=order_type) }}" class="pos-cat-pill {% if status == 'cancelled' %}active{% endif %} shrink-0 text-rose-400">
+                ❌ ملغي ({{ kpis.cancelled_orders }})
+            </a>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- 4. ORDERS VIEW PANES (CARDS, TABLE, KANBAN)               -->
+    <!-- ========================================================= -->
+
+    <!-- =================== VIEW 1: CARDS GRID =================== -->
+    <div id="ordersPane-cards" class="orders-view-pane space-y-4">
+        {% if orders %}
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" id="ordersCardsContainer">
+            {% for ord in orders %}
+            <div class="pos-emerald-card p-4.5 rounded-3xl border border-[#303A32] hover:border-[#0E8F65]/80 transition-all duration-200 shadow-xl flex flex-col justify-between space-y-3.5 relative group"
+                 id="orderCard-{{ ord.id }}"
+                 data-order-id="{{ ord.id }}"
+                 data-order-number="{{ ord.order_number }}"
+                 data-status="{{ ord.status or 'paid' }}">
+                
+                <!-- Card Header -->
+                <div class="flex items-start justify-between gap-2 border-b border-[#303A32]/70 pb-3">
+                    <div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="font-mono font-black text-base text-[#F5F5F0] group-hover:text-[#35C995] transition">
+                                #{{ ord.order_number }}
+                            </span>
+                            {% if ord.tracking_number %}
+                            <span class="text-[10px] bg-[#D6B875]/15 text-[#D6B875] font-mono font-bold px-2 py-0.5 rounded-lg border border-[#D6B875]/40 flex items-center gap-1 shadow-sm" title="رقم التتبع الموحد للفاتورة">
+                                <i class="fa-solid fa-hashtag text-[9px]"></i>
+                                <span>{{ ord.tracking_number }}</span>
+                            </span>
+                            {% endif %}
+                            <!-- Order Type Badge -->
+                            {% if ord.dining_table_name or ord.dining_table_id or ord.order_type == 'dine_in' %}
+                            <span class="text-[10px] bg-indigo-500/20 text-indigo-300 font-bold px-2.5 py-0.5 rounded-full border border-indigo-500/40">
+                                🍽️ طاولة: {{ ord.dining_table_name or ord.dining_table_id }}
+                            </span>
+                            {% elif ord.order_type == 'delivery' %}
+                            <span class="text-[10px] bg-purple-500/20 text-purple-300 font-bold px-2.5 py-0.5 rounded-full border border-purple-500/40">
+                                🛵 دليفري
+                            </span>
+                            {% else %}
+                            <span class="text-[10px] bg-[#222A24] text-[#A7B0A8] font-bold px-2.5 py-0.5 rounded-full border border-[#303A32]">
+                                🥡 سفري
+                            </span>
+                            {% endif %}
+                        </div>
+                        <div class="text-[11px] text-[#A7B0A8] mt-1 flex items-center gap-2 font-mono">
+                            <span><i class="fa-regular fa-clock text-[10px]"></i> {{ ord.created_at|format_date }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Status Pill -->
+                    <div>
+                        {% if ord.status == 'cancelled' %}
+                        <span class="status-pill status-pill-cancelled">
+                            <i class="fa-solid fa-ban text-[10px]"></i> ملغي ومسترجع
+                        </span>
+                        {% elif ord.status == 'new' or ord.status == 'open' %}
+                        <span class="status-pill status-pill-new">
+                            <span class="w-1.5 h-1.5 rounded-full bg-sky-400 animate-ping"></span> جديد
+                        </span>
+                        {% elif ord.status == 'preparing' %}
+                        <span class="status-pill status-pill-preparing">
+                            <i class="fa-solid fa-fire-burner text-[10px]"></i> قيد التحضير
+                        </span>
+                        {% elif ord.status == 'ready' %}
+                        <span class="status-pill status-pill-ready">
+                            <i class="fa-solid fa-bell-concierge text-[10px]"></i> جاهز للتسليم
+                        </span>
+                        {% else %}
+                        <span class="status-pill status-pill-completed">
+                            <i class="fa-solid fa-check text-[10px]"></i> مكتمل ومدفوع
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Customer & Items Summary -->
+                <div class="space-y-2 py-1 flex-1">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="font-bold text-[#F5F5F0] flex items-center gap-1.5">
+                            <i class="fa-solid fa-user text-[#D6B875] text-[10px]"></i>
+                            <span>{{ ord.customer_name or 'زبون كاش' }}</span>
+                        </span>
+                        <span class="text-[10px] text-[#A7B0A8] font-mono">
+                            الكاشير: <strong class="text-[#F5F5F0]">{{ ord.employee_name or 'كاشير' }}</strong>
+                        </span>
+                    </div>
+
+                    <!-- Items Summary Box -->
+                    <div class="bg-[#101411] p-3 rounded-2xl border border-[#303A32]/80 text-xs leading-relaxed text-[#D6B875] font-bold max-h-28 overflow-y-auto custom-scrollbar">
+                        {{ ord.items_summary or 'طلب عام' }}
+                    </div>
+
+                    {% if ord.notes %}
+                    <div class="text-[11px] text-amber-300/90 bg-amber-950/25 px-2.5 py-1 rounded-xl border border-amber-500/25 italic">
+                        📝 {{ ord.notes }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Card Footer & Financials -->
+                <div class="pt-2 border-t border-[#303A32]/70 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-[10px] text-[#A7B0A8] block">المجموع الصافي:</span>
+                            <div class="font-mono font-black text-lg text-[#35C995]">
+                                {{ ord.total_lbp|format_currency }} <span class="text-xs font-normal text-[#A7B0A8]">ل.ل</span>
+                            </div>
+                        </div>
+                        <div class="text-left font-mono">
+                            <span class="text-[10px] text-[#A7B0A8] block">المقابل:</span>
+                            <div class="font-bold text-sm text-[#D6B875]">
+                                {{ ord.total_usd|to_usd }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="grid grid-cols-5 gap-1 pt-1">
+                        <!-- Details -->
+                        <button type="button" onclick="openOrderDetailsModal({{ ord.id }})" class="bg-[#222A24] hover:bg-[#2c362f] text-[#F5F5F0] py-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1 border border-[#303A32] cursor-pointer" title="عرض تفاصيل الطلب">
+                            <i class="fa-solid fa-eye text-cyan-400"></i>
+                            <span>تفاصيل</span>
+                        </button>
+
+                        <!-- Edit Invoice -->
+                        <button type="button" onclick="openEditInvoiceModal({{ ord.id }}, '{{ ord.order_number }}', '{{ (ord.customer_name or '')|escape }}', '{{ ord.order_type or 'takeaway' }}', '{{ ord.payment_method or 'cash' }}', '{{ (ord.notes or '')|escape }}')" class="bg-[#222A24] hover:bg-[#D6B875] hover:text-[#101411] text-[#D6B875] py-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1 border border-[#303A32] cursor-pointer" title="تعديل وتنظيم بيانات الفاتورة">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                            <span>تعديل</span>
+                        </button>
+
+                        <!-- Print 80mm Thermal -->
+                        <a href="{{ url_for('order_receipt', order_id=ord.id) }}" target="_blank" class="bg-[#222A24] hover:bg-[#2c362f] text-amber-300 py-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1 border border-[#303A32]" title="طباعة إيصال حراري (80mm)">
+                            <i class="fa-solid fa-print"></i>
+                            <span>حراري</span>
+                        </a>
+
+                        <!-- Print A4 Invoice -->
+                        <a href="{{ url_for('order_receipt', order_id=ord.id) }}?format=full" target="_blank" class="bg-[#222A24] hover:bg-[#2c362f] text-indigo-300 py-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1 border border-[#303A32]" title="طباعة فاتورة رسمية (A4)">
+                            <i class="fa-solid fa-file-invoice"></i>
+                            <span>A4</span>
+                        </a>
+
+                        <!-- Quick Next Status / Cancel -->
+                        {% if ord.status != 'cancelled' and ord.status != 'completed' and ord.status != 'paid' %}
+                        <button type="button" onclick="advanceOrderStatus({{ ord.id }}, '{{ ord.status or 'new' }}')" class="pos-emerald-btn-main py-2 rounded-xl text-[11px] flex items-center justify-center gap-1 font-black cursor-pointer shadow-md" title="نقل الطلب للمرحلة التالية">
+                            <i class="fa-solid fa-forward-step"></i>
+                            <span>تقدم</span>
+                        </button>
+                        {% else %}
+                        <button type="button" onclick="cancelOrderAction({{ ord.id }}, '{{ ord.order_number }}')" class="bg-rose-950/30 hover:bg-rose-900/40 text-rose-300 py-2 rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1 border border-rose-800/40 cursor-pointer" title="إلغاء الطلب واسترجاع المخزون">
+                            <i class="fa-solid fa-ban"></i>
+                            <span>إلغاء</span>
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <!-- Empty State -->
+        <div class="pos-emerald-card p-12 rounded-3xl text-center space-y-4 border border-[#303A32]">
+            <div class="w-16 h-16 rounded-full bg-[#191F1B] border border-[#303A32] flex items-center justify-center text-3xl mx-auto text-[#A7B0A8]">
+                📋
+            </div>
+            <div>
+                <h3 class="text-base font-black text-white">لا توجد طلبات تطابق الفلترة المحددة</h3>
+                <p class="text-xs text-[#A7B0A8] mt-1">جرّب اختيار فترة زمنية أخرى أو إزالة قيود البحث</p>
+            </div>
+            <a href="{{ url_for('orders_page') }}" class="pos-emerald-btn-main px-4 py-2 text-xs inline-flex items-center gap-2 cursor-pointer font-bold">
+                <i class="fa-solid fa-rotate-left"></i> عرض جميع طلبات اليوم
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- =================== VIEW 2: TABLE VIEW =================== -->
+    <div id="ordersPane-table" class="orders-view-pane hidden space-y-4">
+        <div class="pos-emerald-card rounded-3xl border border-[#303A32] overflow-hidden shadow-2xl">
+            <div class="overflow-x-auto max-h-[720px] custom-scrollbar">
+                <table class="w-full text-right text-xs">
+                    <thead class="bg-[#101411] text-[#A7B0A8] font-bold border-b border-[#303A32] sticky top-0 z-10 backdrop-blur-md">
+                        <tr>
+                            <th class="py-3.5 px-4">رقم الطلب</th>
+                            <th class="py-3.5 px-3">التوقيت والنوع</th>
+                            <th class="py-3.5 px-3">الزبون / الطاولة</th>
+                            <th class="py-3.5 px-4">المنتجات والأصناف المباعة</th>
+                            <th class="py-3.5 px-3">الموظف</th>
+                            <th class="py-3.5 px-3 text-center">الحالة</th>
+                            <th class="py-3.5 px-4 text-left">المجموع (ل.ل / $)</th>
+                            <th class="py-3.5 px-4 text-center">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[#303A32]/60" id="ordersTableBody">
+                        {% for ord in orders %}
+                        <tr class="hover:bg-[#191F1B]/80 transition">
+                            <td class="py-3.5 px-4 font-mono font-black text-white">
+                                <div class="flex flex-col gap-1">
+                                    <span class="bg-[#101411] px-2.5 py-1 rounded-xl border border-[#303A32] inline-block w-fit">
+                                        #{{ ord.order_number }}
+                                    </span>
+                                    {% if ord.tracking_number %}
+                                    <span class="text-[10px] font-mono text-[#D6B875] font-bold">
+                                        {{ ord.tracking_number }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="py-3.5 px-3">
+                                <div class="font-mono text-[#A7B0A8] text-[11px]">{{ ord.created_at|format_date }}</div>
+                                <span class="text-[10px] text-slate-400">
+                                    {% if ord.dining_table_name or ord.dining_table_id %}🍽️ طاولة: {{ ord.dining_table_name or ord.dining_table_id }}
+                                    {% elif ord.order_type == 'delivery' %}🛵 توصيل
+                                    {% else %}🥡 سفري
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td class="py-3.5 px-3 font-bold text-white">
+                                {{ ord.customer_name or 'زبون كاش' }}
+                            </td>
+                            <td class="py-3.5 px-4 text-[#D6B875] font-bold max-w-xs truncate">
+                                {{ ord.items_summary or 'طلب عام' }}
+                            </td>
+                            <td class="py-3.5 px-3 text-slate-300 font-mono">
+                                {{ ord.employee_name or 'كاشير' }}
+                            </td>
+                            <td class="py-3.5 px-3 text-center">
+                                {% if ord.status == 'cancelled' %}
+                                <span class="status-pill status-pill-cancelled">ملغي</span>
+                                {% elif ord.status == 'new' or ord.status == 'open' %}
+                                <span class="status-pill status-pill-new">جديد</span>
+                                {% elif ord.status == 'preparing' %}
+                                <span class="status-pill status-pill-preparing">تحضير</span>
+                                {% elif ord.status == 'ready' %}
+                                <span class="status-pill status-pill-ready">جاهز</span>
+                                {% else %}
+                                <span class="status-pill status-pill-completed">مكتمل</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-3.5 px-4 text-left font-mono">
+                                <div class="font-black text-sm text-[#35C995]">{{ ord.total_lbp|format_currency }} ل.ل</div>
+                                <div class="text-[11px] text-[#D6B875]">{{ ord.total_usd|to_usd }}</div>
+                            </td>
+                            <td class="py-3.5 px-4 text-center">
+                                <div class="inline-flex items-center gap-1.5">
+                                    <button type="button" onclick="openOrderDetailsModal({{ ord.id }})" class="bg-[#222A24] hover:bg-[#2c362f] text-cyan-300 p-2 rounded-xl text-xs transition border border-[#303A32]" title="تفاصيل">
+                                        <i class="fa-solid fa-eye"></i>
+                                    </button>
+                                    <button type="button" onclick="openEditInvoiceModal({{ ord.id }}, '{{ ord.order_number }}', '{{ (ord.customer_name or '')|escape }}', '{{ ord.order_type or 'takeaway' }}', '{{ ord.payment_method or 'cash' }}', '{{ (ord.notes or '')|escape }}')" class="bg-[#222A24] hover:bg-[#D6B875] hover:text-[#101411] text-[#D6B875] p-2 rounded-xl text-xs transition border border-[#303A32] cursor-pointer" title="تعديل وتنظيم الفاتورة">
+                                        <i class="fa-solid fa-pen-to-square"></i>
+                                    </button>
+                                    <a href="{{ url_for('order_receipt', order_id=ord.id) }}" target="_blank" class="bg-[#222A24] hover:bg-[#2c362f] text-amber-300 p-2 rounded-xl text-xs transition border border-[#303A32]" title="إيصال حراري">
+                                        <i class="fa-solid fa-print"></i>
+                                    </a>
+                                    {% if ord.status != 'cancelled' and ord.status != 'completed' and ord.status != 'paid' %}
+                                    <button type="button" onclick="advanceOrderStatus({{ ord.id }}, '{{ ord.status or 'new' }}')" class="pos-emerald-btn-main px-2.5 py-1.5 rounded-xl text-xs font-bold" title="تقدم">
+                                        <i class="fa-solid fa-forward-step"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- =================== VIEW 3: KANBAN BOARD =================== -->
+    <div id="ordersPane-kanban" class="orders-view-pane hidden space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Column 1: New / Pending -->
+            <div class="kanban-column p-3.5 shadow-xl" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, 'new')">
+                <div class="p-3 bg-sky-950/40 rounded-2xl border border-sky-500/30 flex items-center justify-between mb-3 shrink-0">
+                    <h3 class="font-black text-xs text-sky-300 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-sky-400 animate-ping"></span>
+                        <span>📥 طلبات جديدة (New)</span>
+                    </h3>
+                    <span class="text-xs font-mono font-black text-sky-400 bg-sky-950 px-2.5 py-0.5 rounded-full border border-sky-500/40" id="kanbanCount-new">
+                        {{ orders|selectattr('status', 'in', ['new', 'open'])|list|length }}
+                    </span>
+                </div>
+                <div class="space-y-3 overflow-y-auto flex-1 custom-scrollbar pr-1" id="kanbanCol-new">
+                    {% for ord in orders if ord.status in ['new', 'open'] %}
+                    <div class="kanban-card space-y-2.5" draggable="true" ondragstart="handleDragStart(event, {{ ord.id }})" id="kanbanCard-{{ ord.id }}">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="font-mono font-black text-[#F5F5F0]">#{{ ord.order_number }}</span>
+                            <span class="text-[10px] text-sky-300 font-bold bg-sky-950/80 px-2 py-0.5 rounded-full">جديد</span>
+                        </div>
+                        <div class="text-xs font-bold text-[#F5F5F0]">{{ ord.customer_name or 'زبون كاش' }}</div>
+                        <div class="text-xs text-[#D6B875] font-bold line-clamp-2 bg-[#101411] p-2 rounded-xl border border-[#303A32]">
+                            {{ ord.items_summary or 'طلب عام' }}
+                        </div>
+                        <div class="flex items-center justify-between pt-2 border-t border-[#303A32]/60 text-xs">
+                            <span class="font-mono font-bold text-[#35C995]">{{ ord.total_lbp|format_currency }} ل.ل</span>
+                            <button type="button" onclick="advanceOrderStatus({{ ord.id }}, 'preparing')" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-3 py-1 rounded-xl text-[11px] transition shadow cursor-pointer">
+                                بدء التحضير ⏳
+                            </button>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-12 text-[#A7B0A8] text-xs">لا توجد طلبات جديدة بانتظار التحضير</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Column 2: Preparing -->
+            <div class="kanban-column p-3.5 shadow-xl" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, 'preparing')">
+                <div class="p-3 bg-amber-950/40 rounded-2xl border border-amber-500/30 flex items-center justify-between mb-3 shrink-0">
+                    <h3 class="font-black text-xs text-amber-300 flex items-center gap-2">
+                        <i class="fa-solid fa-fire-burner text-amber-400"></i>
+                        <span>⏳ قيد التحضير (Preparing)</span>
+                    </h3>
+                    <span class="text-xs font-mono font-black text-amber-400 bg-amber-950 px-2.5 py-0.5 rounded-full border border-amber-500/40" id="kanbanCount-preparing">
+                        {{ orders|selectattr('status', 'equalto', 'preparing')|list|length }}
+                    </span>
+                </div>
+                <div class="space-y-3 overflow-y-auto flex-1 custom-scrollbar pr-1" id="kanbanCol-preparing">
+                    {% for ord in orders if ord.status == 'preparing' %}
+                    <div class="kanban-card space-y-2.5" draggable="true" ondragstart="handleDragStart(event, {{ ord.id }})" id="kanbanCard-{{ ord.id }}">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="font-mono font-black text-[#F5F5F0]">#{{ ord.order_number }}</span>
+                            <span class="text-[10px] text-amber-300 font-bold bg-amber-950/80 px-2 py-0.5 rounded-full">تحضير</span>
+                        </div>
+                        <div class="text-xs font-bold text-[#F5F5F0]">{{ ord.customer_name or 'زبون كاش' }}</div>
+                        <div class="text-xs text-[#D6B875] font-bold line-clamp-2 bg-[#101411] p-2 rounded-xl border border-[#303A32]">
+                            {{ ord.items_summary or 'طلب عام' }}
+                        </div>
+                        <div class="flex items-center justify-between pt-2 border-t border-[#303A32]/60 text-xs">
+                            <span class="font-mono font-bold text-[#35C995]">{{ ord.total_lbp|format_currency }} ل.ل</span>
+                            <button type="button" onclick="advanceOrderStatus({{ ord.id }}, 'ready')" class="bg-teal-600 hover:bg-teal-500 text-white font-bold px-3 py-1 rounded-xl text-[11px] transition shadow cursor-pointer">
+                                جاهز للتسليم 🛎️
+                            </button>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-12 text-[#A7B0A8] text-xs">لا توجد طلبات قيد التحضير حالياً</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Column 3: Ready -->
+            <div class="kanban-column p-3.5 shadow-xl" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, 'ready')">
+                <div class="p-3 bg-teal-950/40 rounded-2xl border border-teal-500/30 flex items-center justify-between mb-3 shrink-0">
+                    <h3 class="font-black text-xs text-teal-300 flex items-center gap-2">
+                        <i class="fa-solid fa-bell-concierge text-teal-400"></i>
+                        <span>🛎️ جاهزة للتسليم (Ready)</span>
+                    </h3>
+                    <span class="text-xs font-mono font-black text-teal-400 bg-teal-950 px-2.5 py-0.5 rounded-full border border-teal-500/40" id="kanbanCount-ready">
+                        {{ orders|selectattr('status', 'equalto', 'ready')|list|length }}
+                    </span>
+                </div>
+                <div class="space-y-3 overflow-y-auto flex-1 custom-scrollbar pr-1" id="kanbanCol-ready">
+                    {% for ord in orders if ord.status == 'ready' %}
+                    <div class="kanban-card space-y-2.5" draggable="true" ondragstart="handleDragStart(event, {{ ord.id }})" id="kanbanCard-{{ ord.id }}">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="font-mono font-black text-[#F5F5F0]">#{{ ord.order_number }}</span>
+                            <span class="text-[10px] text-teal-300 font-bold bg-teal-950/80 px-2 py-0.5 rounded-full">جاهز</span>
+                        </div>
+                        <div class="text-xs font-bold text-[#F5F5F0]">{{ ord.customer_name or 'زبون كاش' }}</div>
+                        <div class="text-xs text-[#D6B875] font-bold line-clamp-2 bg-[#101411] p-2 rounded-xl border border-[#303A32]">
+                            {{ ord.items_summary or 'طلب عام' }}
+                        </div>
+                        <div class="flex items-center justify-between pt-2 border-t border-[#303A32]/60 text-xs">
+                            <span class="font-mono font-bold text-[#35C995]">{{ ord.total_lbp|format_currency }} ل.ل</span>
+                            <button type="button" onclick="advanceOrderStatus({{ ord.id }}, 'completed')" class="pos-emerald-btn-main px-3 py-1 rounded-xl text-[11px] font-bold transition shadow cursor-pointer">
+                                تسليم واستلام ✅
+                            </button>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-12 text-[#A7B0A8] text-xs">لا توجد طلبات جاهزة للتسليم</div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Column 4: Completed / Paid -->
+            <div class="kanban-column p-3.5 shadow-xl" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, 'completed')">
+                <div class="p-3 bg-[#0E8F65]/15 rounded-2xl border border-[#0E8F65]/30 flex items-center justify-between mb-3 shrink-0">
+                    <h3 class="font-black text-xs text-[#35C995] flex items-center gap-2">
+                        <i class="fa-solid fa-circle-check text-[#35C995]"></i>
+                        <span>✅ مكتملة ومدفوعة (Completed)</span>
+                    </h3>
+                    <span class="text-xs font-mono font-black text-[#35C995] bg-[#101411] px-2.5 py-0.5 rounded-full border border-[#0E8F65]/40" id="kanbanCount-completed">
+                        {{ orders|selectattr('status', 'in', ['completed', 'paid'])|list|length }}
+                    </span>
+                </div>
+                <div class="space-y-3 overflow-y-auto flex-1 custom-scrollbar pr-1" id="kanbanCol-completed">
+                    {% for ord in orders if ord.status in ['completed', 'paid'] %}
+                    <div class="kanban-card space-y-2.5 opacity-90 hover:opacity-100" id="kanbanCard-{{ ord.id }}">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="font-mono font-black text-[#F5F5F0]">#{{ ord.order_number }}</span>
+                            <span class="text-[10px] text-[#35C995] font-bold bg-[#0E8F65]/20 px-2 py-0.5 rounded-full">مكتمل</span>
+                        </div>
+                        <div class="text-xs font-bold text-[#F5F5F0]">{{ ord.customer_name or 'زبون كاش' }}</div>
+                        <div class="text-xs text-[#A7B0A8] font-bold line-clamp-1">
+                            {{ ord.items_summary or 'طلب عام' }}
+                        </div>
+                        <div class="flex items-center justify-between pt-2 border-t border-[#303A32]/60 text-xs">
+                            <span class="font-mono font-bold text-[#35C995]">{{ ord.total_lbp|format_currency }} ل.ل</span>
+                            <a href="{{ url_for('order_receipt', order_id=ord.id) }}" target="_blank" class="bg-[#222A24] hover:bg-[#303A32] text-amber-300 px-2.5 py-1 rounded-xl text-[10px] font-bold border border-[#303A32]" title="إعادة طباعة">
+                                <i class="fa-solid fa-print"></i>
+                            </a>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-12 text-[#A7B0A8] text-xs">لا توجد طلبات مكتملة للفترة</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================= -->
+<!-- 5. DETAILED ORDER INSPECTION MODAL (تفاصيل الطلب والفاتورة)-->
+<!-- ========================================================= -->
+<div id="orderDetailsModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md hidden flex items-center justify-center p-3">
+    <div class="pos-emerald-card w-full max-w-2xl rounded-3xl border border-[#303A32] p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto custom-scrollbar animate-fade-in" dir="rtl">
+        
+        <!-- Header -->
+        <div class="flex items-start justify-between border-b border-[#303A32] pb-3.5">
+            <div>
+                <div class="flex items-center gap-2">
+                    <h3 class="text-xl font-black text-white" id="modalOrderNumber">#ORD-0000</h3>
+                    <span id="modalOrderStatusBadge" class="status-pill status-pill-completed">
+                        مكتمل
+                    </span>
+                </div>
+                <div class="flex items-center gap-2 mt-1 flex-wrap">
+                    <p class="text-xs text-[#A7B0A8]" id="modalOrderDate">التاريخ: ...</p>
+                    <span class="text-[#303A32]">•</span>
+                    <span class="text-[11px] text-[#A7B0A8] font-bold">رقم التتبع:</span>
+                    <span id="modalOrderTracking" class="font-mono font-black text-xs text-[#D6B875] bg-[#222A24] px-2.5 py-0.5 rounded-lg border border-[#303A32] select-all tracking-wider">TRK-...</span>
+                    <button type="button" onclick="copyOrderDetailsTracking()" class="text-[10px] text-[#35C995] hover:underline flex items-center gap-1 cursor-pointer">
+                        <i class="fa-solid fa-copy"></i>
+                        <span id="copyOrderModalText">نسخ</span>
+                    </button>
+                </div>
+            </div>
+            <button type="button" onclick="closeOrderDetailsModal()" class="text-[#A7B0A8] hover:text-white text-xl p-1.5 rounded-xl hover:bg-[#222A24] transition">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Order Meta Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs bg-[#101411] p-3.5 rounded-2xl border border-[#303A32]">
+            <div>
+                <span class="text-[10px] text-[#A7B0A8] block">الزبون:</span>
+                <span class="font-bold text-white text-sm" id="modalCustomerName">زبون كاش</span>
+            </div>
+            <div>
+                <span class="text-[10px] text-[#A7B0A8] block">الموظف المسؤول:</span>
+                <span class="font-bold text-white text-sm" id="modalEmployeeName">كاشير</span>
+            </div>
+            <div>
+                <span class="text-[10px] text-[#A7B0A8] block">طريقة الدفع:</span>
+                <span class="font-bold text-[#D6B875] text-sm" id="modalPaymentMethod">نقدي (Cash)</span>
+            </div>
+            <div>
+                <span class="text-[10px] text-[#A7B0A8] block">نوع الطلب / الطاولة:</span>
+                <span class="font-bold text-white text-sm" id="modalOrderType">سفري</span>
+            </div>
+        </div>
+
+        <!-- Items Table -->
+        <div class="border border-[#303A32] rounded-2xl overflow-hidden bg-[#101411]">
+            <table class="w-full text-right text-xs">
+                <thead class="bg-[#191F1B] text-[#A7B0A8] font-bold border-b border-[#303A32]">
+                    <tr>
+                        <th class="py-3 px-3.5">الصنف</th>
+                        <th class="py-3 px-3 text-center">الكمية</th>
+                        <th class="py-3 px-3 text-left">السعر الفردي</th>
+                        <th class="py-3 px-3.5 text-left">المجموع</th>
+                    </tr>
+                </thead>
+                <tbody id="modalOrderItemsBody" class="divide-y divide-[#303A32]/60">
+                    <!-- Dynamic Items -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Financial Breakdown -->
+        <div class="bg-[#191F1B] p-4 rounded-2xl border border-[#303A32] space-y-2 text-xs">
+            <div class="flex items-center justify-between text-[#A7B0A8]">
+                <span>المجموع الفرعي (Subtotal):</span>
+                <span class="font-mono text-white font-bold" id="modalSubtotalLbp">0 ل.ل</span>
+            </div>
+            <div class="flex items-center justify-between text-amber-400" id="modalDiscountRow">
+                <span>الخصم الممنوح:</span>
+                <span class="font-mono font-bold" id="modalDiscountLbp">0 ل.ل</span>
+            </div>
+            <div class="flex items-center justify-between text-base font-black pt-2.5 border-t border-[#303A32]">
+                <span class="text-white">الإجمالي النهائي الصافي:</span>
+                <div class="text-left font-mono">
+                    <div class="text-lg text-[#35C995]" id="modalTotalLbp">0 ل.ل</div>
+                    <div class="text-xs text-[#D6B875]" id="modalTotalUsd">$0.00</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Order Notes -->
+        <div id="modalNotesBox" class="text-xs text-slate-300 bg-[#101411] p-3 rounded-2xl border border-[#303A32] hidden">
+            <span class="text-[10px] text-[#A7B0A8] block mb-0.5 font-bold">ملاحظات الطلب:</span>
+            <p id="modalNotesText" class="italic"></p>
+        </div>
+
+        <!-- Status Change Controls -->
+        <div class="bg-[#101411] p-3.5 rounded-2xl border border-[#303A32] flex items-center justify-between gap-3">
+            <span class="text-xs font-bold text-[#A7B0A8] shrink-0">تحديث حالة الطلب:</span>
+            <div class="flex items-center gap-2 flex-1 justify-end">
+                <select id="modalStatusSelect" class="bg-[#191F1B] border border-[#303A32] text-white text-xs rounded-xl py-2 px-3 focus:outline-none">
+                    <option value="new">📥 جديد / معلق</option>
+                    <option value="preparing">⏳ قيد التحضير</option>
+                    <option value="ready">🛎️ جاهز للتسليم</option>
+                    <option value="completed">✅ مكتمل ومدفوع</option>
+                    <option value="cancelled">❌ إلغاء الطلب</option>
+                </select>
+                <button type="button" onclick="submitModalStatusUpdate()" class="pos-emerald-btn-main px-4 py-2 text-xs font-bold cursor-pointer">
+                    حفظ الحالة
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="flex items-center justify-between gap-2 pt-2 border-t border-[#303A32]">
+            <button type="button" onclick="cancelCurrentOrderFromModal()" class="bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-ban"></i>
+                <span>إلغاء الطلب</span>
+            </button>
+
+            <div class="flex items-center gap-2">
+                <a href="#" id="modalPrintThermalBtn" target="_blank" class="bg-[#222A24] hover:bg-[#303A32] text-[#D6B875] border border-[#303A32] px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-print"></i>
+                    <span>إيصال حراري (80mm)</span>
+                </a>
+                <a href="#" id="modalPrintA4Btn" target="_blank" class="bg-[#222A24] hover:bg-[#303A32] text-indigo-300 border border-[#303A32] px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-file-invoice"></i>
+                    <span>فاتورة رسمية (A4)</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================= -->
+<!-- 6. CLIENT JAVASCRIPT ENGINE & REAL-TIME POLLING           -->
+<!-- ========================================================= -->
+<script>
+    let currentSelectedOrderId = null;
+    let activeViewMode = 'cards';
+    let pollInterval = null;
+    let draggedOrderId = null;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Restore view mode from localStorage
+        const savedView = localStorage.getItem('stargate_orders_view') || 'cards';
+        switchOrdersView(savedView);
+
+        // Start Auto-polling engine (every 12 seconds)
+        startOrdersPolling();
+    });
+
+    function switchOrdersView(mode) {
+        activeViewMode = mode;
+        localStorage.setItem('stargate_orders_view', mode);
+
+        document.querySelectorAll('.orders-view-pane').forEach(p => p.classList.add('hidden'));
+        document.querySelectorAll('.orders-view-btn').forEach(b => {
+            b.classList.remove('bg-[#0E8F65]', 'text-white', 'shadow-sm');
+            b.classList.add('text-[#A7B0A8]');
+        });
+
+        const activePane = document.getElementById('ordersPane-' + mode);
+        const activeBtn = document.getElementById('viewBtn-' + mode);
+        if (activePane) activePane.classList.remove('hidden');
+        if (activeBtn) {
+            activeBtn.classList.add('bg-[#0E8F65]', 'text-white', 'shadow-sm');
+            activeBtn.classList.remove('text-[#A7B0A8]');
+        }
+    }
+
+    function clearOrdersSearch() {
+        const inp = document.getElementById('ordersSearchInput');
+        if (inp) {
+            inp.value = '';
+            document.getElementById('ordersFilterForm').submit();
+        }
+    }
+
+    function manualRefreshOrders() {
+        const icon = document.getElementById('refreshIcon');
+        if (icon) icon.classList.add('fa-spin');
+        
+        const params = new URLSearchParams(window.location.search);
+        fetch('/api/orders/list?' + params.toString())
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    updateKpiDisplay(data.kpis);
+                    const now = new Date();
+                    document.getElementById('lastUpdatedTime').innerText = 'تم التحديث ' + now.toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+                }
+            })
+            .catch(err => console.error('Poll error:', err))
+            .finally(() => {
+                setTimeout(() => { if (icon) icon.classList.remove('fa-spin'); }, 500);
+            });
+    }
+
+    function startOrdersPolling() {
+        if (pollInterval) clearInterval(pollInterval);
+        pollInterval = setInterval(() => {
+            manualRefreshOrders();
+        }, 12000);
+    }
+
+    function updateKpiDisplay(k) {
+        if (!k) return;
+        if (document.getElementById('kpiTotalOrders')) document.getElementById('kpiTotalOrders').innerText = k.total_orders;
+        if (document.getElementById('kpiNewOrders')) document.getElementById('kpiNewOrders').innerText = k.new_orders;
+        if (document.getElementById('kpiPreparingOrders')) document.getElementById('kpiPreparingOrders').innerText = k.preparing_orders;
+        if (document.getElementById('kpiReadyOrders')) document.getElementById('kpiReadyOrders').innerText = k.ready_orders;
+        if (document.getElementById('kpiCompletedOrders')) document.getElementById('kpiCompletedOrders').innerText = k.completed_orders;
+        if (document.getElementById('kpiCancelledOrders')) document.getElementById('kpiCancelledOrders').innerText = k.cancelled_orders;
+        
+        if (document.getElementById('kanbanCount-new')) document.getElementById('kanbanCount-new').innerText = k.new_orders;
+        if (document.getElementById('kanbanCount-preparing')) document.getElementById('kanbanCount-preparing').innerText = k.preparing_orders;
+        if (document.getElementById('kanbanCount-ready')) document.getElementById('kanbanCount-ready').innerText = k.ready_orders;
+        if (document.getElementById('kanbanCount-completed')) document.getElementById('kanbanCount-completed').innerText = k.completed_orders;
+    }
+
+    function openOrderDetailsModal(orderId) {
+        currentSelectedOrderId = orderId;
+        const modal = document.getElementById('orderDetailsModal');
+        if (!modal) return;
+        modal.classList.remove('hidden');
+
+        fetch('/api/orders/' + orderId + '/details')
+            .then(r => r.json())
+            .then(res => {
+                if (!res.success || !res.order) {
+                    alert('تعذر جلب تفاصيل الفاتورة');
+                    return;
+                }
+                const ord = res.order;
+                document.getElementById('modalOrderNumber').innerText = '#' + (ord.order_number || ord.id);
+                document.getElementById('modalOrderDate').innerText = 'التاريخ: ' + (ord.created_at || '');
+                const trkEl = document.getElementById('modalOrderTracking');
+                if (trkEl) trkEl.innerText = ord.tracking_number || ('TRK-' + ord.id);
+                document.getElementById('modalCustomerName').innerText = ord.customer_name || 'زبون كاش';
+                document.getElementById('modalEmployeeName').innerText = ord.employee_name || 'كاشير';
+                document.getElementById('modalPaymentMethod').innerText = ord.payment_method === 'cash' ? 'نقدي (Cash)' : (ord.payment_method === 'debt' ? 'آجل (ذمة دين)' : (ord.payment_method || 'نقدي'));
+                document.getElementById('modalOrderType').innerText = ord.dining_table_name ? ('طاولة: ' + ord.dining_table_name) : (ord.order_type === 'delivery' ? 'دليفري' : 'سفري');
+
+                document.getElementById('modalSubtotalLbp').innerText = Number(ord.subtotal_lbp || ord.total_lbp || 0).toLocaleString() + ' ل.ل';
+                document.getElementById('modalDiscountLbp').innerText = Number(ord.discount_lbp || 0).toLocaleString() + ' ل.ل';
+                document.getElementById('modalTotalLbp').innerText = Number(ord.total_lbp || 0).toLocaleString() + ' ل.ل';
+                document.getElementById('modalTotalUsd').innerText = '$' + Number(ord.total_usd || 0).toFixed(2);
+
+                const statusBadge = document.getElementById('modalOrderStatusBadge');
+                if (statusBadge) {
+                    const st = ord.status || 'paid';
+                    statusBadge.className = 'status-pill';
+                    if (st === 'cancelled') {
+                        statusBadge.classList.add('status-pill-cancelled');
+                        statusBadge.innerText = 'ملغي ومسترجع';
+                    } else if (st === 'new' || st === 'open') {
+                        statusBadge.classList.add('status-pill-new');
+                        statusBadge.innerText = 'جديد';
+                    } else if (st === 'preparing') {
+                        statusBadge.classList.add('status-pill-preparing');
+                        statusBadge.innerText = 'قيد التحضير';
+                    } else if (st === 'ready') {
+                        statusBadge.classList.add('status-pill-ready');
+                        statusBadge.innerText = 'جاهز للتسليم';
+                    } else {
+                        statusBadge.classList.add('status-pill-completed');
+                        statusBadge.innerText = 'مكتمل ومدفوع';
+                    }
+                }
+
+                if (ord.notes) {
+                    document.getElementById('modalNotesBox').classList.remove('hidden');
+                    document.getElementById('modalNotesText').innerText = ord.notes;
+                } else {
+                    document.getElementById('modalNotesBox').classList.add('hidden');
+                }
+
+                document.getElementById('modalStatusSelect').value = ord.status || 'completed';
+                document.getElementById('modalPrintThermalBtn').href = '/order/' + ord.id + '/receipt';
+                document.getElementById('modalPrintA4Btn').href = '/order/' + ord.id + '/receipt?format=full';
+
+                // Render items
+                const tbody = document.getElementById('modalOrderItemsBody');
+                tbody.innerHTML = '';
+                (ord.items || []).forEach(it => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-[#191F1B]/50 transition';
+
+                    const tdName = document.createElement('td');
+                    tdName.className = 'py-2.5 px-3.5 font-bold text-white';
+                    tdName.textContent = it.item_name || 'صنف';
+
+                    const tdQty = document.createElement('td');
+                    tdQty.className = 'py-2.5 px-3 text-center font-mono font-bold text-cyan-300';
+                    tdQty.textContent = it.quantity || 1;
+
+                    const tdPrice = document.createElement('td');
+                    tdPrice.className = 'py-2.5 px-3 text-left font-mono text-[#A7B0A8]';
+                    tdPrice.textContent = Number(it.unit_price_lbp || 0).toLocaleString() + ' ل.ل';
+
+                    const tdSub = document.createElement('td');
+                    tdSub.className = 'py-2.5 px-3.5 text-left font-mono font-bold text-[#35C995]';
+                    tdSub.textContent = Number(it.subtotal_lbp || 0).toLocaleString() + ' ل.ل';
+
+                    tr.appendChild(tdName);
+                    tr.appendChild(tdQty);
+                    tr.appendChild(tdPrice);
+                    tr.appendChild(tdSub);
+                    tbody.appendChild(tr);
+                });
+            })
+            .catch(err => {
+                console.error(err);
+                alert('خطأ في الاتصال بالخادم');
+            });
+    }
+
+    function closeOrderDetailsModal() {
+        const modal = document.getElementById('orderDetailsModal');
+        if (modal) modal.classList.add('hidden');
+        currentSelectedOrderId = null;
+    }
+
+    function copyOrderDetailsTracking() {
+        const trk = document.getElementById('modalOrderTracking')?.innerText;
+        if (!trk) return;
+        navigator.clipboard.writeText(trk).then(() => {
+            const txt = document.getElementById('copyOrderModalText');
+            if (txt) {
+                txt.innerText = 'تم النسخ! ✓';
+                setTimeout(() => { txt.innerText = 'نسخ'; }, 2000);
+            }
+        }).catch(() => {
+            prompt('انسخ رقم التتبع يدوياً:', trk);
+        });
+    }
+
+    function advanceOrderStatus(orderId, currentStatus) {
+        let nextStatus = 'preparing';
+        if (currentStatus === 'new' || currentStatus === 'open') nextStatus = 'preparing';
+        else if (currentStatus === 'preparing') nextStatus = 'ready';
+        else if (currentStatus === 'ready') nextStatus = 'completed';
+
+        fetch('/api/orders/' + orderId + '/status', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN},
+            body: JSON.stringify({status: nextStatus})
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                window.location.reload();
+            } else {
+                alert('خطأ: ' + res.message);
+            }
+        })
+        .catch(err => alert('خطأ في الاتصال: ' + err));
+    }
+
+    function submitModalStatusUpdate() {
+        if (!currentSelectedOrderId) return;
+        const newStatus = document.getElementById('modalStatusSelect').value;
+        fetch('/api/orders/' + currentSelectedOrderId + '/status', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN},
+            body: JSON.stringify({status: newStatus})
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                closeOrderDetailsModal();
+                window.location.reload();
+            } else {
+                alert('خطأ: ' + res.message);
+            }
+        })
+        .catch(err => alert('خطأ في الاتصال: ' + err));
+    }
+
+    function cancelOrderAction(orderId, orderNum) {
+        const reason = prompt(`📝 يرجى إدخال سبب إلغاء الفاتورة #${orderNum}:`);
+        if (reason === null) return;
+        if (!reason.trim()) {
+            alert('يرجى كتابة سبب الإلغاء!');
+            return;
+        }
+
+        fetch('/order/' + orderId + '/cancel', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': window.CSRF_TOKEN},
+            body: 'cancel_reason=' + encodeURIComponent(reason)
+        })
+        .then(r => {
+            if (r.ok) {
+                window.location.reload();
+            } else {
+                r.text().then(t => {
+                    try {
+                        const j = JSON.parse(t);
+                        alert('تعذر الإلغاء: ' + (j.message || 'خطأ غير معروف'));
+                    } catch (e) {
+                        alert('تعذر الإلغاء: ' + t);
+                    }
+                });
+            }
+        })
+        .catch(err => alert('خطأ أثناء الإلغاء: ' + err));
+    }
+
+    function cancelCurrentOrderFromModal() {
+        if (!currentSelectedOrderId) return;
+        const ordNum = document.getElementById('modalOrderNumber').innerText.replace('#', '');
+        cancelOrderAction(currentSelectedOrderId, ordNum);
+    }
+
+    // Drag & Drop for Kanban
+    function handleDragStart(ev, orderId) {
+        draggedOrderId = orderId;
+        ev.dataTransfer.setData('text/plain', orderId);
+        ev.dataTransfer.effectAllowed = 'move';
+    }
+
+    function handleDragOver(ev) {
+        ev.preventDefault();
+        ev.currentTarget.classList.add('drag-over');
+    }
+
+    function handleDragLeave(ev) {
+        ev.currentTarget.classList.remove('drag-over');
+    }
+
+    function handleDrop(ev, targetStatus) {
+        ev.preventDefault();
+        ev.currentTarget.classList.remove('drag-over');
+        if (!draggedOrderId) return;
+
+        fetch('/api/orders/' + draggedOrderId + '/status', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN},
+            body: JSON.stringify({status: targetStatus})
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (res.success) {
+                window.location.reload();
+            } else {
+                alert('خطأ: ' + res.message);
+            }
+        })
+        .catch(err => alert('خطأ: ' + err))
+        .finally(() => {
+            draggedOrderId = null;
+        });
+    }
+
+    // ================= EDIT INVOICE DETAILS MODAL LOGIC =================
+    function openEditInvoiceModal(orderId, orderNum, customerName, orderType, paymentMethod, notes) {
+        document.getElementById('editModalOrderId').value = orderId;
+        document.getElementById('editModalOrderNumber').innerText = '#' + (orderNum || orderId);
+        document.getElementById('editModalCustomerName').value = customerName || '';
+        document.getElementById('editModalOrderType').value = orderType || 'takeaway';
+        document.getElementById('editModalPaymentMethod').value = paymentMethod || 'cash';
+        document.getElementById('editModalNotes').value = notes || '';
+
+        const m = document.getElementById('editInvoiceModal');
+        if (m) m.classList.remove('hidden');
+    }
+
+    function closeEditInvoiceModal() {
+        const m = document.getElementById('editInvoiceModal');
+        if (m) m.classList.add('hidden');
+    }
+
+    async function submitEditInvoice(e) {
+        if (e) e.preventDefault();
+        const orderId = document.getElementById('editModalOrderId').value;
+        const customerName = document.getElementById('editModalCustomerName').value.trim();
+        const orderType = document.getElementById('editModalOrderType').value;
+        const paymentMethod = document.getElementById('editModalPaymentMethod').value;
+        const notes = document.getElementById('editModalNotes').value.trim();
+
+        const btn = document.getElementById('btnSubmitEditInvoice');
+        if (btn) btn.disabled = true;
+
+        try {
+            const resp = await fetch(`/api/orders/${orderId}/update`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': window.CSRF_TOKEN },
+                body: JSON.stringify({
+                    customer_name: customerName,
+                    order_type: orderType,
+                    payment_method: paymentMethod,
+                    notes: notes
+                })
+            });
+            const res = await resp.json();
+            if (res.success) {
+                closeEditInvoiceModal();
+                alert('✓ تم حفظ وتحديث بيانات الفاتورة بنجاح!');
+                window.location.reload();
+            } else {
+                alert('خطأ أثناء حفظ التعديلات: ' + (res.message || ''));
+                if (btn) btn.disabled = false;
+            }
+        } catch(err) {
+            alert('حدث خطأ في الاتصال بالسيرفر: ' + err);
+            if (btn) btn.disabled = false;
+        }
+    }
+</script>
+
+<!-- EDIT INVOICE DETAILS MODAL (تعديل وتنظيم بيانات الفاتورة) -->
+<div id="editInvoiceModal" class="hidden fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="pos-emerald-card rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-[#303A32]">
+        <div class="flex items-center justify-between border-b border-[#303A32] pb-3">
+            <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-[#D6B875]/20 text-[#D6B875] flex items-center justify-center text-sm font-black border border-[#D6B875]/30">✏️</span>
+                <div>
+                    <h3 class="font-black text-sm text-[#F5F5F0]">تعديل وتنظيم بيانات الفاتورة</h3>
+                    <span id="editModalOrderNumber" class="text-[10px] text-[#A7B0A8] font-mono font-bold block">#CAF-0000</span>
+                </div>
+            </div>
+            <button type="button" onclick="closeEditInvoiceModal()" class="text-[#A7B0A8] hover:text-[#F5F5F0]">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <form id="editInvoiceForm" onsubmit="submitEditInvoice(event)" class="space-y-3.5 text-xs">
+            <input type="hidden" id="editModalOrderId">
+            
+            <div>
+                <label class="block text-[#A7B0A8] font-bold mb-1">نوع الطلب:</label>
+                <select id="editModalOrderType" class="w-full bg-[#101411] border border-[#303A32] text-[#F5F5F0] font-bold rounded-xl px-3 py-2 text-xs focus:border-[#35C995] focus:outline-none">
+                    <option value="takeaway">🥡 سفري (Takeaway)</option>
+                    <option value="dine_in">🍽️ صالة (Dine-in)</option>
+                    <option value="delivery">🛵 دليفري (Delivery)</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-[#A7B0A8] font-bold mb-1">اسم الزبون / رقم الطاولة:</label>
+                <input type="text" id="editModalCustomerName" class="w-full bg-[#101411] border border-[#303A32] text-[#F5F5F0] font-bold rounded-xl px-3 py-2 text-xs focus:border-[#35C995] focus:outline-none">
+            </div>
+
+            <div>
+                <label class="block text-[#A7B0A8] font-bold mb-1">طريقة الدفع:</label>
+                <select id="editModalPaymentMethod" class="w-full bg-[#101411] border border-[#303A32] text-[#F5F5F0] font-bold rounded-xl px-3 py-2 text-xs focus:border-[#35C995] focus:outline-none">
+                    <option value="cash">💰 نقداً كاش</option>
+                    <option value="debt">📝 ذمة / دين على الحساب</option>
+                    <option value="card">💳 بطاقة / تحويل</option>
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-[#A7B0A8] font-bold mb-1">ملاحظات الفاتورة:</label>
+                <textarea id="editModalNotes" rows="2" class="w-full bg-[#101411] border border-[#303A32] text-[#F5F5F0] rounded-xl px-3 py-2 text-xs focus:border-[#35C995] focus:outline-none placeholder-[#A7B0A8]/60" placeholder="أي ملاحظات إضافية على الطلب..."></textarea>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-[#303A32]">
+                <button type="button" onclick="closeEditInvoiceModal()" class="bg-[#222A24] hover:bg-[#2c362f] text-[#A7B0A8] px-4 py-2 rounded-xl text-xs font-bold transition">
+                    إلغاء
+                </button>
+                <button type="submit" id="btnSubmitEditInvoice" class="pos-emerald-btn-main px-5 py-2 rounded-xl text-xs font-black shadow-md flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-check"></i>
+                    <span>حفظ التعديلات</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,10 @@
+Flask>=2.2.5
+Werkzeug>=2.3.0
+Pillow>=9.5.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+gunicorn>=21.2.0
+# Security: password hashing
+argon2-cffi>=23.1.0
+# Scheduling (backup jobs)
+APScheduler>=3.10.4

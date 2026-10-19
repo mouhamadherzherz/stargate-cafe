@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex-1 flex items-center justify-center p-4 min-h-[calc(100vh-8rem)]">
+    <div class="bg-slate-900/95 border border-purple-500/40 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl backdrop-blur-md space-y-6 text-center relative overflow-hidden">
+        
+        <!-- Ambient Top Glow -->
+        <div class="absolute -top-24 left-1/2 -translate-x-1/2 w-56 h-56 bg-purple-600/25 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-24 -right-12 w-48 h-48 bg-amber-500/15 rounded-full blur-3xl pointer-events-none"></div>
+
+        <!-- Header -->
+        <div class="relative z-10 space-y-2">
+            <div class="w-16 h-16 rounded-3xl bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 mx-auto flex items-center justify-center text-white text-3xl font-black shadow-xl shadow-purple-600/30">
+                🚀
+            </div>
+            <h2 class="text-xl sm:text-2xl font-black text-white tracking-wide">
+                إعداد النظام وإنشاء حساب الإدارة الأول
+            </h2>
+            <p class="text-xs text-slate-300 max-w-sm mx-auto leading-relaxed">
+                مرحباً بك في برنامج <span class="text-amber-400 font-bold">STARGATE CAFE</span>! النظام في حالة ضبط المصنع الكاملة. يرجى إنشاء حساب المدير العام الخاص بك وتعيين اسم المنشأة لبدء العمل.
+            </p>
+        </div>
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="p-3 rounded-2xl text-xs font-bold text-center border {% if category == 'danger' %}bg-rose-950/80 text-rose-300 border-rose-800{% else %}bg-emerald-950/80 text-emerald-300 border-emerald-800{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Setup Form -->
+        <form method="POST" action="{{ url_for('setup_wizard') }}" class="space-y-4 text-right relative z-10" autocomplete="off">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <!-- Company Name -->
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">اسم الكافيه أو المحل:</label>
+                <input type="text" name="company_name" value="STARGATE CAFE" required placeholder="مثال: STARGATE CAFE"
+                       class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 text-white font-bold rounded-2xl py-2.5 px-3.5 text-xs focus:outline-none transition">
+            </div>
+
+            <!-- Admin Full Name -->
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">اسم المدير العام الكامل:</label>
+                <input type="text" name="admin_name" required placeholder="مثال: محمد"
+                       class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 text-white font-bold rounded-2xl py-2.5 px-3.5 text-xs focus:outline-none transition">
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <!-- Admin Username -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">اسم المستخدم (Username):</label>
+                    <input type="text" name="admin_username" required placeholder="مثال: admin"
+                           class="w-full bg-slate-950 border border-slate-700 focus:border-purple-400 text-purple-300 font-mono font-bold rounded-2xl py-2.5 px-3.5 text-xs focus:outline-none transition">
+                </div>
+
+                <!-- Admin PIN -->
+                <div>
+                    <label class="block text-xs font-bold text-amber-300 mb-1">رمز PIN السريع (4-6 أرقام):</label>
+                    <input type="password" name="admin_pin" required maxlength="8" placeholder="مثال: 1234"
+                           class="w-full bg-slate-950 border border-amber-500/50 focus:border-amber-400 text-amber-300 font-mono font-black text-center rounded-2xl py-2.5 px-3.5 text-xs focus:outline-none transition">
+                </div>
+            </div>
+
+            <!-- Admin Password -->
+            <div>
+                <label class="block text-xs font-bold text-slate-300 mb-1">كلمة مرور الإدارة السرية (Password):</label>
+                <input type="password" name="admin_password" required minlength="4" placeholder="••••••••"
+                       class="w-full bg-slate-950 border border-slate-700 focus:border-indigo-400 text-white font-mono rounded-2xl py-2.5 px-3.5 text-xs focus:outline-none transition">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <!-- Exchange Rate -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">سعر الصرف ($):</label>
+                    <input type="number" name="exchange_rate" value="89500" step="any" required
+                           class="w-full bg-slate-950 border border-slate-700 text-emerald-400 font-mono font-bold text-center rounded-2xl py-2 px-3 text-xs focus:outline-none">
+                </div>
+                <!-- PC Price -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">سعر ساعة الكمبيوتر (ل.ل):</label>
+                    <input type="number" name="pc_price_lbp" value="100000" step="any" required
+                           class="w-full bg-slate-950 border border-slate-700 text-purple-400 font-mono font-bold text-center rounded-2xl py-2 px-3 text-xs focus:outline-none">
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="pt-3">
+                <button type="submit" class="w-full bg-gradient-to-r from-purple-600 via-indigo-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-white font-black py-3.5 rounded-2xl text-sm transition shadow-lg shadow-purple-600/30 active:scale-95 flex items-center justify-center gap-2 cursor-pointer">
+                    <i class="fa-solid fa-check-circle"></i>
+                    <span>حفظ وبدء استخدام النظام فوراً ✨</span>
+                </button>
+            </div>
+        </form>
+
+        <p class="text-[11px] text-slate-400 relative z-10 border-t border-slate-800/80 pt-3">
+            🔒 لن تكون هناك أي كلمات سر أو مستخدمين افتراضيين؛ سيتم اعتماد بياناتك هذه للدخول وإدارة النظام.
+        </p>
+    </div>
+</div>
+{% endblock %}

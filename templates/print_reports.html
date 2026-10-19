@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>تقرير مبيعات وأصناف الكافيه - {{ display_period }}</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Tajawal', Arial, sans-serif; background: #fff; color: #0f172a; direction: rtl; padding: 20px; }
+        .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px; }
+        .header h1 { font-size: 24px; font-weight: 900; }
+        .header .sub { font-size: 13px; color: #475569; margin-top: 4px; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+        .kpi-box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; text-align: center; background: #f8fafc; }
+        .kpi-box .title { font-size: 11px; color: #64748b; font-weight: bold; }
+        .kpi-box .val { font-size: 16px; font-weight: 900; color: #0f172a; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 12px; }
+        th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: right; }
+        th { background: #f1f5f9; font-weight: 900; }
+        .text-center { text-align: center; }
+        .total-row { background: #e2e8f0; font-weight: 900; font-size: 13px; }
+        @media print {
+            .no-print { display: none !important; }
+            body { padding: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print" style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; background: #1e293b; color: white; padding: 10px 16px; border-radius: 8px;">
+        <span style="font-weight: bold;">معاينة تقرير المبيعات وحركة الأصناف</span>
+        <div>
+            <button onclick="window.print()" style="background: #f59e0b; color: #000; font-weight: bold; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">🖨️ طباعة (Ctrl+P)</button>
+            <button onclick="window.close()" style="background: #475569; color: #fff; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-right: 6px;">إغلاق</button>
+        </div>
+    </div>
+
+    <div class="header">
+        <h1>{{ company_name or 'STARGATE CAFE' }}</h1>
+        <div class="sub">تقرير المبيعات والتدقيق المالي الشامل | الفترة: <strong>{{ display_period }}</strong></div>
+        <div class="sub">سعر الصرف المعتمد: {{ exchange_rate|format_currency }} ل.ل</div>
+    </div>
+
+    <div class="kpi-grid">
+        <div class="kpi-box">
+            <div class="title">إجمالي المبيعات (كاش + دين)</div>
+            <div class="val">{{ (summary.grand_totals.total_production_lbp or 0)|format_currency }} ل.ل</div>
+            <div style="font-size: 11px; color: #059669;">≈ {{ (summary.grand_totals.total_production_usd or 0)|to_usd }}</div>
+        </div>
+        <div class="kpi-box">
+            <div class="title">المقبوض نقداً (كاش)</div>
+            <div class="val">{{ (summary.grand_totals.cash_sales_lbp or 0)|format_currency }} ل.ل</div>
+        </div>
+        <div class="kpi-box">
+            <div class="title">المصاريف اليومية</div>
+            <div class="val" style="color: #dc2626;">{{ (summary.expenses.total_lbp or 0)|format_currency }} ل.ل</div>
+        </div>
+        <div class="kpi-box">
+            <div class="title">صافي الكاش المتبقي في الدرج</div>
+            <div class="val" style="color: #16a34a;">{{ (drawer_status.total_untransferred_lbp or 0)|format_currency }} ل.ل</div>
+        </div>
+    </div>
+
+    <h3 style="font-size: 15px; font-weight: 900; margin-top: 16px; border-bottom: 2px solid #f59e0b; padding-bottom: 4px;">
+        ☕ تفاصيل المنتجات والأصناف المباعة:
+    </h3>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 30px;">#</th>
+                <th>اسم المنتج / الصنف</th>
+                <th>القسم</th>
+                <th class="text-center">الكمية المباعة</th>
+                <th>متوسط السعر</th>
+                <th>الإجمالي (ل.ل)</th>
+                <th>المقابل ($)</th>
+                <th class="text-center">النسبة</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for it in products_report.products_list %}
+            <tr>
+                <td class="text-center">{{ loop.index }}</td>
+                <td><strong>{{ it.item_name }}</strong></td>
+                <td>{{ it.category_name }}</td>
+                <td class="text-center" style="font-weight: bold;">{{ it.total_qty }}</td>
+                <td>{{ it.avg_price_lbp|format_currency }} ل.ل</td>
+                <td style="font-weight: bold;">{{ it.total_lbp|format_currency }} ل.ل</td>
+                <td>${{ "{:,.2f}".format(it.total_usd or 0) }}</td>
+                <td class="text-center">{{ it.pct }}%</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="text-center">لا توجد مبيعات في هذه الفترة.</td></tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="total-row">
+                <td colspan="3">المجموع الكلي:</td>
+                <td class="text-center">{{ products_report.grand_total_qty }} قطعة/كوب</td>
+                <td>-</td>
+                <td>{{ products_report.grand_total_lbp|format_currency }} ل.ل</td>
+                <td>${{ "{:,.2f}".format(products_report.grand_total_lbp / exchange_rate) }}</td>
+                <td class="text-center">100%</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div style="margin-top: 30px; display: flex; justify-content: space-between; font-size: 12px; color: #475569;">
+        <div>توقيع الكاشير: .......................................</div>
+        <div>توقيع المدير العام: .......................................</div>
+    </div>
+</body>
+</html>
