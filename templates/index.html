@@ -519,7 +519,7 @@
 
             <!-- ALL PRODUCTS GRID -->
             <div id="productsScrollContainer" class="p-2 sm:p-2.5 overflow-y-auto custom-scrollbar max-h-[calc(100vh-220px)] min-h-[460px] pb-32 scroll-smooth bg-[#101411]">
-                <div id="itemsGrid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2 sm:gap-2.5">
+                <div id="itemsGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-3.5">
                     
                     <!-- 1. REGULAR COMPUTER PRODUCT CARD (مع دعم المدد السريعة: نصف ساعة، ساعة ونصف، ساعتان ونصف) -->
                     <div class="item-card group relative rounded-2xl pos-emerald-product-card text-right flex flex-col justify-between overflow-hidden cursor-pointer"
@@ -534,10 +534,10 @@
                         
                         <!-- Visual Header -->
                         <div class="pos-emerald-product-visual">
-                            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#0E8F65]/25 via-[#222A24] to-[#101411] border border-[#0E8F65]/40 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                <span class="text-3xl">🎮</span>
+                            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0E8F65]/25 via-[#222A24] to-[#101411] border border-[#0E8F65]/40 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                <span class="text-4xl">🎮</span>
                             </div>
-                            <span class="absolute top-1.5 right-1.5 z-20 text-[9px] font-bold text-[#35C995] bg-[#101411]/90 backdrop-blur px-2 py-0.5 rounded-full border border-[#303A32]">
+                            <span class="absolute top-2 right-2 z-20 text-[10px] font-bold text-[#35C995] bg-[#101411]/90 backdrop-blur px-2.5 py-0.5 rounded-full border border-[#303A32]">
                                 كمبيوتر
                             </span>
                         </div>
@@ -618,8 +618,8 @@
                             {% if item.icon and (item.icon.startswith('/') or item.icon.startswith('http') or item.icon.startswith('data:')) %}
                             <img src="{{ item.icon }}" alt="{{ item.name }}" loading="lazy">
                             {% else %}
-                            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#0E8F65]/25 via-[#222A24] to-[#101411] border border-[#0E8F65]/40 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                <span class="text-3xl">{{ item.icon or '☕' }}</span>
+                            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0E8F65]/25 via-[#222A24] to-[#101411] border border-[#0E8F65]/40 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                <span class="text-4xl">{{ item.icon or '☕' }}</span>
                             </div>
                             {% endif %}
 

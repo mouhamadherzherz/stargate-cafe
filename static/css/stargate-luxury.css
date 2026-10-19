@@ -464,11 +464,11 @@ body {
 }
 
 .pos-emerald-product-card {
-  min-height: 148px;
+  min-height: 220px;
   background: linear-gradient(180deg, #1d2520 0%, #151a17 100%);
   border: 1px solid #303A32;
-  border-radius: 1.1rem;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 1.15rem;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -476,19 +476,21 @@ body {
   overflow: hidden;
   cursor: pointer;
   user-select: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
 }
 .pos-emerald-product-card:hover {
   border-color: #35C995;
-  box-shadow: 0 8px 24px rgba(14, 143, 101, 0.25), 0 0 0 1px rgba(53, 201, 149, 0.35);
-  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(14, 143, 101, 0.28), 0 0 0 1.5px rgba(53, 201, 149, 0.4);
+  transform: translateY(-3px);
 }
 .pos-emerald-product-card:active {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 
 .pos-emerald-product-visual {
   width: 100%;
-  height: 82px;
+  height: 140px;
+  min-height: 130px;
   background: radial-gradient(circle at center, #242c26 0%, #121614 100%);
   display: flex;
   align-items: center;
@@ -503,7 +505,9 @@ body {
   max-width: 100% !important;
   max-height: 100% !important;
   object-fit: cover !important;
-  transition: transform 0.25s ease;
+  object-position: center center !important;
+  transition: transform 0.28s ease;
+  image-rendering: -webkit-optimize-contrast;
 }
 .pos-emerald-product-card:hover .pos-emerald-product-visual img {
   transform: scale(1.06);
