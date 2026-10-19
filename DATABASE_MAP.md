@@ -1,563 +1,641 @@
-# STARGATE CAFE — Comprehensive Database Architecture Map
-**Database Engine:** SQLite 3
-**Total Business Tables:** 29
+# STARGATE CAFE — Database Schema & Architecture Map
 
-## 1. Entity Relational Summary & Row Counts
+**Total Registered Tables:** 33
 
-| Table Name | Active Row Count | Primary Key | Foreign Key References | Indexes |
-| :--- | :--- | :--- | :--- | :--- |
-| `accounts` | 18 | `id` | None | idx_accounts_type <br>idx_accounts_code <br>sqlite_autoindex_accounts_1 (UNIQUE) |
-| `audit_log` | 1 | `id` | None | idx_audit_created <br>idx_audit_action <br>idx_audit_actor  |
-| `cafe_categories` | 4 | `id` | None | sqlite_autoindex_cafe_categories_1 (UNIQUE) |
-| `cafe_items` | 6 | `id` | category_id -> cafe_categories(id) | idx_items_coffee_link <br>idx_items_track_stock <br>idx_items_is_active <br>idx_items_category_id  |
-| `cafe_order_items` | 1935 | `id` | order_id -> cafe_orders(id) | idx_order_items_order_item <br>idx_order_items_item_id <br>idx_order_items_order_id  |
-| `cafe_orders` | 1927 | `id` | None | idx_orders_table_status <br>idx_orders_status_created <br>idx_orders_employee_id <br>idx_orders_is_tab <br>idx_orders_status <br>idx_orders_created_at <br>sqlite_autoindex_cafe_orders_1 (UNIQUE) |
-| `coffee_bag_batches` | 7 | `id` | None | idx_coffee_batches_status <br>sqlite_autoindex_coffee_bag_batches_1 (UNIQUE) |
-| `coffee_waste_logs` | 18 | `id` | batch_id -> coffee_bag_batches(id) | Default PK |
-| `customer_debts` | 82 | `id` | order_id -> cafe_orders(id) | idx_debts_status_cust <br>idx_debts_status_rem <br>idx_debts_customer <br>idx_debts_status  |
-| `debt_payments` | 3 | `id` | debt_id -> customer_debts(id) | Default PK |
-| `dining_tables` | 10 | `id` | None | idx_dining_tables_status <br>sqlite_autoindex_dining_tables_1 (UNIQUE) |
-| `employees` | 1 | `id` | None | sqlite_autoindex_employees_1 (UNIQUE) |
-| `expenses` | 45 | `id` | None | idx_expenses_source_date <br>idx_expenses_created_at  |
-| `financial_ledger` | 1977 | `id` | None | idx_ledger_ref <br>idx_ledger_source_dest <br>idx_ledger_status_date <br>idx_ledger_created <br>idx_ledger_status <br>idx_ledger_entry_type <br>idx_ledger_business_date  |
-| `fiscal_year_closings` | 0 | `id` | None | sqlite_autoindex_fiscal_year_closings_1 (UNIQUE) |
-| `inventory` | 1 | `id` | None | Default PK |
-| `journal_entries` | 2056 | `id` | None | idx_journal_entries_date <br>sqlite_autoindex_journal_entries_1 (UNIQUE) |
-| `journal_entry_lines` | 4196 | `id` | journal_entry_id -> journal_entries(id) | idx_journal_entry_lines_acc  |
-| `pc_usage_logs` | 0 | `id` | None | idx_pc_usage_created_at  |
-| `purchase_invoice_items` | 0 | `id` | invoice_id -> purchase_invoices(id) | Default PK |
-| `purchase_invoices` | 0 | `id` | supplier_id -> suppliers(id) | idx_purchase_invoices_status_date <br>sqlite_autoindex_purchase_invoices_1 (UNIQUE) |
-| `recipes` | 0 | `id` | inventory_id -> inventory(id)<br>cafe_item_id -> cafe_items(id) | Default PK |
-| `safe_transfers` | 49 | `id` | None | idx_safe_transfers_status_date <br>idx_safe_transfers_created_at  |
-| `settings` | 1 | `id` | None | Default PK |
-| `shift_closings` | 94 | `id` | None | idx_shift_closings_status <br>idx_shift_closings_date  |
-| `shift_logs` | 94 | `id` | None | Default PK |
-| `stock_movements` | 8 | `id` | None | idx_stock_movements_ref <br>idx_stock_movements_created <br>idx_stock_movements_type <br>idx_stock_movements_item  |
-| `supplier_payments` | 0 | `id` | supplier_id -> suppliers(id) | Default PK |
-| `suppliers` | 2 | `id` | None | sqlite_autoindex_suppliers_1 (UNIQUE) |
+| Table Name | Row Count | Column Count | Primary Columns |
+| :--- | :---: | :---: | :--- |
+| `accounts` | 19 | 10 | id (INTEGER), code (TEXT), name (TEXT), name_ar (TEXT), account_type (TEXT), balance_lbp (REAL)... |
+| `audit_log` | 12 | 10 | id (INTEGER), actor (TEXT), action (TEXT), table_name (TEXT), record_id (INTEGER), old_value (TEXT)... |
+| `cafe_categories` | 4 | 4 | id (INTEGER), name (TEXT), icon (TEXT), sort_order (INTEGER) |
+| `cafe_items` | 8 | 23 | id (INTEGER), category_id (INTEGER), name (TEXT), price_lbp (REAL), price_usd (REAL), icon (TEXT)... |
+| `cafe_order_items` | 1942 | 15 | id (INTEGER), order_id (INTEGER), item_id (INTEGER), item_name (TEXT), item_type (TEXT), quantity (INTEGER)... |
+| `cafe_orders` | 1934 | 34 | id (INTEGER), order_number (TEXT), subtotal_lbp (REAL), subtotal_usd (REAL), discount_lbp (REAL), discount_usd (REAL)... |
+| `coffee_bag_batches` | 13 | 26 | id (INTEGER), batch_code (TEXT), bag_weight_grams (REAL), cost_per_kg_lbp (REAL), cost_per_kg_usd (REAL), opened_at (TIMESTAMP)... |
+| `coffee_waste_logs` | 18 | 12 | id (INTEGER), batch_id (INTEGER), item_name (TEXT), qty (INTEGER), unit_cost_lbp (REAL), unit_cost_usd (REAL)... |
+| `customer_debts` | 83 | 18 | id (INTEGER), customer_name (TEXT), phone (TEXT), order_id (INTEGER), order_number (TEXT), amount_lbp (REAL)... |
+| `debt_payments` | 3 | 10 | id (INTEGER), debt_id (INTEGER), customer_name (TEXT), amount_lbp (REAL), amount_usd (REAL), payment_method (TEXT)... |
+| `dining_tables` | 10 | 8 | id (INTEGER), table_number (TEXT), table_name (TEXT), section (TEXT), status (TEXT), current_order_id (INTEGER)... |
+| `employees` | 1 | 11 | id (INTEGER), name (TEXT), username (TEXT), password (TEXT), pin (TEXT), role (TEXT)... |
+| `expenses` | 45 | 15 | id (INTEGER), title (TEXT), amount_lbp (REAL), amount_usd (REAL), category (TEXT), notes (TEXT)... |
+| `financial_ledger` | 1984 | 24 | id (INTEGER), entry_type (TEXT), source (TEXT), destination (TEXT), reference_table (TEXT), reference_id (INTEGER)... |
+| `fiscal_year_closings` | 0 | 13 | id (INTEGER), fiscal_year (INTEGER), closing_date (TEXT), total_revenues_lbp (REAL), total_expenses_lbp (REAL), net_profit_lbp (REAL)... |
+| `inventory` | 1 | 15 | id (INTEGER), name (TEXT), category (TEXT), unit (TEXT), stock_qty (REAL), cost_per_unit (REAL)... |
+| `journal_entries` | 2067 | 11 | id (INTEGER), entry_number (TEXT), entry_date (TEXT), description (TEXT), reference_type (TEXT), reference_id (INTEGER)... |
+| `journal_entry_lines` | 4218 | 10 | id (INTEGER), journal_entry_id (INTEGER), account_code (TEXT), account_name (TEXT), debit_lbp (REAL), credit_lbp (REAL)... |
+| `owner_drawings` | 0 | 11 | id (INTEGER), amount_lbp (REAL), amount_usd (REAL), source (TEXT), drawing_type (TEXT), month_period (TEXT)... |
+| `pc_usage_logs` | 0 | 7 | id (INTEGER), price_lbp (REAL), price_usd (REAL), note (TEXT), employee_id (INTEGER), employee_name (TEXT)... |
+| `product_price_history` | 0 | 10 | id (INTEGER), item_id (INTEGER), item_name (TEXT), old_price_lbp (REAL), new_price_lbp (REAL), old_price_usd (REAL)... |
+| `purchase_invoice_items` | 0 | 10 | id (INTEGER), invoice_id (INTEGER), inventory_id (INTEGER), item_name (TEXT), qty (REAL), unit (TEXT)... |
+| `purchase_invoices` | 0 | 16 | id (INTEGER), invoice_number (TEXT), supplier_id (INTEGER), supplier_name (TEXT), total_usd (REAL), total_lbp (REAL)... |
+| `recipes` | 0 | 5 | id (INTEGER), cafe_item_id (INTEGER), inventory_id (INTEGER), required_qty (REAL), unit (TEXT) |
+| `safe_transfers` | 51 | 16 | id (INTEGER), amount_lbp (REAL), amount_usd (REAL), note (TEXT), transferred_by (TEXT), operation_type (TEXT)... |
+| `settings` | 1 | 24 | id (INTEGER), company_name (TEXT), phone (TEXT), address (TEXT), receipt_footer_text (TEXT), currency (TEXT)... |
+| `shift_closings` | 94 | 28 | id (INTEGER), business_date (TEXT), shift_number (INTEGER), employee_id (INTEGER), employee_name (TEXT), opened_at (TIMESTAMP)... |
+| `shift_logs` | 94 | 9 | id (INTEGER), employee_id (INTEGER), employee_name (TEXT), date (TEXT), total_sales_lbp (REAL), cash_sales_lbp (REAL)... |
+| `stock_movements` | 17 | 17 | id (INTEGER), movement_type (TEXT), item_type (TEXT), item_id (INTEGER), item_name (TEXT), quantity (REAL)... |
+| `stocktaking_items` | 0 | 14 | id (INTEGER), session_id (INTEGER), item_type (TEXT), item_id (INTEGER), item_name (TEXT), unit (TEXT)... |
+| `stocktaking_sessions` | 0 | 13 | id (INTEGER), session_code (TEXT), status (TEXT), notes (TEXT), conducted_by_id (INTEGER), conducted_by_name (TEXT)... |
+| `supplier_payments` | 0 | 8 | id (INTEGER), supplier_id (INTEGER), amount_usd (REAL), amount_lbp (REAL), payment_method (TEXT), notes (TEXT)... |
+| `suppliers` | 2 | 9 | id (INTEGER), name (TEXT), phone (TEXT), company (TEXT), balance_usd (REAL), balance_lbp (REAL)... |
 
-## 2. Detailed Table Schemas
 
-### Table: `accounts` (18 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `code` | `TEXT` | YES | `NULL` | NO |
-| `name` | `TEXT` | YES | `NULL` | NO |
-| `name_ar` | `TEXT` | YES | `NULL` | NO |
-| `account_type` | `TEXT` | YES | `NULL` | NO |
-| `balance_lbp` | `REAL` | NO | `0.0` | NO |
-| `balance_usd` | `REAL` | NO | `0.0` | NO |
-| `description` | `TEXT` | NO | `''` | NO |
-| `is_active` | `INTEGER` | NO | `1` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+## Detailed Table Specifications
 
-### Table: `audit_log` (1 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `actor` | `TEXT` | YES | `NULL` | NO |
-| `action` | `TEXT` | YES | `NULL` | NO |
-| `table_name` | `TEXT` | NO | `NULL` | NO |
-| `record_id` | `INTEGER` | NO | `NULL` | NO |
-| `old_value` | `TEXT` | NO | `NULL` | NO |
-| `new_value` | `TEXT` | NO | `NULL` | NO |
-| `reason` | `TEXT` | NO | `NULL` | NO |
-| `ip_address` | `TEXT` | NO | `'127.0.0.1'` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `accounts`
+- **Row Count:** 19
+- **Columns:**
+  - `id (INTEGER)`
+  - `code (TEXT)`
+  - `name (TEXT)`
+  - `name_ar (TEXT)`
+  - `account_type (TEXT)`
+  - `balance_lbp (REAL)`
+  - `balance_usd (REAL)`
+  - `description (TEXT)`
+  - `is_active (INTEGER)`
+  - `created_at (TIMESTAMP)`
 
-### Table: `cafe_categories` (4 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `name` | `TEXT` | YES | `NULL` | NO |
-| `icon` | `TEXT` | NO | `'☕'` | NO |
-| `sort_order` | `INTEGER` | NO | `0` | NO |
+### `audit_log`
+- **Row Count:** 12
+- **Columns:**
+  - `id (INTEGER)`
+  - `actor (TEXT)`
+  - `action (TEXT)`
+  - `table_name (TEXT)`
+  - `record_id (INTEGER)`
+  - `old_value (TEXT)`
+  - `new_value (TEXT)`
+  - `reason (TEXT)`
+  - `ip_address (TEXT)`
+  - `created_at (TIMESTAMP)`
 
-### Table: `cafe_items` (6 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `category_id` | `INTEGER` | YES | `NULL` | NO |
-| `name` | `TEXT` | YES | `NULL` | NO |
-| `price_lbp` | `REAL` | YES | `0.0` | NO |
-| `price_usd` | `REAL` | YES | `0.0` | NO |
-| `icon` | `TEXT` | NO | `'☕'` | NO |
-| `item_type` | `TEXT` | NO | `'cafe'` | NO |
-| `sort_order` | `INTEGER` | NO | `0` | NO |
-| `is_active` | `INTEGER` | NO | `1` | NO |
-| `stock_qty` | `REAL` | NO | `0` | NO |
-| `track_stock` | `INTEGER` | NO | `0` | NO |
-| `low_stock_limit` | `REAL` | NO | `5` | NO |
-| `image_path` | `TEXT` | NO | `NULL` | NO |
-| `cost_price_lbp` | `REAL` | NO | `0.0` | NO |
-| `cost_price_usd` | `REAL` | NO | `0.0` | NO |
-| `wholesale_price_lbp` | `REAL` | NO | `0.0` | NO |
-| `wholesale_price_usd` | `REAL` | NO | `0.0` | NO |
-| `is_coffee_bean_linked` | `INTEGER` | NO | `0` | NO |
+### `cafe_categories`
+- **Row Count:** 4
+- **Columns:**
+  - `id (INTEGER)`
+  - `name (TEXT)`
+  - `icon (TEXT)`
+  - `sort_order (INTEGER)`
 
-### Table: `cafe_order_items` (1935 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `order_id` | `INTEGER` | YES | `NULL` | NO |
-| `item_id` | `INTEGER` | NO | `NULL` | NO |
-| `item_name` | `TEXT` | YES | `NULL` | NO |
-| `item_type` | `TEXT` | NO | `'cafe'` | NO |
-| `quantity` | `INTEGER` | YES | `1` | NO |
-| `unit_price_lbp` | `REAL` | YES | `0.0` | NO |
-| `unit_price_usd` | `REAL` | YES | `0.0` | NO |
-| `subtotal_lbp` | `REAL` | YES | `0.0` | NO |
-| `subtotal_usd` | `REAL` | YES | `0.0` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
-| `unit_cost_lbp` | `REAL` | NO | `0.0` | NO |
-| `unit_cost_usd` | `REAL` | NO | `0.0` | NO |
-| `is_wholesale` | `INTEGER` | NO | `0` | NO |
-| `coffee_batch_id` | `INTEGER` | NO | `NULL` | NO |
+### `cafe_items`
+- **Row Count:** 8
+- **Columns:**
+  - `id (INTEGER)`
+  - `category_id (INTEGER)`
+  - `name (TEXT)`
+  - `price_lbp (REAL)`
+  - `price_usd (REAL)`
+  - `icon (TEXT)`
+  - `item_type (TEXT)`
+  - `sort_order (INTEGER)`
+  - `is_active (INTEGER)`
+  - `stock_qty (REAL)`
+  - `track_stock (INTEGER)`
+  - `low_stock_limit (REAL)`
+  - `image_path (TEXT)`
+  - `cost_price_lbp (REAL)`
+  - `cost_price_usd (REAL)`
+  - `wholesale_price_lbp (REAL)`
+  - `wholesale_price_usd (REAL)`
+  - `is_coffee_bean_linked (INTEGER)`
+  - `sku (TEXT)`
+  - `barcode (TEXT)`
+  - `unit (TEXT)`
+  - `supplier_id (INTEGER)`
+  - `min_order_qty (REAL)`
 
-### Table: `cafe_orders` (1927 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `order_number` | `TEXT` | YES | `NULL` | NO |
-| `subtotal_lbp` | `REAL` | NO | `0.0` | NO |
-| `subtotal_usd` | `REAL` | NO | `0.0` | NO |
-| `discount_lbp` | `REAL` | NO | `0.0` | NO |
-| `discount_usd` | `REAL` | NO | `0.0` | NO |
-| `discount_percent` | `REAL` | NO | `0.0` | NO |
-| `discount_reason` | `TEXT` | NO | `''` | NO |
-| `total_lbp` | `REAL` | YES | `0.0` | NO |
-| `total_usd` | `REAL` | YES | `0.0` | NO |
-| `paid_amount` | `REAL` | YES | `0.0` | NO |
-| `payment_method` | `TEXT` | NO | `'cash'` | NO |
-| `customer_name` | `TEXT` | NO | `'زبون كاش'` | NO |
-| `notes` | `TEXT` | NO | `NULL` | NO |
-| `status` | `TEXT` | NO | `'paid'` | NO |
-| `is_tab` | `INTEGER` | NO | `0` | NO |
-| `employee_id` | `INTEGER` | NO | `NULL` | NO |
-| `employee_name` | `TEXT` | NO | `'كاشير'` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
-| `updated_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
-| `ledger_id` | `INTEGER` | NO | `NULL` | NO |
-| `cancelled_by` | `TEXT` | NO | `NULL` | NO |
-| `cancelled_at` | `TIMESTAMP` | NO | `NULL` | NO |
-| `cancel_reason` | `TEXT` | NO | `NULL` | NO |
-| `dining_table_id` | `INTEGER` | NO | `NULL` | NO |
-| `dining_table_name` | `TEXT` | NO | `''` | NO |
-| `exchange_rate_used` | `REAL` | NO | `89500.0` | NO |
-| `total_cost_lbp` | `REAL` | NO | `0.0` | NO |
-| `total_cost_usd` | `REAL` | NO | `0.0` | NO |
-| `is_wholesale` | `INTEGER` | NO | `0` | NO |
+### `cafe_order_items`
+- **Row Count:** 1942
+- **Columns:**
+  - `id (INTEGER)`
+  - `order_id (INTEGER)`
+  - `item_id (INTEGER)`
+  - `item_name (TEXT)`
+  - `item_type (TEXT)`
+  - `quantity (INTEGER)`
+  - `unit_price_lbp (REAL)`
+  - `unit_price_usd (REAL)`
+  - `subtotal_lbp (REAL)`
+  - `subtotal_usd (REAL)`
+  - `created_at (TIMESTAMP)`
+  - `unit_cost_lbp (REAL)`
+  - `unit_cost_usd (REAL)`
+  - `is_wholesale (INTEGER)`
+  - `coffee_batch_id (INTEGER)`
 
-### Table: `coffee_bag_batches` (7 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `batch_code` | `TEXT` | YES | `NULL` | NO |
-| `bag_weight_grams` | `REAL` | NO | `1000.0` | NO |
-| `cost_per_kg_lbp` | `REAL` | YES | `0.0` | NO |
-| `cost_per_kg_usd` | `REAL` | YES | `0.0` | NO |
-| `opened_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
-| `opened_by` | `TEXT` | NO | `'كاشير'` | NO |
-| `status` | `TEXT` | NO | `'active'` | NO |
-| `closed_at` | `TIMESTAMP` | NO | `NULL` | NO |
-| `closed_by` | `TEXT` | NO | `NULL` | NO |
-| `cups_sold` | `INTEGER` | NO | `0` | NO |
-| `cups_damaged` | `INTEGER` | NO | `0` | NO |
-| `total_cups` | `INTEGER` | NO | `0` | NO |
-| `cost_per_cup_lbp` | `REAL` | NO | `0.0` | NO |
-| `cost_per_cup_usd` | `REAL` | NO | `0.0` | NO |
-| `total_revenue_lbp` | `REAL` | NO | `0.0` | NO |
-| `total_revenue_usd` | `REAL` | NO | `0.0` | NO |
-| `net_profit_lbp` | `REAL` | NO | `0.0` | NO |
-| `net_profit_usd` | `REAL` | NO | `0.0` | NO |
-| `prev_batch_id` | `INTEGER` | NO | `NULL` | NO |
-| `prev_batch_code` | `TEXT` | NO | `NULL` | NO |
-| `prev_batch_cups` | `INTEGER` | NO | `0` | NO |
-| `expected_cups_yield` | `REAL` | NO | `0.0` | NO |
-| `initial_cup_cost_lbp` | `REAL` | NO | `0.0` | NO |
-| `initial_cup_cost_usd` | `REAL` | NO | `0.0` | NO |
-| `notes` | `TEXT` | NO | `''` | NO |
+### `cafe_orders`
+- **Row Count:** 1934
+- **Columns:**
+  - `id (INTEGER)`
+  - `order_number (TEXT)`
+  - `subtotal_lbp (REAL)`
+  - `subtotal_usd (REAL)`
+  - `discount_lbp (REAL)`
+  - `discount_usd (REAL)`
+  - `discount_percent (REAL)`
+  - `discount_reason (TEXT)`
+  - `total_lbp (REAL)`
+  - `total_usd (REAL)`
+  - `paid_amount (REAL)`
+  - `payment_method (TEXT)`
+  - `customer_name (TEXT)`
+  - `notes (TEXT)`
+  - `status (TEXT)`
+  - `is_tab (INTEGER)`
+  - `employee_id (INTEGER)`
+  - `employee_name (TEXT)`
+  - `created_at (TIMESTAMP)`
+  - `updated_at (TIMESTAMP)`
+  - `ledger_id (INTEGER)`
+  - `cancelled_by (TEXT)`
+  - `cancelled_at (TIMESTAMP)`
+  - `cancel_reason (TEXT)`
+  - `dining_table_id (INTEGER)`
+  - `dining_table_name (TEXT)`
+  - `exchange_rate_used (REAL)`
+  - `total_cost_lbp (REAL)`
+  - `total_cost_usd (REAL)`
+  - `is_wholesale (INTEGER)`
+  - `order_type (TEXT)`
+  - `table_number (TEXT)`
+  - `idempotency_key (TEXT)`
+  - `tracking_number (TEXT)`
 
-### Table: `coffee_waste_logs` (18 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `batch_id` | `INTEGER` | NO | `NULL` | NO |
-| `item_name` | `TEXT` | NO | `'فنجان قهوة'` | NO |
-| `qty` | `INTEGER` | NO | `1` | NO |
-| `unit_cost_lbp` | `REAL` | NO | `0.0` | NO |
-| `unit_cost_usd` | `REAL` | NO | `0.0` | NO |
-| `loss_cost_lbp` | `REAL` | NO | `0.0` | NO |
-| `loss_cost_usd` | `REAL` | NO | `0.0` | NO |
-| `reason` | `TEXT` | NO | `'تلف أثناء التحضير'` | NO |
-| `employee_name` | `TEXT` | NO | `'كاشير'` | NO |
-| `notes` | `TEXT` | NO | `''` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `coffee_bag_batches`
+- **Row Count:** 13
+- **Columns:**
+  - `id (INTEGER)`
+  - `batch_code (TEXT)`
+  - `bag_weight_grams (REAL)`
+  - `cost_per_kg_lbp (REAL)`
+  - `cost_per_kg_usd (REAL)`
+  - `opened_at (TIMESTAMP)`
+  - `opened_by (TEXT)`
+  - `status (TEXT)`
+  - `closed_at (TIMESTAMP)`
+  - `closed_by (TEXT)`
+  - `cups_sold (INTEGER)`
+  - `cups_damaged (INTEGER)`
+  - `total_cups (INTEGER)`
+  - `cost_per_cup_lbp (REAL)`
+  - `cost_per_cup_usd (REAL)`
+  - `total_revenue_lbp (REAL)`
+  - `total_revenue_usd (REAL)`
+  - `net_profit_lbp (REAL)`
+  - `net_profit_usd (REAL)`
+  - `prev_batch_id (INTEGER)`
+  - `prev_batch_code (TEXT)`
+  - `prev_batch_cups (INTEGER)`
+  - `expected_cups_yield (REAL)`
+  - `initial_cup_cost_lbp (REAL)`
+  - `initial_cup_cost_usd (REAL)`
+  - `notes (TEXT)`
 
-### Table: `customer_debts` (82 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `customer_name` | `TEXT` | YES | `NULL` | NO |
-| `phone` | `TEXT` | NO | `''` | NO |
-| `order_id` | `INTEGER` | NO | `NULL` | NO |
-| `order_number` | `TEXT` | NO | `''` | NO |
-| `amount_lbp` | `REAL` | YES | `0.0` | NO |
-| `amount_usd` | `REAL` | YES | `0.0` | NO |
-| `paid_lbp` | `REAL` | YES | `0.0` | NO |
-| `paid_usd` | `REAL` | YES | `0.0` | NO |
-| `remaining_lbp` | `REAL` | YES | `0.0` | NO |
-| `remaining_usd` | `REAL` | YES | `0.0` | NO |
-| `status` | `TEXT` | NO | `'unpaid'` | NO |
-| `notes` | `TEXT` | NO | `''` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
-| `updated_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
-| `cancelled_by` | `TEXT` | NO | `NULL` | NO |
-| `cancelled_at` | `TIMESTAMP` | NO | `NULL` | NO |
-| `cancel_reason` | `TEXT` | NO | `NULL` | NO |
+### `coffee_waste_logs`
+- **Row Count:** 18
+- **Columns:**
+  - `id (INTEGER)`
+  - `batch_id (INTEGER)`
+  - `item_name (TEXT)`
+  - `qty (INTEGER)`
+  - `unit_cost_lbp (REAL)`
+  - `unit_cost_usd (REAL)`
+  - `loss_cost_lbp (REAL)`
+  - `loss_cost_usd (REAL)`
+  - `reason (TEXT)`
+  - `employee_name (TEXT)`
+  - `notes (TEXT)`
+  - `created_at (TIMESTAMP)`
 
-### Table: `debt_payments` (3 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `debt_id` | `INTEGER` | YES | `NULL` | NO |
-| `customer_name` | `TEXT` | YES | `NULL` | NO |
-| `amount_lbp` | `REAL` | YES | `0.0` | NO |
-| `amount_usd` | `REAL` | YES | `0.0` | NO |
-| `payment_method` | `TEXT` | NO | `'cash'` | NO |
-| `notes` | `TEXT` | NO | `''` | NO |
-| `employee_id` | `INTEGER` | NO | `NULL` | NO |
-| `employee_name` | `TEXT` | NO | `'كاشير'` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `customer_debts`
+- **Row Count:** 83
+- **Columns:**
+  - `id (INTEGER)`
+  - `customer_name (TEXT)`
+  - `phone (TEXT)`
+  - `order_id (INTEGER)`
+  - `order_number (TEXT)`
+  - `amount_lbp (REAL)`
+  - `amount_usd (REAL)`
+  - `paid_lbp (REAL)`
+  - `paid_usd (REAL)`
+  - `remaining_lbp (REAL)`
+  - `remaining_usd (REAL)`
+  - `status (TEXT)`
+  - `notes (TEXT)`
+  - `created_at (TIMESTAMP)`
+  - `updated_at (TIMESTAMP)`
+  - `cancelled_by (TEXT)`
+  - `cancelled_at (TIMESTAMP)`
+  - `cancel_reason (TEXT)`
 
-### Table: `dining_tables` (10 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `table_number` | `TEXT` | YES | `NULL` | NO |
-| `table_name` | `TEXT` | NO | `''` | NO |
-| `section` | `TEXT` | NO | `'الصالة الرئيسية'` | NO |
-| `status` | `TEXT` | NO | `'available'` | NO |
-| `current_order_id` | `INTEGER` | NO | `NULL` | NO |
-| `seats` | `INTEGER` | NO | `4` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `debt_payments`
+- **Row Count:** 3
+- **Columns:**
+  - `id (INTEGER)`
+  - `debt_id (INTEGER)`
+  - `customer_name (TEXT)`
+  - `amount_lbp (REAL)`
+  - `amount_usd (REAL)`
+  - `payment_method (TEXT)`
+  - `notes (TEXT)`
+  - `employee_id (INTEGER)`
+  - `employee_name (TEXT)`
+  - `created_at (TIMESTAMP)`
 
-### Table: `employees` (1 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `name` | `TEXT` | YES | `NULL` | NO |
-| `username` | `TEXT` | NO | `NULL` | NO |
-| `password` | `TEXT` | YES | `NULL` | NO |
-| `pin` | `TEXT` | NO | `NULL` | NO |
-| `role` | `TEXT` | NO | `'cashier'` | NO |
-| `phone` | `TEXT` | NO | `NULL` | NO |
-| `is_active` | `INTEGER` | NO | `1` | NO |
-| `password_is_hashed` | `INTEGER` | NO | `0` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `dining_tables`
+- **Row Count:** 10
+- **Columns:**
+  - `id (INTEGER)`
+  - `table_number (TEXT)`
+  - `table_name (TEXT)`
+  - `section (TEXT)`
+  - `status (TEXT)`
+  - `current_order_id (INTEGER)`
+  - `seats (INTEGER)`
+  - `created_at (TIMESTAMP)`
 
-### Table: `expenses` (45 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `title` | `TEXT` | YES | `NULL` | NO |
-| `amount_lbp` | `REAL` | YES | `0.0` | NO |
-| `amount_usd` | `REAL` | YES | `0.0` | NO |
-| `category` | `TEXT` | NO | `'مصاريف عامة'` | NO |
-| `notes` | `TEXT` | NO | `NULL` | NO |
-| `source` | `TEXT` | NO | `'drawer'` | NO |
-| `employee_id` | `INTEGER` | NO | `NULL` | NO |
-| `employee_name` | `TEXT` | NO | `'كاشير'` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
-| `status` | `TEXT` | NO | `'active'` | NO |
-| `cancelled_by` | `TEXT` | NO | `NULL` | NO |
-| `cancelled_at` | `TIMESTAMP` | NO | `NULL` | NO |
-| `cancel_reason` | `TEXT` | NO | `NULL` | NO |
-| `ledger_id` | `INTEGER` | NO | `NULL` | NO |
+### `employees`
+- **Row Count:** 1
+- **Columns:**
+  - `id (INTEGER)`
+  - `name (TEXT)`
+  - `username (TEXT)`
+  - `password (TEXT)`
+  - `pin (TEXT)`
+  - `role (TEXT)`
+  - `phone (TEXT)`
+  - `is_active (INTEGER)`
+  - `password_is_hashed (INTEGER)`
+  - `created_at (TIMESTAMP)`
+  - `custom_permissions (TEXT)`
 
-### Table: `financial_ledger` (1977 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `entry_type` | `TEXT` | YES | `NULL` | NO |
-| `source` | `TEXT` | YES | `NULL` | NO |
-| `destination` | `TEXT` | YES | `NULL` | NO |
-| `reference_table` | `TEXT` | NO | `NULL` | NO |
-| `reference_id` | `INTEGER` | NO | `NULL` | NO |
-| `amount_lbp` | `REAL` | YES | `0.0` | NO |
-| `amount_usd` | `REAL` | YES | `0.0` | NO |
-| `exchange_rate` | `REAL` | YES | `89500.0` | NO |
-| `drawer_balance_before` | `REAL` | NO | `0.0` | NO |
-| `drawer_balance_after` | `REAL` | NO | `0.0` | NO |
-| `safe_balance_lbp_before` | `REAL` | NO | `0.0` | NO |
-| `safe_balance_lbp_after` | `REAL` | NO | `0.0` | NO |
-| `safe_balance_usd_before` | `REAL` | NO | `0.0` | NO |
-| `safe_balance_usd_after` | `REAL` | NO | `0.0` | NO |
-| `user_id` | `INTEGER` | NO | `NULL` | NO |
-| `user_name` | `TEXT` | NO | `'النظام'` | NO |
-| `status` | `TEXT` | NO | `'active'` | NO |
-| `cancelled_by` | `TEXT` | NO | `NULL` | NO |
-| `cancelled_at` | `TIMESTAMP` | NO | `NULL` | NO |
-| `cancel_reason` | `TEXT` | NO | `NULL` | NO |
-| `notes` | `TEXT` | NO | `''` | NO |
-| `business_date` | `TEXT` | YES | `NULL` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `expenses`
+- **Row Count:** 45
+- **Columns:**
+  - `id (INTEGER)`
+  - `title (TEXT)`
+  - `amount_lbp (REAL)`
+  - `amount_usd (REAL)`
+  - `category (TEXT)`
+  - `notes (TEXT)`
+  - `source (TEXT)`
+  - `employee_id (INTEGER)`
+  - `employee_name (TEXT)`
+  - `created_at (TIMESTAMP)`
+  - `status (TEXT)`
+  - `cancelled_by (TEXT)`
+  - `cancelled_at (TIMESTAMP)`
+  - `cancel_reason (TEXT)`
+  - `ledger_id (INTEGER)`
 
-### Table: `fiscal_year_closings` (0 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `fiscal_year` | `INTEGER` | YES | `NULL` | NO |
-| `closing_date` | `TEXT` | YES | `NULL` | NO |
-| `total_revenues_lbp` | `REAL` | YES | `0.0` | NO |
-| `total_expenses_lbp` | `REAL` | YES | `0.0` | NO |
-| `net_profit_lbp` | `REAL` | YES | `0.0` | NO |
-| `total_revenues_usd` | `REAL` | YES | `0.0` | NO |
-| `total_expenses_usd` | `REAL` | YES | `0.0` | NO |
-| `net_profit_usd` | `REAL` | YES | `0.0` | NO |
-| `journal_entry_id` | `INTEGER` | NO | `NULL` | NO |
-| `closed_by` | `TEXT` | YES | `NULL` | NO |
-| `notes` | `TEXT` | NO | `NULL` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `financial_ledger`
+- **Row Count:** 1984
+- **Columns:**
+  - `id (INTEGER)`
+  - `entry_type (TEXT)`
+  - `source (TEXT)`
+  - `destination (TEXT)`
+  - `reference_table (TEXT)`
+  - `reference_id (INTEGER)`
+  - `amount_lbp (REAL)`
+  - `amount_usd (REAL)`
+  - `exchange_rate (REAL)`
+  - `drawer_balance_before (REAL)`
+  - `drawer_balance_after (REAL)`
+  - `safe_balance_lbp_before (REAL)`
+  - `safe_balance_lbp_after (REAL)`
+  - `safe_balance_usd_before (REAL)`
+  - `safe_balance_usd_after (REAL)`
+  - `user_id (INTEGER)`
+  - `user_name (TEXT)`
+  - `status (TEXT)`
+  - `cancelled_by (TEXT)`
+  - `cancelled_at (TIMESTAMP)`
+  - `cancel_reason (TEXT)`
+  - `notes (TEXT)`
+  - `business_date (TEXT)`
+  - `created_at (TIMESTAMP)`
 
-### Table: `inventory` (1 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `name` | `TEXT` | YES | `NULL` | NO |
-| `category` | `TEXT` | NO | `'عام'` | NO |
-| `unit` | `TEXT` | NO | `'قطعة'` | NO |
-| `stock_qty` | `REAL` | NO | `0.0` | NO |
-| `cost_per_unit` | `REAL` | NO | `0.0` | NO |
-| `low_stock_limit` | `REAL` | NO | `5.0` | NO |
-| `notes` | `TEXT` | NO | `''` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
-| `updated_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
-| `item_name` | `TEXT` | NO | `NULL` | NO |
-| `current_stock` | `REAL` | NO | `0.0` | NO |
-| `safety_stock` | `REAL` | NO | `5.0` | NO |
-| `cost_price` | `REAL` | NO | `0.0` | NO |
-| `selling_price` | `REAL` | NO | `0.0` | NO |
+### `fiscal_year_closings`
+- **Row Count:** 0
+- **Columns:**
+  - `id (INTEGER)`
+  - `fiscal_year (INTEGER)`
+  - `closing_date (TEXT)`
+  - `total_revenues_lbp (REAL)`
+  - `total_expenses_lbp (REAL)`
+  - `net_profit_lbp (REAL)`
+  - `total_revenues_usd (REAL)`
+  - `total_expenses_usd (REAL)`
+  - `net_profit_usd (REAL)`
+  - `journal_entry_id (INTEGER)`
+  - `closed_by (TEXT)`
+  - `notes (TEXT)`
+  - `created_at (TIMESTAMP)`
 
-### Table: `journal_entries` (2056 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `entry_number` | `TEXT` | YES | `NULL` | NO |
-| `entry_date` | `TEXT` | YES | `NULL` | NO |
-| `description` | `TEXT` | YES | `NULL` | NO |
-| `reference_type` | `TEXT` | NO | `NULL` | NO |
-| `reference_id` | `INTEGER` | NO | `NULL` | NO |
-| `total_amount_lbp` | `REAL` | YES | `0.0` | NO |
-| `total_amount_usd` | `REAL` | YES | `0.0` | NO |
-| `user_name` | `TEXT` | NO | `'النظام'` | NO |
-| `status` | `TEXT` | NO | `'posted'` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `inventory`
+- **Row Count:** 1
+- **Columns:**
+  - `id (INTEGER)`
+  - `name (TEXT)`
+  - `category (TEXT)`
+  - `unit (TEXT)`
+  - `stock_qty (REAL)`
+  - `cost_per_unit (REAL)`
+  - `low_stock_limit (REAL)`
+  - `notes (TEXT)`
+  - `created_at (TIMESTAMP)`
+  - `updated_at (TIMESTAMP)`
+  - `item_name (TEXT)`
+  - `current_stock (REAL)`
+  - `safety_stock (REAL)`
+  - `cost_price (REAL)`
+  - `selling_price (REAL)`
 
-### Table: `journal_entry_lines` (4196 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `journal_entry_id` | `INTEGER` | YES | `NULL` | NO |
-| `account_code` | `TEXT` | YES | `NULL` | NO |
-| `account_name` | `TEXT` | YES | `NULL` | NO |
-| `debit_lbp` | `REAL` | YES | `0.0` | NO |
-| `credit_lbp` | `REAL` | YES | `0.0` | NO |
-| `debit_usd` | `REAL` | YES | `0.0` | NO |
-| `credit_usd` | `REAL` | YES | `0.0` | NO |
-| `memo` | `TEXT` | NO | `''` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `journal_entries`
+- **Row Count:** 2067
+- **Columns:**
+  - `id (INTEGER)`
+  - `entry_number (TEXT)`
+  - `entry_date (TEXT)`
+  - `description (TEXT)`
+  - `reference_type (TEXT)`
+  - `reference_id (INTEGER)`
+  - `total_amount_lbp (REAL)`
+  - `total_amount_usd (REAL)`
+  - `user_name (TEXT)`
+  - `status (TEXT)`
+  - `created_at (TIMESTAMP)`
 
-### Table: `pc_usage_logs` (0 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `price_lbp` | `REAL` | YES | `100000.0` | NO |
-| `price_usd` | `REAL` | YES | `1.10` | NO |
-| `note` | `TEXT` | NO | `'استخدام كمبيوتر GAMING'` | NO |
-| `employee_id` | `INTEGER` | NO | `NULL` | NO |
-| `employee_name` | `TEXT` | NO | `'كاشير'` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `journal_entry_lines`
+- **Row Count:** 4218
+- **Columns:**
+  - `id (INTEGER)`
+  - `journal_entry_id (INTEGER)`
+  - `account_code (TEXT)`
+  - `account_name (TEXT)`
+  - `debit_lbp (REAL)`
+  - `credit_lbp (REAL)`
+  - `debit_usd (REAL)`
+  - `credit_usd (REAL)`
+  - `memo (TEXT)`
+  - `created_at (TIMESTAMP)`
 
-### Table: `purchase_invoice_items` (0 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `invoice_id` | `INTEGER` | YES | `NULL` | NO |
-| `inventory_id` | `INTEGER` | NO | `NULL` | NO |
-| `item_name` | `TEXT` | YES | `NULL` | NO |
-| `qty` | `REAL` | YES | `1.0` | NO |
-| `unit` | `TEXT` | NO | `'قطعة'` | NO |
-| `cost_unit_usd` | `REAL` | NO | `0.0` | NO |
-| `cost_unit_lbp` | `REAL` | NO | `0.0` | NO |
-| `total_usd` | `REAL` | NO | `0.0` | NO |
-| `total_lbp` | `REAL` | NO | `0.0` | NO |
+### `owner_drawings`
+- **Row Count:** 0
+- **Columns:**
+  - `id (INTEGER)`
+  - `amount_lbp (REAL)`
+  - `amount_usd (REAL)`
+  - `source (TEXT)`
+  - `drawing_type (TEXT)`
+  - `month_period (TEXT)`
+  - `drawn_by (TEXT)`
+  - `notes (TEXT)`
+  - `exchange_rate (REAL)`
+  - `status (TEXT)`
+  - `created_at (TIMESTAMP)`
 
-### Table: `purchase_invoices` (0 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `invoice_number` | `TEXT` | NO | `NULL` | NO |
-| `supplier_id` | `INTEGER` | NO | `NULL` | NO |
-| `supplier_name` | `TEXT` | NO | `''` | NO |
-| `total_usd` | `REAL` | NO | `0.0` | NO |
-| `total_lbp` | `REAL` | NO | `0.0` | NO |
-| `paid_usd` | `REAL` | NO | `0.0` | NO |
-| `paid_lbp` | `REAL` | NO | `0.0` | NO |
-| `payment_source` | `TEXT` | NO | `'safe'` | NO |
-| `status` | `TEXT` | NO | `'completed'` | NO |
-| `cancelled_by` | `TEXT` | NO | `NULL` | NO |
-| `cancelled_at` | `TIMESTAMP` | NO | `NULL` | NO |
-| `cancel_reason` | `TEXT` | NO | `NULL` | NO |
-| `notes` | `TEXT` | NO | `''` | NO |
-| `created_by` | `TEXT` | NO | `'المدير'` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `pc_usage_logs`
+- **Row Count:** 0
+- **Columns:**
+  - `id (INTEGER)`
+  - `price_lbp (REAL)`
+  - `price_usd (REAL)`
+  - `note (TEXT)`
+  - `employee_id (INTEGER)`
+  - `employee_name (TEXT)`
+  - `created_at (TIMESTAMP)`
 
-### Table: `recipes` (0 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `cafe_item_id` | `INTEGER` | YES | `NULL` | NO |
-| `inventory_id` | `INTEGER` | YES | `NULL` | NO |
-| `required_qty` | `REAL` | YES | `1.0` | NO |
-| `unit` | `TEXT` | NO | `'g'` | NO |
+### `product_price_history`
+- **Row Count:** 0
+- **Columns:**
+  - `id (INTEGER)`
+  - `item_id (INTEGER)`
+  - `item_name (TEXT)`
+  - `old_price_lbp (REAL)`
+  - `new_price_lbp (REAL)`
+  - `old_price_usd (REAL)`
+  - `new_price_usd (REAL)`
+  - `changed_by (TEXT)`
+  - `reason (TEXT)`
+  - `created_at (TIMESTAMP)`
 
-### Table: `safe_transfers` (49 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `amount_lbp` | `REAL` | YES | `0.0` | NO |
-| `amount_usd` | `REAL` | YES | `0.0` | NO |
-| `note` | `TEXT` | NO | `''` | NO |
-| `transferred_by` | `TEXT` | NO | `'المدير'` | NO |
-| `operation_type` | `TEXT` | NO | `'deposit'` | NO |
-| `source` | `TEXT` | NO | `'drawer'` | NO |
-| `target` | `TEXT` | NO | `'safe'` | NO |
-| `employee_id` | `INTEGER` | NO | `NULL` | NO |
-| `employee_name` | `TEXT` | NO | `'المدير'` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
-| `status` | `TEXT` | NO | `'active'` | NO |
-| `cancelled_by` | `TEXT` | NO | `NULL` | NO |
-| `cancelled_at` | `TIMESTAMP` | NO | `NULL` | NO |
-| `cancel_reason` | `TEXT` | NO | `NULL` | NO |
-| `ledger_id` | `INTEGER` | NO | `NULL` | NO |
+### `purchase_invoice_items`
+- **Row Count:** 0
+- **Columns:**
+  - `id (INTEGER)`
+  - `invoice_id (INTEGER)`
+  - `inventory_id (INTEGER)`
+  - `item_name (TEXT)`
+  - `qty (REAL)`
+  - `unit (TEXT)`
+  - `cost_unit_usd (REAL)`
+  - `cost_unit_lbp (REAL)`
+  - `total_usd (REAL)`
+  - `total_lbp (REAL)`
 
-### Table: `settings` (1 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `company_name` | `TEXT` | NO | `'STARGATE'` | NO |
-| `phone` | `TEXT` | NO | `''` | NO |
-| `address` | `TEXT` | NO | `''` | NO |
-| `receipt_footer_text` | `TEXT` | NO | `''` | NO |
-| `currency` | `TEXT` | NO | `'ل.ل'` | NO |
-| `secondary_currency` | `TEXT` | NO | `'$'` | NO |
-| `exchange_rate` | `REAL` | NO | `89500.0` | NO |
-| `pc_price_per_click_lbp` | `REAL` | NO | `100000.0` | NO |
-| `admin_password` | `TEXT` | NO | `''` | NO |
-| `default_delivery_fee` | `REAL` | NO | `268500.0` | NO |
-| `default_driver_commission` | `REAL` | NO | `30000.0` | NO |
-| `default_return_fee` | `REAL` | NO | `89500.0` | NO |
-| `whatsapp_gateway_enabled` | `INTEGER` | NO | `0` | NO |
-| `whatsapp_provider` | `TEXT` | NO | `'ultramsg'` | NO |
-| `whatsapp_instance_id` | `TEXT` | NO | `''` | NO |
-| `whatsapp_token` | `TEXT` | NO | `''` | NO |
-| `whatsapp_api_url` | `TEXT` | NO | `'https://api.ultramsg.com'` | NO |
-| `is_seeded` | `INTEGER` | NO | `0` | NO |
-| `setup_complete` | `INTEGER` | NO | `0` | NO |
-| `updated_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
-| `telegram_enabled` | `INTEGER` | NO | `0` | NO |
-| `telegram_bot_token` | `TEXT` | NO | `''` | NO |
-| `telegram_chat_id` | `TEXT` | NO | `''` | NO |
+### `purchase_invoices`
+- **Row Count:** 0
+- **Columns:**
+  - `id (INTEGER)`
+  - `invoice_number (TEXT)`
+  - `supplier_id (INTEGER)`
+  - `supplier_name (TEXT)`
+  - `total_usd (REAL)`
+  - `total_lbp (REAL)`
+  - `paid_usd (REAL)`
+  - `paid_lbp (REAL)`
+  - `payment_source (TEXT)`
+  - `status (TEXT)`
+  - `cancelled_by (TEXT)`
+  - `cancelled_at (TIMESTAMP)`
+  - `cancel_reason (TEXT)`
+  - `notes (TEXT)`
+  - `created_by (TEXT)`
+  - `created_at (TIMESTAMP)`
 
-### Table: `shift_closings` (94 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `business_date` | `TEXT` | YES | `NULL` | NO |
-| `shift_number` | `INTEGER` | NO | `1` | NO |
-| `employee_id` | `INTEGER` | NO | `NULL` | NO |
-| `employee_name` | `TEXT` | YES | `NULL` | NO |
-| `opened_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
-| `closed_at` | `TIMESTAMP` | NO | `NULL` | NO |
-| `opening_float_lbp` | `REAL` | NO | `0.0` | NO |
-| `opening_float_usd` | `REAL` | NO | `0.0` | NO |
-| `cash_sales_lbp` | `REAL` | NO | `0.0` | NO |
-| `cash_sales_usd` | `REAL` | NO | `0.0` | NO |
-| `debt_sales_lbp` | `REAL` | NO | `0.0` | NO |
-| `debt_collected_lbp` | `REAL` | NO | `0.0` | NO |
-| `expenses_lbp` | `REAL` | NO | `0.0` | NO |
-| `safe_transfers_lbp` | `REAL` | NO | `0.0` | NO |
-| `expected_cash_lbp` | `REAL` | NO | `0.0` | NO |
-| `actual_cash_lbp` | `REAL` | NO | `0.0` | NO |
-| `difference_lbp` | `REAL` | NO | `0.0` | NO |
-| `difference_note` | `TEXT` | NO | `''` | NO |
-| `orders_count` | `INTEGER` | NO | `0` | NO |
-| `status` | `TEXT` | NO | `'closed'` | NO |
-| `handover_to_employee_id` | `INTEGER` | NO | `NULL` | NO |
-| `handover_to_employee_name` | `TEXT` | NO | `NULL` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
-| `approved_by` | `TEXT` | NO | `NULL` | NO |
-| `approved_at` | `TIMESTAMP` | NO | `NULL` | NO |
-| `approval_status` | `TEXT` | NO | `'pending'` | NO |
-| `approval_notes` | `TEXT` | NO | `''` | NO |
+### `recipes`
+- **Row Count:** 0
+- **Columns:**
+  - `id (INTEGER)`
+  - `cafe_item_id (INTEGER)`
+  - `inventory_id (INTEGER)`
+  - `required_qty (REAL)`
+  - `unit (TEXT)`
 
-### Table: `shift_logs` (94 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `employee_id` | `INTEGER` | NO | `NULL` | NO |
-| `employee_name` | `TEXT` | NO | `NULL` | NO |
-| `date` | `TEXT` | NO | `NULL` | NO |
-| `total_sales_lbp` | `REAL` | NO | `0` | NO |
-| `cash_sales_lbp` | `REAL` | NO | `0` | NO |
-| `production_note` | `TEXT` | NO | `NULL` | NO |
-| `closed_at` | `TEXT` | NO | `NULL` | NO |
-| `created_at` | `TEXT` | NO | `CURRENT_TIMESTAMP` | NO |
+### `safe_transfers`
+- **Row Count:** 51
+- **Columns:**
+  - `id (INTEGER)`
+  - `amount_lbp (REAL)`
+  - `amount_usd (REAL)`
+  - `note (TEXT)`
+  - `transferred_by (TEXT)`
+  - `operation_type (TEXT)`
+  - `source (TEXT)`
+  - `target (TEXT)`
+  - `employee_id (INTEGER)`
+  - `employee_name (TEXT)`
+  - `created_at (TIMESTAMP)`
+  - `status (TEXT)`
+  - `cancelled_by (TEXT)`
+  - `cancelled_at (TIMESTAMP)`
+  - `cancel_reason (TEXT)`
+  - `ledger_id (INTEGER)`
 
-### Table: `stock_movements` (8 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `movement_type` | `TEXT` | YES | `NULL` | NO |
-| `item_type` | `TEXT` | NO | `'inventory'` | NO |
-| `item_id` | `INTEGER` | YES | `NULL` | NO |
-| `item_name` | `TEXT` | YES | `NULL` | NO |
-| `quantity` | `REAL` | YES | `NULL` | NO |
-| `qty_before` | `REAL` | YES | `0.0` | NO |
-| `qty_after` | `REAL` | YES | `0.0` | NO |
-| `unit_cost_lbp` | `REAL` | NO | `0.0` | NO |
-| `unit_cost_usd` | `REAL` | NO | `0.0` | NO |
-| `total_cost_lbp` | `REAL` | NO | `0.0` | NO |
-| `total_cost_usd` | `REAL` | NO | `0.0` | NO |
-| `reference_type` | `TEXT` | NO | `NULL` | NO |
-| `reference_id` | `INTEGER` | NO | `NULL` | NO |
-| `user_name` | `TEXT` | NO | `'النظام'` | NO |
-| `notes` | `TEXT` | NO | `''` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `settings`
+- **Row Count:** 1
+- **Columns:**
+  - `id (INTEGER)`
+  - `company_name (TEXT)`
+  - `phone (TEXT)`
+  - `address (TEXT)`
+  - `receipt_footer_text (TEXT)`
+  - `currency (TEXT)`
+  - `secondary_currency (TEXT)`
+  - `exchange_rate (REAL)`
+  - `pc_price_per_click_lbp (REAL)`
+  - `admin_password (TEXT)`
+  - `default_delivery_fee (REAL)`
+  - `default_driver_commission (REAL)`
+  - `default_return_fee (REAL)`
+  - `whatsapp_gateway_enabled (INTEGER)`
+  - `whatsapp_provider (TEXT)`
+  - `whatsapp_instance_id (TEXT)`
+  - `whatsapp_token (TEXT)`
+  - `whatsapp_api_url (TEXT)`
+  - `is_seeded (INTEGER)`
+  - `setup_complete (INTEGER)`
+  - `updated_at (TIMESTAMP)`
+  - `telegram_enabled (INTEGER)`
+  - `telegram_bot_token (TEXT)`
+  - `telegram_chat_id (TEXT)`
 
-### Table: `supplier_payments` (0 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `supplier_id` | `INTEGER` | YES | `NULL` | NO |
-| `amount_usd` | `REAL` | NO | `0.0` | NO |
-| `amount_lbp` | `REAL` | NO | `0.0` | NO |
-| `payment_method` | `TEXT` | NO | `'safe'` | NO |
-| `notes` | `TEXT` | NO | `''` | NO |
-| `created_by` | `TEXT` | NO | `'المدير'` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `shift_closings`
+- **Row Count:** 94
+- **Columns:**
+  - `id (INTEGER)`
+  - `business_date (TEXT)`
+  - `shift_number (INTEGER)`
+  - `employee_id (INTEGER)`
+  - `employee_name (TEXT)`
+  - `opened_at (TIMESTAMP)`
+  - `closed_at (TIMESTAMP)`
+  - `opening_float_lbp (REAL)`
+  - `opening_float_usd (REAL)`
+  - `cash_sales_lbp (REAL)`
+  - `cash_sales_usd (REAL)`
+  - `debt_sales_lbp (REAL)`
+  - `debt_collected_lbp (REAL)`
+  - `expenses_lbp (REAL)`
+  - `safe_transfers_lbp (REAL)`
+  - `expected_cash_lbp (REAL)`
+  - `actual_cash_lbp (REAL)`
+  - `difference_lbp (REAL)`
+  - `difference_note (TEXT)`
+  - `orders_count (INTEGER)`
+  - `status (TEXT)`
+  - `handover_to_employee_id (INTEGER)`
+  - `handover_to_employee_name (TEXT)`
+  - `created_at (TIMESTAMP)`
+  - `approved_by (TEXT)`
+  - `approved_at (TIMESTAMP)`
+  - `approval_status (TEXT)`
+  - `approval_notes (TEXT)`
 
-### Table: `suppliers` (2 records)
-| Column Name | Type | Not Null | Default Value | PK |
-| :--- | :--- | :--- | :--- | :--- |
-| `id` | `INTEGER` | NO | `NULL` | YES |
-| `name` | `TEXT` | YES | `NULL` | NO |
-| `phone` | `TEXT` | NO | `''` | NO |
-| `company` | `TEXT` | NO | `''` | NO |
-| `balance_usd` | `REAL` | NO | `0.0` | NO |
-| `balance_lbp` | `REAL` | NO | `0.0` | NO |
-| `notes` | `TEXT` | NO | `''` | NO |
-| `is_active` | `INTEGER` | NO | `1` | NO |
-| `created_at` | `TIMESTAMP` | NO | `CURRENT_TIMESTAMP` | NO |
+### `shift_logs`
+- **Row Count:** 94
+- **Columns:**
+  - `id (INTEGER)`
+  - `employee_id (INTEGER)`
+  - `employee_name (TEXT)`
+  - `date (TEXT)`
+  - `total_sales_lbp (REAL)`
+  - `cash_sales_lbp (REAL)`
+  - `production_note (TEXT)`
+  - `closed_at (TEXT)`
+  - `created_at (TEXT)`
+
+### `stock_movements`
+- **Row Count:** 17
+- **Columns:**
+  - `id (INTEGER)`
+  - `movement_type (TEXT)`
+  - `item_type (TEXT)`
+  - `item_id (INTEGER)`
+  - `item_name (TEXT)`
+  - `quantity (REAL)`
+  - `qty_before (REAL)`
+  - `qty_after (REAL)`
+  - `unit_cost_lbp (REAL)`
+  - `unit_cost_usd (REAL)`
+  - `total_cost_lbp (REAL)`
+  - `total_cost_usd (REAL)`
+  - `reference_type (TEXT)`
+  - `reference_id (INTEGER)`
+  - `user_name (TEXT)`
+  - `notes (TEXT)`
+  - `created_at (TIMESTAMP)`
+
+### `stocktaking_items`
+- **Row Count:** 0
+- **Columns:**
+  - `id (INTEGER)`
+  - `session_id (INTEGER)`
+  - `item_type (TEXT)`
+  - `item_id (INTEGER)`
+  - `item_name (TEXT)`
+  - `unit (TEXT)`
+  - `theoretical_qty (REAL)`
+  - `actual_counted_qty (REAL)`
+  - `difference_qty (REAL)`
+  - `unit_cost_lbp (REAL)`
+  - `variance_cost_lbp (REAL)`
+  - `difference_reason (TEXT)`
+  - `adjusted (INTEGER)`
+  - `created_at (TIMESTAMP)`
+
+### `stocktaking_sessions`
+- **Row Count:** 0
+- **Columns:**
+  - `id (INTEGER)`
+  - `session_code (TEXT)`
+  - `status (TEXT)`
+  - `notes (TEXT)`
+  - `conducted_by_id (INTEGER)`
+  - `conducted_by_name (TEXT)`
+  - `approved_by_id (INTEGER)`
+  - `approved_by_name (TEXT)`
+  - `total_items_counted (INTEGER)`
+  - `total_discrepancy_items (INTEGER)`
+  - `total_variance_cost_lbp (REAL)`
+  - `started_at (TIMESTAMP)`
+  - `completed_at (TIMESTAMP)`
+
+### `supplier_payments`
+- **Row Count:** 0
+- **Columns:**
+  - `id (INTEGER)`
+  - `supplier_id (INTEGER)`
+  - `amount_usd (REAL)`
+  - `amount_lbp (REAL)`
+  - `payment_method (TEXT)`
+  - `notes (TEXT)`
+  - `created_by (TEXT)`
+  - `created_at (TIMESTAMP)`
+
+### `suppliers`
+- **Row Count:** 2
+- **Columns:**
+  - `id (INTEGER)`
+  - `name (TEXT)`
+  - `phone (TEXT)`
+  - `company (TEXT)`
+  - `balance_usd (REAL)`
+  - `balance_lbp (REAL)`
+  - `notes (TEXT)`
+  - `is_active (INTEGER)`
+  - `created_at (TIMESTAMP)`
+

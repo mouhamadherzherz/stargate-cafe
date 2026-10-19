@@ -18,6 +18,7 @@ from flask import (
 import database
 from database import init_db, get_db, reset_operational_data, write_audit_log
 import accounting
+import permissions
 from logger import app_logger as logger, log_audit
 import backup as backup_module
 
@@ -500,6 +501,48 @@ def admin_required(f):
             return redirect(url_for('admin_login', next=request.path))
         return f(*args, **kwargs)
     return decorated_function
+
+def permission_required(perm):
+    """Require a specific fine-grained permission for the authenticated user."""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'employee_id' not in session and not session.get('admin_authenticated'):
+                if request.is_json or request.path.startswith('/api/'):
+                    return jsonify({'error': 'Authentication required', 'code': 401}), 401
+                flash("⚠️ يرجى تسجيل الدخول أولاً", "warning")
+                return redirect(url_for('employee_login', next=request.path))
+
+            user_role = session.get('employee_role') or ('admin' if session.get('is_admin') or session.get('admin_authenticated') else 'cashier')
+            if not permissions.has_permission(user_role, perm):
+                if request.is_json or request.path.startswith('/api/'):
+                    return jsonify({'error': f'Permission denied: {perm}', 'code': 403, 'success': False}), 403
+                flash(f"⚠️ عذراً، لا تملك الصلاحية الكافية لتنفيذ هذا الإجراء ({perm})!", "danger")
+                return redirect(request.referrer or url_for('index'))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+def role_required(*allowed_roles):
+    """Require user role to be in the allowed_roles list."""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'employee_id' not in session and not session.get('admin_authenticated'):
+                if request.is_json or request.path.startswith('/api/'):
+                    return jsonify({'error': 'Authentication required', 'code': 401}), 401
+                flash("⚠️ يرجى تسجيل الدخول أولاً", "warning")
+                return redirect(url_for('employee_login', next=request.path))
+
+            user_role = session.get('employee_role') or ('admin' if session.get('is_admin') or session.get('admin_authenticated') else 'cashier')
+            if user_role not in allowed_roles and not (session.get('is_admin') or session.get('admin_authenticated')):
+                if request.is_json or request.path.startswith('/api/'):
+                    return jsonify({'error': 'Role access denied', 'code': 403, 'success': False}), 403
+                flash("⚠️ عذراً، لا تملك الدور المطلوب للوصول لهذه الصفحة!", "danger")
+                return redirect(request.referrer or url_for('index'))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
 
 app.jinja_env.globals['csrf_token'] = generate_csrf_token
 
@@ -2302,6 +2345,28 @@ def menu_item_edit(item_id):
             if existing and existing.get('icon'):
                 data['icon'] = existing['icon']
 
+    # Track price changes in product_price_history
+    existing = accounting.get_item(item_id)
+    if existing:
+        old_p_lbp = existing.get('price_lbp')
+        old_p_usd = existing.get('price_usd')
+        new_p_lbp = data.get('price_lbp')
+        new_p_usd = data.get('price_usd')
+        try:
+            if new_p_lbp is not None and (float(new_p_lbp or 0) != float(old_p_lbp or 0) or float(new_p_usd or 0) != float(old_p_usd or 0)):
+                accounting.log_price_change(
+                    item_id=item_id,
+                    item_name=existing.get('name'),
+                    old_lbp=old_p_lbp,
+                    new_lbp=new_p_lbp,
+                    old_usd=old_p_usd,
+                    new_usd=new_p_usd,
+                    changed_by=session.get('employee_name', 'المدير'),
+                    reason=data.get('price_change_reason', 'تعديل من إدارة المنيو')
+                )
+        except Exception:
+            pass
+
     success, res = accounting.update_item(item_id, data)
     if success:
         flash("تم تعديل الصنف والأسعار بنجاح", "success")
@@ -2822,6 +2887,20 @@ def quick_update_item():
         if not field or field not in ('price_lbp', 'price_usd', 'cost_price_lbp', 'cost_price_usd', 'stock_qty', 'name'):
             return jsonify({'success': False, 'message': 'حقل غير صالح'}), 400
             
+        if field in ('price_lbp', 'price_usd'):
+            existing = accounting.get_item(item_id)
+            if existing:
+                old_val = existing.get(field)
+                if float(value or 0) != float(old_val or 0):
+                    old_lbp = existing.get('price_lbp') if field == 'price_usd' else old_val
+                    new_lbp = existing.get('price_lbp') if field == 'price_usd' else value
+                    old_usd = old_val if field == 'price_usd' else existing.get('price_usd')
+                    new_usd = value if field == 'price_usd' else existing.get('price_usd')
+                    accounting.log_price_change(
+                        item_id, existing.get('name'), old_lbp, new_lbp, old_usd, new_usd,
+                        session.get('employee_name', 'المدير'), 'تعديل سعر فوري من القائمة'
+                    )
+
         success, res = accounting.quick_update_item_field(item_id, field, value)
         if success:
             return jsonify({'success': True, 'data': res, 'message': 'تم التعديل الفوري بنجاح'})
@@ -5505,6 +5584,126 @@ def api_ai_chat():
     except Exception as e:
         logger.error("AI Chat Error: %s", e)
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# ─────────────────────────────────────────────────────────────
+# 📦 نظام الجرد الفعلي الدوري (Stocktaking & Physical Inventory)
+# ─────────────────────────────────────────────────────────────
+
+@app.route('/stocktaking')
+@login_required
+@permission_required('stocktaking.conduct')
+def stocktaking_page():
+    """واجهة إدارة ومتابعة جلسات الجرد الفعلي للمخزون."""
+    sessions = accounting.get_stocktaking_sessions()
+    return render_template('inventory.html', active_tab='stocktaking', stocktaking_sessions=sessions)
+
+@app.route('/api/stocktaking/sessions', methods=['GET'])
+@login_required
+@permission_required('stocktaking.conduct')
+def api_stocktaking_sessions_list():
+    """جلب قائمة جلسات الجرد الدورية."""
+    sessions = accounting.get_stocktaking_sessions()
+    return jsonify({'success': True, 'sessions': sessions})
+
+@app.route('/api/stocktaking/new', methods=['POST'])
+@login_required
+@permission_required('stocktaking.conduct')
+def api_stocktaking_new_session():
+    """بدء جلسة جرد دوري جديدة وتثبيت الأرصدة الدفترية النظرية."""
+    data = request.get_json(silent=True) or request.form or {}
+    notes = data.get('notes', 'جرد دوري مجدول')
+    emp_id = session.get('employee_id')
+    emp_name = session.get('employee_name', 'المدير')
+    result = accounting.create_stocktaking_session(notes=notes, employee_id=emp_id, employee_name=emp_name)
+    return jsonify(result)
+
+@app.route('/api/stocktaking/<int:session_id>', methods=['GET'])
+@login_required
+@permission_required('stocktaking.conduct')
+def api_stocktaking_session_details(session_id):
+    """عرض بيانات جلسة الجرد وبنود المواد المحصورة والفروقات الحالية."""
+    details = accounting.get_stocktaking_session_details(session_id)
+    if not details:
+        return jsonify({'success': False, 'message': 'جلسة الجرد غير موجودة'}), 404
+    return jsonify({'success': True, 'session': details})
+
+@app.route('/api/stocktaking/<int:session_id>/update-count', methods=['POST'])
+@login_required
+@permission_required('stocktaking.conduct')
+def api_stocktaking_update_count(session_id):
+    """تسجيل الكميات الفعلية المحصورة وبناء الفروقات الآنية."""
+    data = request.get_json(silent=True) or request.form or {}
+    item_id = int(data.get('item_id', 0))
+    item_type = data.get('item_type', 'cafe_item')
+    counted_qty = float(data.get('counted_qty', 0.0))
+    reason = data.get('reason', '')
+    ok, msg = accounting.update_stocktaking_item_count(session_id, item_id, item_type, counted_qty, reason)
+    return jsonify({'success': ok, 'message': msg})
+
+@app.route('/api/stocktaking/<int:session_id>/finalize', methods=['POST'])
+@login_required
+@permission_required('stocktaking.approve')
+def api_stocktaking_finalize(session_id):
+    """اعتماد الجرد الفعلي وتطبيق التسويات المخزنية الرسمية."""
+    emp_id = session.get('employee_id')
+    emp_name = session.get('employee_name', 'المدير')
+    ok, msg = accounting.finalize_stocktaking_session(session_id, approved_by_id=emp_id, approved_by_name=emp_name)
+    return jsonify({'success': ok, 'message': msg})
+
+# ─────────────────────────────────────────────────────────────
+# 🔍 البحث بالباركود وسجل الأسعار (Barcode & Price History)
+# ─────────────────────────────────────────────────────────────
+
+@app.route('/api/items/barcode-lookup', methods=['GET'])
+@login_required
+def api_barcode_lookup():
+    """البحث الفوري عن منتج باستخدام الباركود أو رمز الـ SKU."""
+    code = (request.args.get('code') or '').strip()
+    if not code:
+        return jsonify({'success': False, 'message': 'يرجى تزويد رمز الباركود'}), 400
+    conn = database.get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT * FROM cafe_items 
+        WHERE (barcode = ? OR sku = ?) AND is_active = 1
+        LIMIT 1
+    """, (code, code))
+    item = cursor.fetchone()
+    conn.close()
+    if item:
+        return jsonify({'success': True, 'item': dict(item)})
+    return jsonify({'success': False, 'message': 'لم يتم العثور على أي منتج بهذا الباركود'}), 404
+
+@app.route('/api/items/<int:item_id>/price-history', methods=['GET'])
+@login_required
+@admin_required
+def api_item_price_history(item_id):
+    """جلب سجل التعديلات السابقة لأسعار المنتج المحدد."""
+    history = accounting.get_price_change_history(item_id=item_id)
+    return jsonify({'success': True, 'item_id': item_id, 'history': history})
+
+# ─────────────────────────────────────────────────────────────
+# 📊 مركز التقارير الشامل والذكاء الاصطناعي الإداري
+# ─────────────────────────────────────────────────────────────
+
+@app.route('/api/reports/comprehensive', methods=['GET'])
+@login_required
+@permission_required('reports.view')
+def api_comprehensive_reports_hub():
+    """إرجاع بيانات التقارير الـ 20 الشاملة للمراجعة والإشراف والتصدير."""
+    date_from = request.args.get('date_from')
+    date_to = request.args.get('date_to')
+    data = accounting.get_comprehensive_reports_hub(date_from=date_from, date_to=date_to)
+    return jsonify({'success': True, 'data': data})
+
+@app.route('/api/ai/assistant/query', methods=['POST'])
+@login_required
+def api_ai_assistant_query():
+    """المساعد الإداري الذكي: الإجابة على الأسئلة الحسابية والإدارية من الأرقام المعتمدة."""
+    payload = request.get_json(silent=True) or request.form or {}
+    query_text = payload.get('query') or payload.get('question') or ''
+    res = accounting.ai_business_assistant_query(query_text)
+    return jsonify(res)
 
 
 

@@ -655,6 +655,63 @@ def init_db(seed_items=False):
     )
     """)
 
+    # ── Product Price History (سجل تغيير الأسعار) ───────────────────
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS product_price_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        item_id INTEGER NOT NULL,
+        item_name TEXT,
+        old_price_lbp REAL,
+        new_price_lbp REAL,
+        old_price_usd REAL,
+        new_price_usd REAL,
+        changed_by TEXT,
+        reason TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (item_id) REFERENCES cafe_items(id)
+    )
+    """)
+
+    # ── Stocktaking Sessions (جلسات الجرد الدوري الفعلي للمخزون) ─────
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS stocktaking_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_code TEXT UNIQUE NOT NULL,
+        status TEXT DEFAULT 'draft',
+        notes TEXT,
+        conducted_by_id INTEGER,
+        conducted_by_name TEXT,
+        approved_by_id INTEGER,
+        approved_by_name TEXT,
+        total_items_counted INTEGER DEFAULT 0,
+        total_discrepancy_items INTEGER DEFAULT 0,
+        total_variance_cost_lbp REAL DEFAULT 0.0,
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        completed_at TIMESTAMP
+    )
+    """)
+
+    # ── Stocktaking Items (عناصر ومطابقات الجرد الفعلي) ───────────────
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS stocktaking_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        item_type TEXT DEFAULT 'cafe_item',
+        item_id INTEGER NOT NULL,
+        item_name TEXT NOT NULL,
+        unit TEXT DEFAULT 'قطعة',
+        theoretical_qty REAL NOT NULL,
+        actual_counted_qty REAL NOT NULL,
+        difference_qty REAL NOT NULL,
+        unit_cost_lbp REAL DEFAULT 0.0,
+        variance_cost_lbp REAL DEFAULT 0.0,
+        difference_reason TEXT,
+        adjusted INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (session_id) REFERENCES stocktaking_sessions(id) ON DELETE CASCADE
+    )
+    """)
+
     conn.commit()
 
     # ── Column Migrations (idempotent) ─────────
@@ -793,6 +850,14 @@ def _run_migrations(cursor, conn):
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_cafe_orders_idempotency ON cafe_orders(idempotency_key) WHERE idempotency_key IS NOT NULL AND idempotency_key != ''",
         "ALTER TABLE cafe_orders ADD COLUMN tracking_number TEXT",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_cafe_orders_tracking ON cafe_orders(tracking_number) WHERE tracking_number IS NOT NULL AND tracking_number != ''",
+        "ALTER TABLE cafe_items ADD COLUMN sku TEXT",
+        "ALTER TABLE cafe_items ADD COLUMN barcode TEXT",
+        "ALTER TABLE cafe_items ADD COLUMN unit TEXT DEFAULT 'قطعة'",
+        "ALTER TABLE cafe_items ADD COLUMN supplier_id INTEGER DEFAULT NULL",
+        "ALTER TABLE cafe_items ADD COLUMN min_order_qty REAL DEFAULT 1.0",
+        "ALTER TABLE employees ADD COLUMN custom_permissions TEXT DEFAULT NULL",
+        "CREATE INDEX IF NOT EXISTS idx_cafe_items_barcode ON cafe_items(barcode)",
+        "CREATE INDEX IF NOT EXISTS idx_cafe_items_sku ON cafe_items(sku)",
     ]
     for sql in migrations:
         try:
@@ -1026,7 +1091,7 @@ def write_audit_log(actor: str = None, action: str = None, table_name: str = Non
 # Seed
 # ──────────────────────────────────────────────
 def seed_default_sample_menu(force=False):
-    """Seed default cafe categories and items – only on first run."""
+    """Seed default cafe categories and items - only on first run."""
     conn = get_db()
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) as count FROM cafe_categories")

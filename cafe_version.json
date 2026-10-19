@@ -1,9 +1,9 @@
 {
-    "changelog": "v6.3.0 Enterprise Pro: إصلاح الثغرات الأمنية الكبرى — إغلاق ثغرة تجاوز صلاحية الموظف في /employee/current، قصر عمليات ترحيل الخزنة وتصفير الحسابات الشاملة على المدير العام (@admin_required)، تحصين معالج التهيئة الأولى ضد الاستحواذ غير المصرح به، حصر السجلات المالية والرقابية بالإدارة، مطابقة تقارير الوردية عبر السيرفر، وتفعيل القيد المزدوج النقي.",
-    "version": "6.3.0",
-    "name": "Stargate Cafe & Gaming System - Luxury Enterprise Edition",
+    "version": "6.3.1",
+    "name": "Stargate Cafe & Gaming System - NextGen Pro Edition",
     "company": "STARGATE EXPERTS",
     "channel": "cafe",
+    "changelog": "v6.3.1 NextGen Pro: تطبيق نظام الصلاحيات المتقدم (7 أدوار)، إضافة دورة الجرد الفعلي الدوري (Stocktaking) واحتساب الفروقات التلقائية، تتبع سجل تعديلات أسعار المنتجات، البحث السريع بالباركود والـ SKU، مركز التقارير الـ 20 الشامل، والمساعد الإداري الذكي بالذكاء الاصطناعي.",
     "download_url": "https://raw.githubusercontent.com/mouhamadherzherz/stargate-cafe/master/Stargate_Cafe_Update.zip",
     "release_date": "2026-10-19"
 }

@@ -1,74 +1,40 @@
-# STARGATE CAFE PRO — Comprehensive Implementation & Upgrade Plan
-## STARGATE CAFE v6.2.0 PRO — Verified & Certified (2026-10-17)
+# STARGATE CAFE — Implementation Plan & Engineering Execution (v6.3.1)
 
-## 1. Executive Vision & Objectives
-Upgrade **STARGATE CAFE** to a bulletproof, high-performance, luxury-grade POS & ERP system (**v6.2.0 PRO**). 
-The overhaul encompasses:
-- Zero data loss guarantee with automated pre-flight snapshotting.
-- Strict financial atomicity (order, COGS, inventory, customer debt, central ledger, double-entry vouchers).
-- Deep application security (CSRF origin verification, path traversal immunity, authenticated admin OTA updates, rate limits).
-- Ultra-premium **Dark Charcoal (#090d16)**, **Emerald Green (#10b981)**, and **Champagne Gold (#f59e0b)** design system with glassmorphic cards, smooth micro-interactions, and Arabic RTL typography.
-- An intelligent, privacy-first **AI Analytics & Executive Insights Engine** that runs offline with heuristics and optionally hooks into LLMs without ever interrupting POS operations.
-- 100% automated test coverage for critical financial workflows with zero-dependency standalone execution support.
+## 1. الترتيب المرحلي للتنفيذ (Phased Execution)
 
----
+### المرحلة A: الفحص وتثبيت خط الأساس والأمان (Baseline & Security)
+- [x] فحص المشروع وقواعد البيانات وتسجيل عدد الجداول والأعمدة والأرسطر في `DATABASE_MAP.md`.
+- [x] إنشاء نسخة احتياطية أولية كاملة لقاعدة البيانات في `Safe_Backups/`.
+- [x] إغلاق ثغرة `/employee/current` وإلغاء الإنشاء التلقائي للجلسات.
+- [x] قصر تصفير ونقل الخزنة على الإدارة مع التحقق من الرصيد ومفتاح منع التكرار.
+- [x] تحصين معالج التثبيت الأول `/setup` بقفل ذرّي `BEGIN IMMEDIATE`.
+- [x] تفعيل حماية CSRF الصارمة ضد الطلبات الخارجية المزورة.
 
-## 2. Phased Roadmap & Execution Record
+### المرحلة B: نظام الصلاحيات المتقدم (RBAC System)
+- [x] إنشاء وحدة `permissions.py` وتعريف 7 أدوار قياسية (مالك، مدير، مدير وردية، محاسب، كاشير، مسؤول مخزون، مدقق).
+- [x] تعريف 30 صلاحية تغطي العمليات المالية، المبيعات، المخزون، والتقارير.
+- [x] بناء المعالج الزخرفي `@permission_required(perm)` و `@role_required(*roles)` وتطبيقه في `app.py`.
 
-### Phase 1: Snapshot, Isolation & Safe Sandbox
-- [x] Create complete recursive snapshot of `organized_programs/cafe` to `cafe_backup_pre_upgrade_20261017` (53 items preserved).
-- [x] Perform full AST code inventory (123 endpoints, 321 functions, 29 tables).
-- [x] Generate `ROUTE_INVENTORY.md`, `FUNCTION_INVENTORY.md`, and `DATABASE_MAP.md`.
+### المرحلة C: المحاسبة والقيد المزدوج النقي (Pure Double-Entry Accounting)
+- [x] إلغاء كود التعديل المباشر بـ SQL لرصيد حساب 1010.
+- [x] ترحيل كافة عمليات النقل والتصفير عبر سندات قيد مزدوجة متوازنة (مدين 1020، دائن 1010).
+- [x] فحص ومطابقة ميزان المراجعة اليومي والأسبوعي.
 
-### Phase 2: Security & Fault Tolerance Hardening
-- [x] Enforce `@login_required` and `@admin_required` on manual and automatic OTA updates (`api_manual_update`, `api_do_update`).
-- [x] Path traversal prevention in `/static/uploads/<path:filename>` via `safe_join` and normalized commonpath checks.
-- [x] Eliminate default `changeme` passwords in employee migration routines.
-- [x] Enforce server-side authoritative pricing; ignore all client-tampered prices.
-- [x] Whitelist supported payment methods (`cash`, `debt`, `card`, `split`).
-- [x] Enforce HTTPOnly and SameSite=Lax session cookies.
-- [x] Safe targeted process termination in update `.bat` scripts (protecting unrelated developer processes).
-- [x] Build comprehensive CSRF protection with Origin/Referer verification and support for Form, Header (`X-CSRFToken`), JSON payload, and desktop WebView loopback.
+### المرحلة D: المخزون والجرد الفعلي الدوري (Stocktaking & Physical Inventory)
+- [x] إنشاء جداول `stocktaking_sessions` و `stocktaking_items`.
+- [x] برمجة دورة الجرد: بدء الجلسة، التقاط الأرصدة النظرية، تسجيل العد الفعلي، احتساب الفروقات والتكلفة.
+- [x] اعتماد الجرد وترحيل التسويات إلى جدول `stock_movements` بنوع `STOCKTAKE_ADJUSTMENT`.
+- [x] تتبع تعديلات أسعار المنتجات عبر `product_price_history` ودالة `log_price_change`.
+- [x] إضافة حقول الباركود والـ SKU ووحدات القياس إلى `cafe_items`.
 
-### Phase 3: Financial Engine & Database Atomicity
-- [x] Atomic transactions (`BEGIN IMMEDIATE ... COMMIT`) encompassing order, items, inventory deduction, debts, ledger, and journals.
-- [x] Explicit deficit tracking for recipes in `stock_movements` (`[⚠️ عجز مخزون: ...]`) without silent zero-clipping.
-- [x] Automatic COGS calculation for standalone items and recipe-linked products.
-- [x] Strict employee isolation during shift closings (zero fallback to store totals for unassociated shifts).
-- [x] Comprehensive database integrity and table verification during backup restoration.
-- [x] Empirical verification of full financial lifecycles (debt sales, repayments, drawer vs. safe expenses, safe transfers, order cancellations).
+### المرحلة E: مركز التقارير الشامل والذكاء الاصطناعي (Reports & AI Analytics)
+- [x] بناء مركز التقارير الـ 20 الشامل `get_comprehensive_reports_hub` في `accounting.py`.
+- [x] توفير واجهة API موحدة للملخصات المالية والأرباح وهوامش الربح الإجمالية والصافية.
+- [x] تطوير المساعد الإداري الذكي `ai_business_assistant_query` للإجابة الفورية من واقع أرقام النظام الحقيقية.
+- [x] تضمين خوارزمية كشف الحالات الشاذة ومعدلات الإلغاء والخصم غير المعتادة.
 
-### Phase 4: UI/UX Luxury Overhaul (Dark Emerald & Champagne Gold)
-- [x] Create dedicated luxury CSS stylesheet `static/css/stargate-luxury.css`:
-  - Curated color tokens (Charcoal `#090d16`, Surface `#111827`, Emerald `#10b981`, Gold `#f59e0b`, Red `#ef4444`).
-  - Glassmorphic panels with backdrop blur, fine borders, and deep ambient glows.
-  - Arabic typography with Google Fonts `Cairo` and `Tajawal`.
-  - Responsive POS grid, quick-touch number pads, and status pills.
-  - Smooth hover transitions and focus rings for accessibility.
-- [x] Integrate into `templates/base.html`, `templates/index.html`, `templates/admin.html`, and `templates/safe.html`.
-- [x] Cache purge and live sync to compiled desktop runtime (`C:\STARGATE_CAFE` & `C:\STARGATE_CAFE\_internal`).
-
-### Phase 5: AI Insights & Executive Analytics Engine
-- [x] Build `ai_insights.py` in `organized_programs/cafe`:
-  - Statistical sales trends (hourly peak analysis, top beverage velocity).
-  - Inventory depletion forecasting (runway days before stockout).
-  - Expense & safe anomaly detector (sudden large withdrawals or discrepancies).
-  - Cashier shift executive summaries in fluent, professional Arabic.
-  - Role-guarded system assistant (`ask_system_assistant`) and API endpoints (`/api/ai/daily_summary`, `/api/ai/anomalies`, `/api/ai/chat`).
-
-### Phase 6: Automated Testing & Verification
-- [x] Expand test coverage into 4 distinct, resilient test suites:
-  1. `tests/test_pure_accounting.py` (Zero dependencies, pure Python standard library SQLite).
-  2. `tests/test_financial_workflows.py` (End-to-end integration: cash sales, debt repayment, drawer vs safe, cancel order, shift closing).
-  3. `tests/test_csrf_security.py` (Form CSRF, Header CSRF, JSON CSRF, Origin forgery defense, WebView loopback).
-  4. `tests/test_audit_suite.py` (20-point regression and security audit).
-- [x] Create universal dependency-detecting runner `run_tests.py`.
-- [x] Run full automated test suite: 31 tests executed, 0 failures, 0 errors (100% pass rate in 32.55s).
-- [x] Generate `TEST_RESULTS.md` and `TEST_COVERAGE_MATRIX.md`.
-
-### Phase 7: Deployment Package & Artifact Delivery
-- [x] Repack `Stargate_Cafe_Update.zip` with verified production code and assets.
-- [x] Repack `STARGATE_CAFE_SOURCE_FOR_CHATGPT.zip` with complete test suites and documentation.
-- [x] Synchronize live deployment at `C:\STARGATE_CAFE` and `C:\STARGATE_CAFE\_internal`.
-- [x] Verify live server running on `0.0.0.0:5000` (PID 33804).
-- [x] Deliver finalized documentation, trace matrix, and executive changelog.
+### المرحلة F: حزم التوزيع وضمان الجودة (QA, Release & Packaging)
+- [x] تشغيل حزمة الاختبارات الشاملة (117 اختباراً ناجحاً بنسبة 100%).
+- [x] رفع رقم الإصدار المعتمد إلى `v6.3.1` في `cafe_version.json` و `CHANGELOG.md`.
+- [x] مزامنة الكود مع بيئة الإنتاج الفعلية `C:\STARGATE_CAFE`.
+- [x] إنشاء حزمة التوزيع البرمجية النظيفة الخالية من المفاتيح السرية وقواعد بيانات الإنتاج.

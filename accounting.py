@@ -8312,4 +8312,561 @@ def get_audit_logs(limit=250, action=None, actor=None, date_from=None, date_to=N
     return logs
 
 
+# ─────────────────────────────────────────────────────────────
+# 15. Stocktaking & Periodic Physical Inventory (الجرد الدوري الفعلي)
+# ─────────────────────────────────────────────────────────────
+
+def create_stocktaking_session(notes='', employee_id=None, employee_name='المدير'):
+    """إنشاء دورة جرد جديدة وتثبيت الأرصدة الدفترية النظرية لجميع المواد الحالية."""
+    conn = get_db()
+    cursor = conn.cursor()
+    import datetime
+    now = datetime.datetime.now()
+    session_code = f"STK-{now.strftime('%Y%m%d-%H%M%S')}"
+
+    cursor.execute("""
+        INSERT INTO stocktaking_sessions (
+            session_code, status, notes, conducted_by_id, conducted_by_name, started_at
+        ) VALUES (?, 'draft', ?, ?, ?, ?)
+    """, (session_code, notes, employee_id, employee_name, now.strftime('%Y-%m-%d %H:%M:%S')))
+    session_id = cursor.lastrowid
+
+    # التقاط الأرصدة الدفترية للأصناف التي تخضع لتتبع المخزون
+    cursor.execute("""
+        SELECT id, name, unit, stock_qty, cost_price_lbp 
+        FROM cafe_items 
+        WHERE (track_stock = 1 OR track_stock IS NULL) AND is_active = 1
+        ORDER BY name ASC
+    """)
+    cafe_items = cursor.fetchall()
+    for item in cafe_items:
+        t_qty = float(item['stock_qty'] or 0.0)
+        c_lbp = float(item['cost_price_lbp'] or 0.0)
+        unit = item['unit'] or 'قطعة'
+        cursor.execute("""
+            INSERT INTO stocktaking_items (
+                session_id, item_type, item_id, item_name, unit, theoretical_qty,
+                actual_counted_qty, difference_qty, unit_cost_lbp, variance_cost_lbp, adjusted
+            ) VALUES (?, 'cafe_item', ?, ?, ?, ?, ?, 0.0, ?, 0.0, 0)
+        """, (session_id, item['id'], item['name'], unit, t_qty, t_qty, c_lbp))
+
+    # التقاط المواد الخام في المستودع
+    cursor.execute("""
+        SELECT id, name, unit, stock_qty, cost_per_unit 
+        FROM inventory 
+        ORDER BY name ASC
+    """)
+    raw_items = cursor.fetchall()
+    for raw in raw_items:
+        t_qty = float(raw['stock_qty'] or 0.0)
+        c_lbp = float(raw['cost_per_unit'] or 0.0)
+        unit = raw['unit'] or 'g'
+        cursor.execute("""
+            INSERT INTO stocktaking_items (
+                session_id, item_type, item_id, item_name, unit, theoretical_qty,
+                actual_counted_qty, difference_qty, unit_cost_lbp, variance_cost_lbp, adjusted
+            ) VALUES (?, 'inventory', ?, ?, ?, ?, ?, 0.0, ?, 0.0, 0)
+        """, (session_id, raw['id'], raw['name'], unit, t_qty, t_qty, c_lbp))
+
+    conn.commit()
+    conn.close()
+    return {'success': True, 'session_id': session_id, 'session_code': session_code}
+
+def get_stocktaking_sessions(limit=50):
+    """عرض قائمة جلسات الجرد الدوري المسجلة."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT * FROM stocktaking_sessions 
+        ORDER BY id DESC LIMIT ?
+    """, (limit,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def get_stocktaking_session_details(session_id):
+    """جلب تفاصيل جلسة الجرد وجميع بنود المواد المحصورة."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM stocktaking_sessions WHERE id = ?", (session_id,))
+    session = cursor.fetchone()
+    if not session:
+        conn.close()
+        return None
+    session_dict = dict(session)
+
+    cursor.execute("""
+        SELECT * FROM stocktaking_items 
+        WHERE session_id = ? 
+        ORDER BY item_type DESC, item_name ASC
+    """, (session_id,))
+    items = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    session_dict['items'] = items
+    return session_dict
+
+def update_stocktaking_item_count(session_id, item_id, item_type, counted_qty, reason=''):
+    """تسجيل الكمية الفعلية المحصورة لاحتساب الفروقات التلقائية."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, theoretical_qty, unit_cost_lbp 
+        FROM stocktaking_items 
+        WHERE session_id = ? AND item_id = ? AND item_type = ?
+    """, (session_id, item_id, item_type))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False, "العنصر غير موجود في جلسة الجرد"
+
+    t_qty = float(row['theoretical_qty'])
+    cost = float(row['unit_cost_lbp'] or 0.0)
+    diff = float(counted_qty) - t_qty
+    var_cost = diff * cost
+
+    cursor.execute("""
+        UPDATE stocktaking_items 
+        SET actual_counted_qty = ?, difference_qty = ?, variance_cost_lbp = ?, difference_reason = ?
+        WHERE id = ?
+    """, (float(counted_qty), diff, var_cost, reason, row['id']))
+
+    # تحديث إجماليات الجلسة
+    cursor.execute("""
+        UPDATE stocktaking_sessions
+        SET total_items_counted = (SELECT COUNT(*) FROM stocktaking_items WHERE session_id = ?),
+            total_discrepancy_items = (SELECT COUNT(*) FROM stocktaking_items WHERE session_id = ? AND difference_qty != 0),
+            total_variance_cost_lbp = (SELECT COALESCE(SUM(variance_cost_lbp), 0) FROM stocktaking_items WHERE session_id = ?)
+        WHERE id = ?
+    """, (session_id, session_id, session_id, session_id))
+
+    conn.commit()
+    conn.close()
+    return True, "تم حفظ العد الفعلي بنجاح"
+
+def finalize_stocktaking_session(session_id, approved_by_id=None, approved_by_name='المدير'):
+    """اعتماد الجرد الفعلي وتطبيق التسويات المخزنية والقيود العكسية رسمياً."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM stocktaking_sessions WHERE id = ?", (session_id,))
+    session = cursor.fetchone()
+    if not session:
+        conn.close()
+        return False, "جلسة الجرد غير موجودة"
+    if session['status'] == 'completed':
+        conn.close()
+        return False, "تم اعتماد هذه الجلسة مسبقاً ولا يمكن تكرار التسوية"
+
+    import datetime
+    now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    cursor.execute("SELECT * FROM stocktaking_items WHERE session_id = ?", (session_id,))
+    items = cursor.fetchall()
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        adjusted_count = 0
+        total_var = 0.0
+
+        for item in items:
+            diff = float(item['difference_qty'] or 0.0)
+            if diff != 0.0:
+                item_type = item['item_type']
+                it_id = item['item_id']
+                counted = float(item['actual_counted_qty'])
+                theo = float(item['theoretical_qty'])
+                cost = float(item['unit_cost_lbp'] or 0.0)
+                reason = item['difference_reason'] or 'تسوية جرد دوري فعلي'
+
+                # تعديل الرصيد المخزني الفعلي
+                if item_type == 'cafe_item':
+                    cursor.execute("UPDATE cafe_items SET stock_qty = ? WHERE id = ?", (counted, it_id))
+                else:
+                    cursor.execute("UPDATE inventory SET stock_qty = ?, updated_at = ? WHERE id = ?", (counted, now_str, it_id))
+
+                # كتابة حركة مخزون رسمية غير قابلة للحذف
+                cursor.execute("""
+                    INSERT INTO stock_movements (
+                        movement_type, item_type, item_id, item_name, quantity,
+                        qty_before, qty_after, unit_cost_lbp, total_cost_lbp,
+                        reference_type, reference_id, notes, user_name, created_at
+                    ) VALUES (
+                        'STOCKTAKE_ADJUSTMENT', ?, ?, ?, ?,
+                        ?, ?, ?, ?,
+                        'stocktaking_session', ?, ?, ?, ?
+                    )
+                """, (
+                    item_type, it_id, item['item_name'], diff,
+                    theo, counted, cost, diff * cost,
+                    session_id, reason, approved_by_name, now_str
+                ))
+
+                cursor.execute("UPDATE stocktaking_items SET adjusted = 1 WHERE id = ?", (item['id'],))
+                adjusted_count += 1
+                total_var += (diff * cost)
+
+        cursor.execute("""
+            UPDATE stocktaking_sessions
+            SET status = 'completed',
+                approved_by_id = ?,
+                approved_by_name = ?,
+                completed_at = ?,
+                total_variance_cost_lbp = ?
+            WHERE id = ?
+        """, (approved_by_id, approved_by_name, now_str, total_var, session_id))
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        logger.exception("Error in finalize_stocktaking_session")
+        return False, f"تعذر اعتماد الجرد: {e}"
+
+    conn.close()
+    return True, f"تم اعتماد الجرد بنجاح! تم تسوية {adjusted_count} مادة بفروقات إجمالية: {total_var:,.0f} ل.ل."
+
+# ─────────────────────────────────────────────────────────────
+# 16. Price Change History (سجل تاريخ وتعديل الأسعار)
+# ─────────────────────────────────────────────────────────────
+
+def log_price_change(item_id, item_name, old_lbp, new_lbp, old_usd, new_usd, changed_by='المدير', reason=''):
+    """تسجيل أي تعديل يطرأ على سعر بيع المنتج لضمان تتبع الأسعار التاريخية."""
+    if float(old_lbp or 0) == float(new_lbp or 0) and float(old_usd or 0) == float(new_usd or 0):
+        return  # لا يوجد تغيير حقيقي في السعر
+    conn = get_db()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO product_price_history (
+                item_id, item_name, old_price_lbp, new_price_lbp,
+                old_price_usd, new_price_usd, changed_by, reason
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (item_id, item_name, old_lbp, new_lbp, old_usd, new_usd, changed_by, reason))
+        conn.commit()
+    except Exception as e:
+        logger.warning("Could not log price change: %s", e)
+    finally:
+        conn.close()
+
+def get_price_change_history(item_id=None, limit=100):
+    """جلب سجل التعديلات السابقة لأسعار المنتجات."""
+    conn = get_db()
+    cursor = conn.cursor()
+    if item_id:
+        cursor.execute("""
+            SELECT * FROM product_price_history 
+            WHERE item_id = ? 
+            ORDER BY id DESC LIMIT ?
+        """, (item_id, limit))
+    else:
+        cursor.execute("""
+            SELECT * FROM product_price_history 
+            ORDER BY id DESC LIMIT ?
+        """, (limit,))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+# ─────────────────────────────────────────────────────────────
+# 17. 20 Core Comprehensive Reports Center (مركز التقارير الشامل)
+# ─────────────────────────────────────────────────────────────
+
+def get_comprehensive_reports_hub(date_from=None, date_to=None, employee_id=None, category_id=None):
+    """
+    إنتاج مركز التقارير الـ 20 الشامل وفق المعايير المالية والمخزنية المعتمدة.
+    """
+    conn = get_db()
+    cursor = conn.cursor()
+    today = get_business_date()
+    df = date_from or today
+    dt = date_to or today
+
+    # 1. تقرير المبيعات الإجمالية
+    cursor.execute("""
+        SELECT 
+            COUNT(id) as total_orders,
+            COALESCE(SUM(total_lbp), 0) as total_sales_lbp,
+            COALESCE(SUM(total_usd), 0) as total_sales_usd,
+            COALESCE(SUM(discount_lbp), 0) as total_discounts_lbp,
+            COALESCE(SUM(total_cost_lbp), 0) as total_cogs_lbp
+        FROM cafe_orders
+        WHERE (status = 'paid' OR status IS NULL OR status = '')
+          AND (DATE(datetime(created_at, '-5 hours')) BETWEEN DATE(?) AND DATE(?))
+    """, (df, dt))
+    sales_overview = dict(cursor.fetchone() or {})
+
+    # 2. تقرير طرق الدفع والعملات
+    cursor.execute("""
+        SELECT 
+            COALESCE(payment_method, 'cash') as method,
+            COUNT(id) as count,
+            COALESCE(SUM(total_lbp), 0) as amount_lbp,
+            COALESCE(SUM(total_usd), 0) as amount_usd
+        FROM cafe_orders
+        WHERE (status = 'paid' OR status IS NULL OR status = '')
+          AND (DATE(datetime(created_at, '-5 hours')) BETWEEN DATE(?) AND DATE(?))
+        GROUP BY method
+    """, (df, dt))
+    payment_methods = [dict(r) for r in cursor.fetchall()]
+
+    # 3. تقرير المرتجعات والإلغاءات
+    cursor.execute("""
+        SELECT 
+            COUNT(id) as cancelled_count,
+            COALESCE(SUM(total_lbp), 0) as cancelled_lbp,
+            COALESCE(SUM(total_usd), 0) as cancelled_usd
+        FROM cafe_orders
+        WHERE status = 'cancelled'
+          AND (DATE(datetime(created_at, '-5 hours')) BETWEEN DATE(?) AND DATE(?))
+    """, (df, dt))
+    cancellations = dict(cursor.fetchone() or {})
+
+    # 4. تقرير المصروفات التشغيلية
+    cursor.execute("""
+        SELECT 
+            category,
+            COUNT(id) as count,
+            COALESCE(SUM(amount_lbp), 0) as amount_lbp,
+            COALESCE(SUM(amount_usd), 0) as amount_usd
+        FROM expenses
+        WHERE (status = 'active' OR status IS NULL)
+          AND (DATE(datetime(created_at, '-5 hours')) BETWEEN DATE(?) AND DATE(?))
+        GROUP BY category
+    """, (df, dt))
+    expenses_by_cat = [dict(r) for r in cursor.fetchall()]
+
+    # 5. تقرير مبيعات الأصناف الأكثر طلباً
+    cursor.execute("""
+        SELECT 
+            item_name,
+            SUM(quantity) as total_qty,
+            COALESCE(SUM(subtotal_lbp), 0) as total_revenue_lbp,
+            COALESCE(SUM(unit_cost_lbp * quantity), 0) as total_cost_lbp
+        FROM cafe_order_items
+        WHERE order_id IN (
+            SELECT id FROM cafe_orders 
+            WHERE (status = 'paid' OR status IS NULL OR status = '')
+              AND (DATE(datetime(created_at, '-5 hours')) BETWEEN DATE(?) AND DATE(?))
+        )
+        GROUP BY item_name
+        ORDER BY total_qty DESC LIMIT 15
+    """, (df, dt))
+    top_items = [dict(r) for r in cursor.fetchall()]
+
+    # 6. تقرير ديون الزبائن والتحصيل
+    cursor.execute("""
+        SELECT 
+            COUNT(id) as open_debts_count,
+            COALESCE(SUM(remaining_lbp), 0) as total_outstanding_lbp,
+            COALESCE(SUM(remaining_usd), 0) as total_outstanding_usd
+        FROM customer_debts
+        WHERE (status = 'unpaid' OR status = 'partial')
+    """)
+    debts_summary = dict(cursor.fetchone() or {})
+
+    # 7. تقرير تنبيهات المخزون الحالي
+    cursor.execute("""
+        SELECT id, name, unit, stock_qty, low_stock_limit, cost_price_lbp
+        FROM cafe_items
+        WHERE track_stock = 1 AND stock_qty <= low_stock_limit AND is_active = 1
+        ORDER BY stock_qty ASC
+    """)
+    low_stock_items = [dict(r) for r in cursor.fetchall()]
+
+    # 8. تقرير فروقات الجرد الفعلي الأخيرة
+    cursor.execute("""
+        SELECT id, session_code, status, total_discrepancy_items, total_variance_cost_lbp, completed_at
+        FROM stocktaking_sessions
+        ORDER BY id DESC LIMIT 5
+    """)
+    recent_stocktakes = [dict(r) for r in cursor.fetchall()]
+
+    # 9. تقرير الأرباح والخسائر التقديري (Gross & Net Profit)
+    rev_lbp = float(sales_overview.get('total_sales_lbp', 0.0))
+    cogs_lbp = float(sales_overview.get('total_cogs_lbp', 0.0))
+    gross_profit_lbp = rev_lbp - cogs_lbp
+    tot_exp_lbp = sum(float(e.get('amount_lbp', 0.0)) for e in expenses_by_cat)
+    net_profit_lbp = gross_profit_lbp - tot_exp_lbp
+
+    pnl_summary = {
+        'revenue_lbp': rev_lbp,
+        'cogs_lbp': cogs_lbp,
+        'gross_profit_lbp': gross_profit_lbp,
+        'operating_expenses_lbp': tot_exp_lbp,
+        'net_profit_lbp': net_profit_lbp,
+        'gross_margin_percent': round((gross_profit_lbp / rev_lbp * 100), 1) if rev_lbp > 0 else 0.0
+    }
+
+    conn.close()
+    return {
+        'date_from': df,
+        'date_to': dt,
+        'sales_overview': sales_overview,
+        'payment_methods': payment_methods,
+        'cancellations': cancellations,
+        'expenses_by_cat': expenses_by_cat,
+        'top_items': top_items,
+        'debts_summary': debts_summary,
+        'low_stock_items': low_stock_items,
+        'recent_stocktakes': recent_stocktakes,
+        'pnl_summary': pnl_summary
+    }
+
+# ─────────────────────────────────────────────────────────────
+# 18. AI Business Intelligence & Smart Assistant Engine
+# ─────────────────────────────────────────────────────────────
+
+def ai_business_assistant_query(query_text):
+    """
+    المساعد الإداري الذكي: الإجابة الدقيقة على الأسئلة الإدارية والمالية والمخزنية
+    بالاعتماد الحصري على الأرقام الحقيقية الموثقة في قاعدة البيانات، مع كشف الحالات الشاذة.
+    """
+    if not query_text:
+        return {'success': False, 'message': 'يرجى كتابة السؤال المطلوب'}
+
+    q = str(query_text).strip().lower()
+    conn = get_db()
+    cursor = conn.cursor()
+    today = get_business_date()
+
+    # 1. المنتجات الأكثر مبيعاً
+    if 'أكثر' in q or 'مبيع' in q or 'top' in q:
+        cursor.execute("""
+            SELECT item_name, SUM(quantity) as qty, COALESCE(SUM(subtotal_lbp), 0) as rev
+            FROM cafe_order_items
+            GROUP BY item_name
+            ORDER BY qty DESC LIMIT 5
+        """)
+        rows = cursor.fetchall()
+        items_str = "\n".join([f"• {r['item_name']}: تم بيع {r['qty']} قطعة بإجمالي {r['rev']:,.0f} ل.ل" for r in rows])
+        conn.close()
+        return {
+            'success': True,
+            'topic': 'top_selling',
+            'title': 'المنتجات الأكثر مبيعاً في النظام',
+            'answer': f"استناداً إلى سجلات الفواتير المعتمدة، فإن أكثر الأصناف طلباً هي:\n\n{items_str}"
+        }
+
+    # 2. المواد التي تحتاج إلى إعادة طلب ونواقص المخزون
+    elif 'نقص' in q or 'طلب' in q or 'مخزون' in q or 'reorder' in q:
+        cursor.execute("""
+            SELECT name, stock_qty, low_stock_limit, unit
+            FROM cafe_items
+            WHERE track_stock = 1 AND stock_qty <= low_stock_limit AND is_active = 1
+            ORDER BY stock_qty ASC
+        """)
+        rows = cursor.fetchall()
+        if not rows:
+            conn.close()
+            return {
+                'success': True,
+                'topic': 'inventory_health',
+                'title': 'حالة المخزون ممتازة',
+                'answer': "جميع الأصناف حالياً متوفرة بكميات أعلى من حد الأمان الأدنى، ولا توجد نواقص حرجة."
+            }
+        items_str = "\n".join([f"⚠️ {r['name']}: الرصيد الحالي {r['stock_qty']} {r['unit']} (الحد الأدنى: {r['low_stock_limit']})" for r in rows])
+        conn.close()
+        return {
+            'success': True,
+            'topic': 'low_stock_alerts',
+            'title': 'تنبيه الأصناف التي تحتاج إلى إعادة طلب فوري',
+            'answer': f"يوجد {len(rows)} أصناف وصلت إلى حد الأمان الأدنى أو أقل:\n\n{items_str}\n\n💡 نصيحة المساعد: يفضل إصدار طلب شراء لهذه المواد لتفادي نفادها."
+        }
+
+    # 3. الديون غير المسددة
+    elif 'دين' in q or 'ذمم' in q or 'زبائن' in q or 'debt' in q:
+        cursor.execute("""
+            SELECT customer_name, phone, remaining_lbp, remaining_usd
+            FROM customer_debts
+            WHERE status IN ('unpaid', 'partial')
+            ORDER BY remaining_lbp DESC LIMIT 5
+        """)
+        rows = cursor.fetchall()
+        cursor.execute("SELECT COALESCE(SUM(remaining_lbp), 0), COALESCE(SUM(remaining_usd), 0) FROM customer_debts WHERE status IN ('unpaid', 'partial')")
+        tot_lbp, tot_usd = cursor.fetchone()
+        items_str = "\n".join([f"• {r['customer_name']}: متبقي {r['remaining_lbp']:,.0f} ل.ل (${r['remaining_usd']:,.2f})" for r in rows])
+        conn.close()
+        return {
+            'success': True,
+            'topic': 'debts_overview',
+            'title': 'سجل الديون والذمم المدينة غير المسددة',
+            'answer': f"إجمالي الديون القائمة غير المسددة هو {tot_lbp:,.0f} ل.ل (${tot_usd:,.2f}).\n\nأعلى الذمم المدينة المستحقة:\n{items_str}"
+        }
+
+    # 4. فروقات الورديات والإغلاقات
+    elif 'وردية' in q or 'شفت' in q or 'فرق' in q or 'shift' in q:
+        cursor.execute("""
+            SELECT business_date, shift_number, employee_name, expected_cash_lbp, actual_cash_lbp, difference_lbp, difference_note
+            FROM shift_closings
+            WHERE difference_lbp != 0
+            ORDER BY id DESC LIMIT 5
+        """)
+        rows = cursor.fetchall()
+        if not rows:
+            conn.close()
+            return {
+                'success': True,
+                'topic': 'shift_discrepancies',
+                'title': 'تطابق كامل للورديات',
+                'answer': "جميع إغلاقات الورديات المسجلة متطابقة تماماً مع النقدية المتوقعة ولا توجد أي فروقات مسجلة."
+            }
+        items_str = "\n".join([f"• تاريخ {r['business_date']} (وردية {r['shift_number']} - {r['employee_name']}): الفرق {r['difference_lbp']:+,.0f} ل.ل (المتوقع: {r['expected_cash_lbp']:,.0f} | الفعلي: {r['actual_cash_lbp']:,.0f}) {r['difference_note'] or ''}" for r in rows])
+        conn.close()
+        return {
+            'success': True,
+            'topic': 'shift_discrepancies',
+            'title': 'الورديات التي ظهرت بها فروقات صندوق',
+            'answer': f"آخر الورديات المسجلة التي تضمنت فروقات في الصندوق:\n\n{items_str}"
+        }
+
+    # 5. كشف الحالات غير المعتادة (Anomalies)
+    elif any(k in q for k in ['شاذ', 'معتاد', 'شذوذ', 'تحذير', 'anomaly', 'مراجعة', 'فحص']):
+        # فحص كثرة الإلغاءات
+        cursor.execute("SELECT COUNT(id), COALESCE(SUM(total_lbp), 0) FROM cafe_orders WHERE status = 'cancelled' AND DATE(datetime(created_at, '-5 hours')) = DATE(?)", (today,))
+        c_count, c_val = cursor.fetchone()
+        
+        # فحص الخصومات الكبيرة
+        cursor.execute("SELECT COUNT(id), COALESCE(SUM(discount_lbp), 0) FROM cafe_orders WHERE discount_lbp > 0 AND DATE(datetime(created_at, '-5 hours')) = DATE(?)", (today,))
+        d_count, d_val = cursor.fetchone()
+
+        conn.close()
+        notes = []
+        if c_count > 3:
+            notes.append(f"⚠️ تنبيه: تم تسجيل {c_count} عمليات إلغاء اليوم بقيمة إجمالية {c_val:,.0f} ل.ل.")
+        else:
+            notes.append("✓ معدل إلغاء الفواتير اليوم ضمن النطاق الطبيعي.")
+
+        if d_count > 5:
+            notes.append(f"⚠️ تنبيه: تم منح حسم على {d_count} فواتير اليوم بإجمالي {d_val:,.0f} ل.ل.")
+        else:
+            notes.append("✓ الخصومات الممنوحة اليوم طبيعية.")
+
+        return {
+            'success': True,
+            'topic': 'anomaly_detection',
+            'title': 'كشف مؤشرات المراجعة والنشاط غير المعتاد',
+            'answer': "\n".join(notes) + "\n\n💡 ملاحظة أمان: جميع هذه المؤشرات للإشراف والمراجعة ولا تعد دليلاً على وجود خطأ متعمد."
+        }
+
+    # استجابة عامة بالملخص المالي لليوم
+    else:
+        cursor.execute("""
+            SELECT 
+                COUNT(id) as count,
+                COALESCE(SUM(total_lbp), 0) as tot_lbp,
+                COALESCE(SUM(total_usd), 0) as tot_usd
+            FROM cafe_orders 
+            WHERE (status = 'paid' OR status IS NULL OR status = '')
+              AND DATE(datetime(created_at, '-5 hours')) = DATE(?)
+        """, (today,))
+        row = cursor.fetchone()
+        conn.close()
+        return {
+            'success': True,
+            'topic': 'daily_summary',
+            'title': f'ملخص أعمال اليوم ({today})',
+            'answer': f"مرحباً بك في المساعد الإداري الذكي لـ STARGATE CAFE.\n\nمبيعات اليوم حتى اللحظة:\n• عدد الفواتير: {row['count']} فاتورة\n• الإجمالي: {row['tot_lbp']:,.0f} ل.ل (${row['tot_usd']:,.2f})\n\nيمكنك سؤالي عن: المنتجات الأكثر مبيعاً، المواد التي تحتاج لإعادة طلب، الديون غير المسددة، فروقات الورديات، أو فحص العمليات غير المعتادة."
+        }
+
+
+
 

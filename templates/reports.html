@@ -873,7 +873,7 @@
                 </thead>
                 <tbody class="divide-y divide-slate-800/60 font-mono">
                     {% for item in inventory_items %}
-                    <tr class="hover:bg-slate-800/40 transition {% if item.quantity <= 0 %}bg-rose-950/20{% elif item.quantity <= item.min_quantity %}bg-amber-950/20{% endif %}">
+                    <tr class="hover:bg-slate-800/40 transition {% if (item.stock_qty or 0) <= 0 %}bg-rose-950/20{% elif (item.stock_qty or 0) <= (item.low_stock_limit or 5) %}bg-amber-950/20{% endif %}">
                         <td class="p-3.5 text-slate-500 font-mono">{{ loop.index }}</td>
                         <td class="p-3.5 font-sans font-bold text-white flex items-center gap-2">
                             <span>{{ item.icon or '📦' }}</span>
@@ -885,22 +885,22 @@
                             </span>
                         </td>
                         <td class="p-3.5 text-center">
-                            <span class="font-black text-sm {% if item.quantity <= 0 %}text-rose-400{% elif item.quantity <= item.min_quantity %}text-amber-400{% else %}text-emerald-400{% endif %}">
-                                {{ item.quantity }} {{ item.unit or 'حبة' }}
+                            <span class="font-black text-sm {% if (item.stock_qty or 0) <= 0 %}text-rose-400{% elif (item.stock_qty or 0) <= (item.low_stock_limit or 5) %}text-amber-400{% else %}text-emerald-400{% endif %}">
+                                {{ item.stock_qty or 0 }} {{ item.unit or 'حبة' }}
                             </span>
                         </td>
                         <td class="p-3.5 text-center text-slate-400 font-bold">
-                            {{ item.min_quantity }} {{ item.unit or 'حبة' }}
+                            {{ item.low_stock_limit or 5 }} {{ item.unit or 'حبة' }}
                         </td>
                         <td class="p-3.5 text-slate-300 font-mono">
                             {{ (item.cost_price_lbp or 0)|format_currency }} ل.ل
                         </td>
                         <td class="p-3.5 font-sans">
-                            {% if item.quantity <= 0 %}
+                            {% if (item.stock_qty or 0) <= 0 %}
                             <span class="bg-rose-950 text-rose-300 border border-rose-800 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
                                 ❌ نفد من المخزون
                             </span>
-                            {% elif item.quantity <= item.min_quantity %}
+                            {% elif (item.stock_qty or 0) <= (item.low_stock_limit or 5) %}
                             <span class="bg-amber-950 text-amber-300 border border-amber-800 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
                                 ⚠️ منخفض - يرجى الشراء
                             </span>

@@ -1,39 +1,35 @@
-# STARGATE CAFE — Professional Feature Roadmap & Implementation Status
+# STARGATE CAFE — Feature Roadmap & Architecture Evolution (v6.3.1)
 
-## Overview
-This roadmap establishes the feature maturity matrix for STARGATE CAFE ERP & POS, aligned with restaurant and gaming lounge operational requirements.
+## 1. الميزات المنفذة والمكتملة بالكامل (Completed & Shipped)
 
----
+### أ. الأمان والمصادقة (Security & Authentication)
+- ✅ **منع تجاوز صلاحية الموظف:** حماية مسار `/employee/current` مع فرض المصادقة وإرجاع 401.
+- ✅ **حماية العمليات المالية الكبرى:** قصر تصفير ونقل الخزنة على الإدارة العامة بمفتاح منع التكرار.
+- ✅ **نظام الصلاحيات المتقدم (RBAC):** دعم 7 أدوار قياسية (مالك، مدير، مدير وردية، محاسب، كاشير، مسؤول مخزون، مدقق).
+- ✅ **منع هجمات CSRF:** تحقق صارم من النطاقات الموثوقة وترويسات Origin / Referer.
+- ✅ **تحصين معالج التثبيت الأول:** منع الاستحواذ الإداري على الأنظمة المثبتة مسبقاً.
 
-## Priority A — Core Operational Features
+### ب. المخزون والمشتريات والجرد الفعلي (Inventory & Stocktaking)
+- ✅ **دورة الجرد الدوري الفعلي:** إنشاء جلسات، التقاط الأرصدة النظرية، تسجيل العد الفعلي، احتساب الفروقات الآلية، واعتماد التسويات.
+- ✅ **تتبع أسعار المنتجات:** تسجيل كافة تعديلات الأسعار في `product_price_history`.
+- ✅ **دعم الباركود والـ SKU:** إضافة فهارس سريعة للبحث الفوري عن المنتجات في الكاشير والمخزن.
+- ✅ **تسجيل حركات المخزون الإلزامية:** توثيق كل حركة مخزنية بنوعها وتاريخها ورقم المرجع والموظف.
 
-| Ref | Feature | Status | Implementation Details |
-| :--- | :--- | :---: | :--- |
-| **A1** | **Executive Dashboard & Real-Time KPIs** | **IMPLEMENTED** | Real-time KPI cards for Daily Sales (LBP & USD), Gaming clicks, Cafe items sold, Safe balance, Drawer status, and Gross Production (`/api/reports/live_summary`). |
-| **A2** | **Advanced Multi-Criteria Reporting** | **IMPLEMENTED** | Filterable by business date, shift, employee, category, and payment method (`/reports`). Print-friendly layout, CSV exports, thermal receipt reprinting, and PDF formatting. |
-| **A3** | **Expense Management & Segregated Cash Sources** | **IMPLEMENTED** | Explicit distinction between drawer-sourced (`source='drawer'`) and safe-sourced (`source='safe'`) expenses. Multi-currency tracking, double-entry expense ledger, and audit tracking. |
-| **A4** | **Customer Debts & Receivable Aging** | **IMPLEMENTED** | Customer profile tracking, debt orders, partial and full repayments (`/debts`), printable statements, and double-entry integration. |
-| **A5** | **Inventory & Stock Management** | **IMPLEMENTED** | Automatic stock decrements upon sale, Turkish coffee bean batch yields (`coffee_bag_batches`), recipe ingredient conversions, low-stock alerts, and manual inventory adjustments with stock movements audit trail. |
-| **A6** | **Employee Administration & Role-Based Access** | **IMPLEMENTED** | Roles: `admin`, `cashier`. Fast PIN login, bcrypt password hashing, shift-level sales performance tracking, and safe deactivation without historical record deletion. |
+### ج. المحاسبة والمالية (Double-Entry Financials)
+- ✅ **ترحيل القيود المزدوجة النقي:** إلغاء أي تعديل مباشر لجدول الحسابات بـ SQL.
+- ✅ **دعم العملتين USD و LBP:** تثبيت أسعار الصرف التاريخية في كل فاتورة ومعاملة.
+- ✅ **سجل الديون والتحصيل:** متابعة الذمم المدينة والمدفوعات الجزئية.
 
----
-
-## Priority B — Management & Business Intelligence
-
-| Ref | Feature | Status | Implementation Details |
-| :--- | :--- | :---: | :--- |
-| **B1** | **Profitability & COGS Analytics** | **IMPLEMENTED** | Separation of gross revenue, COGS (Cost of Goods Sold from recipes and purchase prices), operating expenses, and net profit. |
-| **B2** | **Product Performance & Peak Hours Analysis** | **IMPLEMENTED** | Top-selling items, slow-moving items, and hourly distribution curves (`get_hourly_sales_distribution`) to optimize staffing. |
-| **B3** | **Automated Alerts & Notifications** | **IMPLEMENTED** | Real-time low stock indicators, out-of-stock badges on POS buttons, and automated shift-closing backups. |
-| **B4** | **Telegram Bot Integration & AI Auditing** | **IMPLEMENTED** | One-click daily closing summaries and shift reports sent to manager's Telegram bot with end-to-end verified server records. AI copilot for operational queries. |
+### د. التقارير والذكاء الاصطناعي (Reporting & AI)
+- ✅ **مركز التقارير الـ 20 الشامل:** واجهة موحدة تشمل المبيعات، الفواتير، طرق الدفع، المرتجعات، الأرباح والخسائر، وحركات المخزون.
+- ✅ **المساعد الإداري الذكي:** إجابات دقيقة تستند إلى الأرقام الحقيقية لقاعدة البيانات دون صلاحيات تدميرية.
+- ✅ **كشف الحالات غير المعتادة:** رصد كثرة الإلغاءات، الخصومات غير الاعتيادية، وعجز المخزون.
 
 ---
 
-## Priority C — Advanced & Specialized Extensions
+## 2. الميزات المستقبلية المجدولة (Future Enhancements)
 
-| Ref | Feature | Status | Assessment & Architectural Status |
-| :--- | :--- | :---: | :--- |
-| **C1** | **Customer Loyalty & Rewards** | Planned (v6.4) | Feasible using existing customer table; will track loyalty points per spend. |
-| **C2** | **Table & Dine-In Tab Management** | **IMPLEMENTED** | Customer tabs with table assignment, open tab accumulation, and void with waste logging (`delete_tab`). |
-| **C3** | **Multi-Branch Cloud Synchronization** | Planned (v7.0) | Centralized schema ready for store_id branch partitioning. |
-| **C4** | **Offline Resilient Sales Queuing** | **IMPLEMENTED** | Local SQLite embedded engine operates 100% offline; does not require external cloud connection to execute sales. |
+- ⏳ **الربط مع الطابعات الحرارية عبر شبكة الـ IP (ESC/POS Network Printing):** الطباعة المباشرة من نقاط البيع المتعددة إلى طابعات المطبخ والبار عبر بروتوكول TCP/IP raw.
+- ⏳ **تطبيق الهاتف المصاحب للإدارة (Flutter Companion App):** لوحة تحكم حية لأصحاب الكافيه للاطلاع على المبيعات والتنبيهات عن بعد.
+- ⏳ **برنامج الولاء ونقاط المكافآت للزبائن (Customer Loyalty Points):** احتساب نقاط تلقائية عند كل عملية شراء قابلة للاستبدال بمشروبات أو خصومات.
+- ⏳ **المزامنة السحابية للنسخ الاحتياطي (Encrypted Cloud Backup):** رفع النسخ الاحتياطية المشفرة تلقائياً إلى Google Drive أو Telegram Bot مؤمن.
