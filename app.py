@@ -565,7 +565,8 @@ def ensure_default_session():
             conn = database.get_db()
             admin_count = conn.execute("SELECT COUNT(*) FROM employees WHERE role='admin' AND is_active=1").fetchone()[0]
             conn.close()
-            if settings.get('setup_complete') != 1 or admin_count == 0:
+            setup_val = str(settings.get('setup_complete') or '0').strip().lower()
+            if setup_val not in ('1', 'true', 'yes') or admin_count == 0:
                 if request.endpoint != 'setup_wizard':
                     return redirect(url_for('setup_wizard'))
                 return
@@ -3477,10 +3478,15 @@ def safe_page():
     )
     drawer_status = accounting.get_drawer_cash_status()
     daily_transfer_status = accounting.check_daily_safe_transfer_status(target_date if target_date != 'all' else today_str)
+    owner_drawings = accounting.get_owner_drawings(
+        start_date=start_date if target_date != 'all' else None,
+        end_date=end_date if target_date != 'all' else None
+    )
 
     return render_template('safe.html',
         daily_transfer_status=daily_transfer_status,
         transfers=transfers,
+        owner_drawings=owner_drawings,
         balance=balance,
         period_summary=period_summary,
         drawer_status=drawer_status,
@@ -3984,6 +3990,184 @@ def safe_quick_transfer():
         return jsonify({'success': False, 'error': str(e)}), 400
 
 
+# =========================================================================
+# 💰 OWNER DRAWINGS & PROFIT DISTRIBUTION (مسحوبات أرباح المالك ونهاية الشهر)
+# =========================================================================
+
+@app.route('/owner/withdraw', methods=['POST'])
+@app.route('/api/owner/withdraw', methods=['POST'])
+@admin_required
+def owner_withdraw():
+    """
+    سحب أرباح المالك في نهاية الشهر أو دورياً:
+    - خصم فوري ومباشر من كاش الدرج (أو الخزنة الخاصة).
+    - توثيق القيد المزدوج في حساب 3030 (مسحوبات المالك) دون التأثير سلباً على مصاريف التشغيل.
+    """
+    try:
+        data = request.get_json(silent=True) if request.is_json else request.form
+        amount_lbp = float(data.get('amount_lbp') or 0.0)
+        amount_usd = float(data.get('amount_usd') or 0.0)
+        source = (data.get('source') or 'drawer').strip()
+        drawing_type = (data.get('drawing_type') or 'monthly_profit').strip()
+        month_period = (data.get('month_period') or accounting.get_business_date()[:7]).strip()
+        drawn_by = data.get('drawn_by') or session.get('admin_name') or session.get('employee_name') or 'المالك / المدير'
+        notes = (data.get('notes') or f"سحب أرباح نهاية شهر {month_period}").strip()
+
+        res = accounting.record_owner_drawing(
+            amount_lbp=amount_lbp,
+            amount_usd=amount_usd,
+            source=source,
+            drawing_type=drawing_type,
+            month_period=month_period,
+            drawn_by=drawn_by,
+            notes=notes
+        )
+
+        try:
+            database.write_audit_log(
+                actor=drawn_by,
+                action='OWNER_DRAWING',
+                table_name='owner_drawings',
+                record_id=res.get('drawing_id'),
+                new_value=f"{res['amount_lbp']} LBP",
+                reason=f"سحب أرباح المالك ({month_period}) من {source}: {notes}"
+            )
+        except Exception:
+            pass
+
+        src_ar = "درج الكاشير" if source == 'drawer' else "الخزنة الخاصة"
+        msg = f"✓ تم سحب وخصم {res['amount_lbp']:,.0f} ل.ل بنجاح من {src_ar} (أرباح {month_period})"
+
+        if request.is_json:
+            return jsonify({
+                'success': True,
+                'message': msg,
+                'data': res
+            })
+
+        flash(msg, 'success')
+    except Exception as e:
+        err_msg = str(e)
+        if request.is_json:
+            return jsonify({'success': False, 'error': err_msg}), 400
+        flash(f'خطأ أثناء سحب الأرباح: {err_msg}', 'danger')
+
+    next_url = request.form.get('next') or request.referrer or url_for('reports_page')
+    return redirect(next_url)
+
+
+@app.route('/api/owner/drawings', methods=['GET'])
+@admin_required
+def api_owner_drawings():
+    """جلب سجل مسحوبات المالك لحظياً مع إجمالي الشهر."""
+    month_period = request.args.get('month_period')
+    source = request.args.get('source')
+    drawings = accounting.get_owner_drawings(month_period=month_period, source=source)
+    total_lbp = sum(float(d.get('amount_lbp') or 0.0) for d in drawings)
+    total_usd = sum(float(d.get('amount_usd') or 0.0) for d in drawings)
+    return jsonify({
+        'success': True,
+        'drawings': drawings,
+        'total_lbp': total_lbp,
+        'total_usd': total_usd,
+        'count': len(drawings)
+    })
+
+
+@app.route('/owner/drawing/<int:drawing_id>/cancel', methods=['POST'])
+@admin_required
+def cancel_owner_drawing_route(drawing_id: int):
+    """إلغاء عملية سحب أرباح المالك وعكس القيد لاستعادة الرصيد."""
+    reason = request.form.get('cancel_reason') or ((request.get_json(silent=True) or {}).get('cancel_reason')) or 'إلغاء مسحوبات المالك بواسطة الإدارة'
+    admin_name = session.get('admin_name') or session.get('employee_name') or 'المدير'
+    try:
+        accounting.cancel_owner_drawing(drawing_id=drawing_id, cancelled_by=admin_name, reason=reason)
+        try:
+            database.write_audit_log(
+                actor=admin_name,
+                action='CANCEL_OWNER_DRAWING',
+                table_name='owner_drawings',
+                record_id=drawing_id,
+                reason=reason
+            )
+        except Exception:
+            pass
+
+        msg = f"✓ تم إلغاء مسحوبات المالك رقم #{drawing_id} وإعادة الرصيد بالكامل"
+        if request.is_json:
+            return jsonify({'success': True, 'message': msg})
+        flash(msg, 'success')
+    except Exception as e:
+        if request.is_json:
+            return jsonify({'success': False, 'error': str(e)}), 400
+        flash(f'خطأ أثناء إلغاء المسحوبات: {str(e)}', 'danger')
+
+    next_url = request.form.get('next') or request.referrer or url_for('reports_page')
+    return redirect(next_url)
+
+
+@app.route('/api/reports/live_summary', methods=['GET'])
+@login_required
+def api_reports_live_summary():
+    """
+    تقرير فوري لحظي شامل يغطي:
+    1. كاش الدرج والخزنة ومسحوبات المالك والمصاريف بدقة 100%.
+    2. مبيعات وإنتاج اليوم (الكافيه مقابل الألعاب، الكاش مقابل الديون).
+    3. المخزون الفعلي، حبوب القهوة، والنواقص الفورية.
+    """
+    today_str = accounting.get_business_date()
+    current_month = today_str[:7]
+    settings = accounting.get_settings()
+    rate = float(settings.get('exchange_rate') or 89500.0)
+
+    drawer = accounting.get_drawer_cash_status()
+    safe = accounting.get_safe_balance()
+    daily_transfer = accounting.check_daily_safe_transfer_status(today_str)
+    daily_summary = accounting.get_daily_summary(today_str)
+    month_drawings = accounting.get_owner_drawings(month_period=current_month)
+    month_drawings_lbp = sum(float(d.get('amount_lbp') or 0.0) for d in month_drawings)
+    month_drawings_usd = sum(float(d.get('amount_usd') or 0.0) for d in month_drawings)
+
+    low_stock = accounting.get_low_stock_items()
+    coffee_stock = accounting.get_coffee_beans_stock()
+
+    return jsonify({
+        'success': True,
+        'business_date': today_str,
+        'current_month': current_month,
+        'exchange_rate': rate,
+        'money': {
+            'drawer_cash_lbp': drawer.get('total_untransferred_lbp', 0.0),
+            'drawer_cash_usd': drawer.get('total_untransferred_usd', 0.0),
+            'cafe_cash_lbp': drawer.get('untransferred_cafe_lbp', 0.0),
+            'gaming_cash_lbp': drawer.get('untransferred_pc_lbp', 0.0),
+            'past_untransferred_lbp': drawer.get('past_untransferred_lbp', 0.0),
+            'safe_balance_lbp': safe.get('total_lbp', 0.0),
+            'safe_balance_usd': safe.get('total_usd', 0.0),
+            'safe_deposits_lbp': safe.get('total_deposit_lbp', 0.0),
+            'safe_withdrawals_lbp': safe.get('total_withdraw_lbp', 0.0),
+            'today_recommended_transfer_lbp': daily_transfer.get('recommended_transfer_lbp', 0.0),
+            'is_fully_transferred': daily_transfer.get('is_fully_transferred', False),
+            'month_owner_drawings_lbp': month_drawings_lbp,
+            'month_owner_drawings_usd': month_drawings_usd
+        },
+        'sales': {
+            'today_cash_sales_lbp': daily_transfer.get('total_sales_lbp', 0.0),
+            'today_expenses_lbp': daily_transfer.get('total_expenses_lbp', 0.0),
+            'orders_count': daily_transfer.get('orders_count', 0),
+            'total_revenue_lbp': daily_summary.get('total_sales_lbp', 0.0) if daily_summary else 0.0
+        },
+        'inventory': {
+            'low_stock_count': len(low_stock),
+            'low_stock_items': low_stock[:5],
+            'coffee_remaining_grams': coffee_stock.get('remaining_grams', 0),
+            'coffee_remaining_cups': coffee_stock.get('estimated_cups', 0),
+            'coffee_bags_count': coffee_stock.get('bags_count', 0)
+        },
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    })
+
+
 # -------------------------------------------------------------------------
 # 📊 COMPREHENSIVE DAILY & PERIOD FINANCIAL REPORTS (التقارير اليومية وحركة الأصناف)
 # -------------------------------------------------------------------------
@@ -4093,9 +4277,21 @@ def reports_page():
     # AI Smart Offline Audit Analysis
     ai_audit = accounting.ai_audit_system(target_date if target_date != 'all' else today_str)
 
+    owner_drawings = accounting.get_owner_drawings(
+        start_date=start_date if is_range else (target_date if target_date != 'all' else None),
+        end_date=end_date if is_range else (target_date if target_date != 'all' else None)
+    )
+    inventory_items = accounting.get_inventory_items()
+    coffee_stock = accounting.get_coffee_beans_stock()
+    low_stock_items = accounting.get_low_stock_items()
+
     return render_template(
         'reports.html',
         ai_audit=ai_audit,
+        owner_drawings=owner_drawings,
+        inventory_items=inventory_items,
+        coffee_stock=coffee_stock,
+        low_stock_items=low_stock_items,
         coffee_period_stats=coffee_period_stats,
         pnl=pnl,
         daily_transfer_status=daily_transfer_status,

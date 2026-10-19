@@ -453,6 +453,10 @@
                             <i class="fa-solid fa-vault text-amber-400 w-4"></i>
                             <span>الخزنة الخاصة (صندوق المالك)</span>
                         </a>
+                        <a href="{{ url_for('safe_page') }}" onclick="localStorage.setItem('open_owner_withdraw_modal', '1');" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-purple-300 transition">
+                            <i class="fa-solid fa-sack-dollar text-purple-400 w-4"></i>
+                            <span>سحب أرباح المالك (نهاية الشهر)</span>
+                        </a>
                         <a href="{{ url_for('financial_ledger_page') }}" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs hover:bg-slate-800 text-slate-200 hover:text-emerald-300 transition">
                             <i class="fa-solid fa-book text-emerald-400 w-4"></i>
                             <span>السجل المالي العام (Ledger)</span>

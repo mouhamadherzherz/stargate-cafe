@@ -4535,14 +4535,16 @@ def add_safe_transfer(amount_lbp=0.0, note='', transferred_by='المدير', ra
         conn.close()
         return dup_row[0]
 
-    # 2. فحص كفاية كاش الدرج إذا كان الترحيل من الدرج للخزنة
+    # 2. ضمان نقل كامل المبلغ المتاح في الدرج دون أي اقتطاع أو تعليق
     if op_type == 'deposit' and source == 'drawer':
-        cursor.execute("SELECT COALESCE(balance_lbp, 0) FROM accounts WHERE code = '1010'")
-        d_row = cursor.fetchone()
-        drawer_avail = float(d_row[0] or 0.0) if d_row else 0.0
-        if drawer_avail > 0 and amount_lbp > (drawer_avail + 1000.0):
-            amount_lbp = drawer_avail
-            amount_usd = round(amount_lbp / rate, 2) if rate > 0 else 0.0
+        try:
+            drawer_curr = get_drawer_cash_status()
+            drawer_avail = float(drawer_curr.get('total_untransferred_lbp') or 0.0)
+            if amount_lbp >= (drawer_avail - 100.0) and drawer_avail > 0:
+                amount_lbp = drawer_avail
+                amount_usd = round(amount_lbp / rate, 2) if rate > 0 else 0.0
+        except Exception:
+            pass
 
     now_str = get_local_now()
     cursor.execute("""
@@ -4937,9 +4939,34 @@ def get_drawer_cash_status():
     # الكاش الصافي الذي خرج من الدرج باتجاه الخزنة
     net_to_safe_lbp = max(0.0, total_safe_deposits_lbp - total_returned_to_drawer_lbp)
 
-    # حساب الكاش الفعلي الحقيقي الموجود في الصندوق والدرج:
-    # الكاش الفعلي = (كل مبيعات الكاش + سدادات الديون المستلمة) - (مصاريف الدرج + ما تم تحويله للخزنة)
-    calculated_cash_drawer_lbp = max(0.0, (all_cash_sales_lbp + all_debt_rep_lbp) - (all_expenses_lbp + net_to_safe_lbp))
+    # 7. إجمالي مسحوبات أرباح المالك المسحوبة مباشرة من الدرج (سحب نهاية الشهر / مسحوبات شخصية)
+    try:
+        cursor.execute("""
+            SELECT COALESCE(SUM(amount_lbp), 0)
+            FROM owner_drawings
+            WHERE (source = 'drawer' OR source IS NULL) AND (status != 'cancelled' OR status IS NULL)
+        """)
+        all_owner_drawings_from_drawer_lbp = float(cursor.fetchone()[0] or 0.0)
+    except Exception:
+        all_owner_drawings_from_drawer_lbp = 0.0
+
+    # 8. إجمالي العهد وفكة البداية المودعة في الدرج
+    try:
+        cursor.execute("""
+            SELECT COALESCE(SUM(amount_lbp), 0)
+            FROM financial_ledger
+            WHERE destination = 'drawer' AND entry_type IN ('shift_opening_float', 'drawer_float', 'drawer_topup')
+              AND (status = 'active' OR status IS NULL)
+        """)
+        all_floats_to_drawer_lbp = float(cursor.fetchone()[0] or 0.0)
+    except Exception:
+        all_floats_to_drawer_lbp = 0.0
+
+    # ⚖️ المعادلة المحاسبية الصارمة لكاش الدرج الفعلي اللحظي:
+    # كاش الدرج = (كل مبيعات الكاش + سدادات الديون المستلمة + فكة البداية) - (مصاريف الدرج + ما رُحِّل للخزنة + مسحوبات أرباح المالك من الدرج)
+    total_cash_in = all_cash_sales_lbp + all_debt_rep_lbp + all_floats_to_drawer_lbp
+    total_cash_out = all_expenses_lbp + net_to_safe_lbp + all_owner_drawings_from_drawer_lbp
+    calculated_cash_drawer_lbp = max(0.0, total_cash_in - total_cash_out)
     calculated_cash_drawer_usd = round(calculated_cash_drawer_lbp / rate, 2) if rate > 0 else 0.0
 
     # مزامنة رصيد الحساب المالي الدفتري (Account 1010) تلقائياً ليكون مطابقاً 100% للواقع
@@ -5015,9 +5042,212 @@ def get_drawer_cash_status():
         'all_transferred_to_safe_lbp': net_to_safe_lbp,
         'all_debt_rep_lbp': all_debt_rep_lbp,
         'all_expenses_lbp': all_expenses_lbp,
+        'all_owner_drawings_lbp': all_owner_drawings_from_drawer_lbp,
+        'all_floats_lbp': all_floats_to_drawer_lbp,
         'exact_drawer_account_lbp': calculated_cash_drawer_lbp,
         'exact_drawer_account_usd': calculated_cash_drawer_usd
     }
+
+
+def record_owner_drawing(
+    amount_lbp: float = 0.0,
+    amount_usd: float = 0.0,
+    source: str = 'drawer',
+    drawing_type: str = 'monthly_profit',
+    month_period: str = '',
+    drawn_by: str = 'المدير',
+    notes: str = ''
+) -> dict:
+    """
+    سحب أرباح المالك أو مسحوبات شخصية من الدرج أو الخزنة (نهاية الشهر أو دوري):
+    - يخصم فوراً من كاش الدرج (إذا كان المصدر الدرج) أو الخزنة (إذا كان المصدر الخزنة).
+    - يوثق في جدول owner_drawings مع توثيق اسم الساحب والفترة والملاحظات.
+    - يسجل قيداً محاسبياً مزدوجاً: من ح/ مسحوبات المالك وتوزيع الأرباح (3030) إلى ح/ الصندوق (1010 أو 1020).
+    - يسجل في سجل الحركة المالية المركزي (financial_ledger).
+    """
+    settings = get_settings()
+    rate = float(settings.get('exchange_rate') or 89500.0)
+    amount_lbp = float(amount_lbp or 0.0)
+    amount_usd = float(amount_usd or 0.0)
+
+    if amount_usd > 0 and amount_lbp <= 0:
+        amount_lbp = round(amount_usd * rate, 0)
+    elif amount_lbp > 0 and amount_usd <= 0:
+        amount_usd = round(amount_lbp / rate, 2)
+
+    if amount_lbp <= 0 and amount_usd <= 0:
+        raise ValueError("الرجاء إدخال مبلغ صحيح لمسحوبات الأرباح.")
+
+    source = 'safe' if str(source).lower() == 'safe' else 'drawer'
+    month_period = (month_period or get_business_date()[:7]).strip()
+    drawn_by = (drawn_by or 'المدير').strip()
+    notes = (notes or 'سحب أرباح المالك (نهاية الشهر)').strip()
+
+    # فحص كفاية الكاش قبل السحب
+    if source == 'drawer':
+        drawer_stat = get_drawer_cash_status()
+        avail_lbp = float(drawer_stat.get('total_untransferred_lbp') or 0.0)
+        if amount_lbp > (avail_lbp + 1000.0):
+            raise ValueError(f"المبلغ المطلوب سحبه ({amount_lbp:,.0f} ل.ل) أكبر من الكاش الفعلي المتوفر بالدرج ({avail_lbp:,.0f} ل.ل).")
+    else:
+        safe_stat = get_safe_balance()
+        avail_lbp = float(safe_stat.get('total_lbp') or 0.0)
+        if amount_lbp > (avail_lbp + 1000.0):
+            raise ValueError(f"المبلغ المطلوب سحبه ({amount_lbp:,.0f} ل.ل) أكبر من رصيد الخزنة الخاصة الحالي ({avail_lbp:,.0f} ل.ل).")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO owner_drawings (amount_lbp, amount_usd, source, drawing_type, month_period, drawn_by, notes, exchange_rate, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
+    """, (amount_lbp, amount_usd, source, drawing_type, month_period, drawn_by, notes, rate))
+    drawing_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    acc_credit = '1010' if source == 'drawer' else '1020'
+    src_label = 'درج الكاشير' if source == 'drawer' else 'الخزنة الخاصة'
+
+    # تسجيل القيد المزدوج في دفتر اليومية
+    try:
+        record_double_entry_journal(
+            description=f"مسحوبات أرباح المالك ({month_period}): {notes} - خصماً من {src_label}",
+            lines=[
+                {'account_code': '3030', 'debit_lbp': amount_lbp, 'credit_lbp': 0.0, 'debit_usd': amount_usd, 'credit_usd': 0.0, 'memo': f'سحب أرباح {month_period}'},
+                {'account_code': acc_credit, 'debit_lbp': 0.0, 'credit_lbp': amount_lbp, 'debit_usd': 0.0, 'credit_usd': amount_usd, 'memo': f'صادر من {src_label}'}
+            ],
+            reference_type='owner_drawings',
+            reference_id=drawing_id,
+            user_name=drawn_by
+        )
+    except Exception as e:
+        logger.warning(f"Error recording double entry for owner drawing: {e}")
+
+    # تسجيل في سجل الحركة المالية المركزي
+    try:
+        record_financial_ledger_entry(
+            entry_type='owner_withdrawal',
+            source=source,
+            destination='owner',
+            amount_lbp=amount_lbp,
+            amount_usd=amount_usd,
+            reference_table='owner_drawings',
+            reference_id=drawing_id,
+            user_name=drawn_by,
+            notes=f"مسحوبات أرباح المالك ({month_period}): {notes}",
+            exchange_rate=rate,
+            business_date=get_business_date()
+        )
+    except Exception as e:
+        logger.warning(f"Error recording financial ledger for owner drawing: {e}")
+
+    # جلب الوضع الجديد الفوري بعد الخصم
+    updated_drawer = get_drawer_cash_status()
+    updated_safe = get_safe_balance()
+
+    return {
+        'success': True,
+        'drawing_id': drawing_id,
+        'amount_lbp': amount_lbp,
+        'amount_usd': amount_usd,
+        'source': source,
+        'month_period': month_period,
+        'drawer_remaining_lbp': updated_drawer.get('total_untransferred_lbp', 0.0),
+        'safe_balance_lbp': updated_safe.get('total_lbp', 0.0),
+        'message': f"تم خصم سحب الأرباح بقيمة {amount_lbp:,.0f} ل.ل بنجاح من {src_label}"
+    }
+
+
+def get_owner_drawings(start_date=None, end_date=None, month_period=None, source=None):
+    """جلب سجل مسحوبات أرباح المالك مع الفلاتر الزمنية."""
+    conn = get_db()
+    cursor = conn.cursor()
+    query = "SELECT * FROM owner_drawings WHERE (status != 'cancelled' OR status IS NULL)"
+    params = []
+    if month_period:
+        query += " AND month_period = ?"
+        params.append(month_period)
+    if start_date and end_date:
+        query += " AND DATE(datetime(created_at, '-5 hours')) >= DATE(?) AND DATE(datetime(created_at, '-5 hours')) <= DATE(?)"
+        params.extend([start_date, end_date])
+    elif start_date:
+        query += " AND DATE(datetime(created_at, '-5 hours')) = DATE(?)"
+        params.append(start_date)
+    if source:
+        query += " AND source = ?"
+        params.append(source)
+    query += " ORDER BY id DESC"
+    cursor.execute(query, params)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def cancel_owner_drawing(drawing_id: int, cancelled_by: str = 'المدير', reason: str = 'إلغاء مسحوبات المالك بواسطة الإدارة') -> bool:
+    """إلغاء عملية سحب أرباح المالك وعكس القيد المحاسبي لإعادة الرصيد إلى الدرج أو الخزنة."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM owner_drawings WHERE id = ?", (drawing_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise ValueError("سجل مسحوبات المالك غير موجود.")
+    drawing = dict(row)
+    if drawing.get('status') == 'cancelled':
+        conn.close()
+        return True
+
+    now_str = get_local_now()
+    cursor.execute("""
+        UPDATE owner_drawings 
+        SET status = 'cancelled', cancelled_by = ?, cancelled_at = ?, cancel_reason = ?
+        WHERE id = ?
+    """, (cancelled_by, now_str, reason, drawing_id))
+    conn.commit()
+    conn.close()
+
+    source = drawing.get('source') or 'drawer'
+    amount_lbp = float(drawing.get('amount_lbp') or 0.0)
+    amount_usd = float(drawing.get('amount_usd') or 0.0)
+    acc_target = '1010' if source == 'drawer' else '1020'
+    src_label = 'درج الكاشير' if source == 'drawer' else 'الخزنة الخاصة'
+
+    # عكس القيد في اليومية
+    try:
+        record_double_entry_journal(
+            description=f"عكس وإلغاء مسحوبات المالك رقم #{drawing_id}: {reason} - إعادة إلى {src_label}",
+            lines=[
+                {'account_code': acc_target, 'debit_lbp': amount_lbp, 'credit_lbp': 0.0, 'debit_usd': amount_usd, 'credit_usd': 0.0, 'memo': f'إلغاء مسحوبات وإعادة إلى {src_label}'},
+                {'account_code': '3030', 'debit_lbp': 0.0, 'credit_lbp': amount_lbp, 'debit_usd': 0.0, 'credit_usd': amount_usd, 'memo': f'عكس مسحوبات أرباح المالك #{drawing_id}'}
+            ],
+            reference_type='cancel_owner_drawing',
+            reference_id=drawing_id,
+            user_name=cancelled_by
+        )
+    except Exception as e:
+        logger.warning(f"Error recording reversal journal for owner drawing #{drawing_id}: {e}")
+
+    # عكس القيد في السجل المالي
+    try:
+        record_financial_ledger_entry(
+            entry_type='owner_withdrawal_cancelled',
+            source='owner',
+            destination=source,
+            amount_lbp=amount_lbp,
+            amount_usd=amount_usd,
+            reference_table='owner_drawings',
+            reference_id=drawing_id,
+            user_name=cancelled_by,
+            notes=f"إلغاء مسحوبات أرباح المالك #{drawing_id}: {reason}",
+            business_date=get_business_date()
+        )
+    except Exception as e:
+        logger.warning(f"Error recording financial ledger for cancelled owner drawing: {e}")
+
+    # تحديث الكاش الفعلي
+    get_drawer_cash_status()
+    get_safe_balance()
+    return True
 
 
 # =========================================================================
@@ -5027,7 +5257,7 @@ def get_drawer_cash_status():
 def check_daily_safe_transfer_status(target_date=None):
     """
     يفحص ما إذا كان كاش اليوم أو تاريخ محدد قد تم ترحيله إلى الخزنة الخاصة بالفعل أم لا،
-    ويحسب صافي الكاش المتاح للترحيل (المبيعات النقدية - المصاريف النقدية).
+    ويحسب صافي الكاش المتاح للترحيل (المبيعات النقدية - المصاريف النقدية - مسحوبات المالك من الدرج).
     """
     target_date = target_date or get_business_date()
     settings = get_settings()
@@ -5087,6 +5317,16 @@ def check_daily_safe_transfer_status(target_date=None):
     total_expenses_lbp = float(exp_row.get('expenses_lbp') or 0.0)
     total_expenses_usd = float(exp_row.get('expenses_usd') or 0.0)
 
+    # 3b. مسحوبات أرباح المالك من الدرج لهذا اليوم (تخصم من الكاش المتاح للترحيل)
+    cursor.execute("""
+        SELECT COALESCE(SUM(amount_lbp), 0)
+        FROM owner_drawings
+        WHERE (DATE(datetime(created_at, '-5 hours')) = DATE(?) OR DATE(created_at) = DATE(?))
+          AND (source = 'drawer' OR source IS NULL)
+          AND (status != 'cancelled' OR status IS NULL)
+    """, (target_date, target_date))
+    owner_draw_day_lbp = float(cursor.fetchone()[0] or 0.0)
+
     # 4. مجموع ما تم ترحيله بالفعل لهذا التاريخ من الدرج إلى الخزنة
     already_transferred_lbp = sum(float(t.get('amount_lbp') or 0.0) for t in existing_transfers if t.get('source') != 'external')
     already_transferred_usd = sum(float(t.get('amount_usd') or 0.0) for t in existing_transfers if t.get('source') != 'external')
@@ -5094,7 +5334,7 @@ def check_daily_safe_transfer_status(target_date=None):
     conn.close()
 
     # صافي الكاش المتبقي للترحيل
-    net_day_cash_lbp = max(0.0, total_sales_lbp - total_expenses_lbp)
+    net_day_cash_lbp = max(0.0, total_sales_lbp - total_expenses_lbp - owner_draw_day_lbp)
     net_day_cash_usd = round(net_day_cash_lbp / rate, 2) if rate > 0 else 0.0
 
     rem_to_transfer_lbp = max(0.0, net_day_cash_lbp - already_transferred_lbp)
@@ -6855,109 +7095,122 @@ def get_active_coffee_batch():
     - سعر بيع الفنجان وربحه الصافي وهامش الربح
     - خسارة الفناجين التالفة المحسوبة فوراً
     - نقطة التعادل والأرباح المتوقعة
+    محمي بالكامل ضد Database Locked ومع ضمان إغلاق الاتصال try...finally
     """
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM coffee_bag_batches WHERE status = 'active' ORDER BY id DESC LIMIT 1")
-    row = cursor.fetchone()
-    if not row:
-        conn.close()
-        return None
-    d = dict(row)
-    sold = int(d.get('cups_sold') or 0)
-    damaged = int(d.get('cups_damaged') or 0)
-    tot = sold + damaged
-    c_lbp = float(d.get('cost_per_kg_lbp') or 0.0)
-    c_usd = float(d.get('cost_per_kg_usd') or 0.0)
+    conn = None
+    try:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM coffee_bag_batches WHERE status = 'active' ORDER BY id DESC LIMIT 1")
+        row = cursor.fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        sold = int(d.get('cups_sold') or 0)
+        damaged = int(d.get('cups_damaged') or 0)
+        tot = sold + damaged
+        c_lbp = float(d.get('cost_per_kg_lbp') or 0.0)
+        c_usd = float(d.get('cost_per_kg_usd') or 0.0)
 
-    # 1. المعيار الواقعي لإنتاجية الكيلو
-    expected_yield = float(d.get('expected_cups_yield') or d.get('prev_batch_cups') or 0.0)
-    prev_code = d.get('prev_batch_code')
-    prev_batch_id = d.get('prev_batch_id')
+        # 1. المعيار الواقعي لإنتاجية الكيلو
+        expected_yield = float(d.get('expected_cups_yield') or d.get('prev_batch_cups') or 0.0)
+        prev_code = d.get('prev_batch_code')
+        prev_batch_id = d.get('prev_batch_id')
 
-    # إذا كان المعيار غير واقعي (أقل من 30 فنجان أو غير موجود)، نعتمد آخر كيلو مكتمل طبيعي
-    if expected_yield < 30.0 or expected_yield > 150.0:
+        # إذا كان المعيار غير واقعي (أقل من 30 فنجان أو غير موجود)، نعتمد آخر كيلو مكتمل طبيعي
+        if expected_yield < 30.0 or expected_yield > 150.0:
+            cursor.execute("""
+                SELECT id, batch_code, total_cups, cups_sold, cups_damaged 
+                FROM coffee_bag_batches 
+                WHERE status = 'closed' AND total_cups >= 30
+                ORDER BY id DESC LIMIT 1
+            """)
+            prev_row = cursor.fetchone()
+            if prev_row:
+                p_tot = int(prev_row['total_cups'] or (int(prev_row['cups_sold'] or 0) + int(prev_row['cups_damaged'] or 0)))
+                expected_yield = float(p_tot) if p_tot >= 30 else 46.0
+                prev_code = prev_row['batch_code']
+                prev_batch_id = prev_row['id']
+            else:
+                expected_yield = 46.0
+                prev_code = 'معيار قياسي'
+                prev_batch_id = None
+
+            try:
+                cursor.execute("""
+                    UPDATE coffee_bag_batches 
+                    SET prev_batch_id = ?, prev_batch_code = ?, prev_batch_cups = ?, expected_cups_yield = ?,
+                        initial_cup_cost_lbp = ?, initial_cup_cost_usd = ?
+                    WHERE id = ?
+                """, (prev_batch_id, prev_code, int(expected_yield), expected_yield,
+                      round(c_lbp / expected_yield, 2), round(c_usd / expected_yield, 4), d['id']))
+                conn.commit()
+            except Exception:
+                pass
+
+        # 2. متوسط سعر بيع فنجان القهوة من قائمة المنيو
         cursor.execute("""
-            SELECT id, batch_code, total_cups, cups_sold, cups_damaged 
-            FROM coffee_bag_batches 
-            WHERE status = 'closed' AND total_cups >= 30
-            ORDER BY id DESC LIMIT 1
+            SELECT AVG(price_lbp) as avg_p, AVG(price_usd) as avg_u 
+            FROM cafe_items 
+            WHERE (is_coffee_bean_linked = 1 OR (is_coffee_bean_linked IS NULL AND name LIKE '%قهوة%')) AND name NOT LIKE '%دوبل%'
         """)
-        prev_row = cursor.fetchone()
-        if prev_row:
-            p_tot = int(prev_row['total_cups'] or (int(prev_row['cups_sold'] or 0) + int(prev_row['cups_damaged'] or 0)))
-            expected_yield = float(p_tot) if p_tot >= 30 else 46.0
-            prev_code = prev_row['batch_code']
-            prev_batch_id = prev_row['id']
-        else:
-            expected_yield = 46.0
-            prev_code = 'معيار قياسي'
-            prev_batch_id = None
+        cp_row = cursor.fetchone()
+        avg_cup_price_lbp = float(cp_row['avg_p'] or 70000.0) if cp_row and cp_row['avg_p'] else 70000.0
+        avg_cup_price_usd = float(cp_row['avg_u'] or 0.78) if cp_row and cp_row['avg_u'] else 0.78
 
-        cursor.execute("""
-            UPDATE coffee_bag_batches 
-            SET prev_batch_id = ?, prev_batch_code = ?, prev_batch_cups = ?, expected_cups_yield = ?,
-                initial_cup_cost_lbp = ?, initial_cup_cost_usd = ?
-            WHERE id = ?
-        """, (prev_batch_id, prev_code, int(expected_yield), expected_yield,
-              round(c_lbp / expected_yield, 2), round(c_usd / expected_yield, 4), d['id']))
-        conn.commit()
+        d['prev_batch_id'] = prev_batch_id
+        d['prev_batch_code'] = prev_code
+        d['prev_batch_cups'] = int(expected_yield)
+        d['expected_cups_yield'] = expected_yield
 
-    # 2. متوسط سعر بيع فنجان القهوة من قائمة المنيو
-    cursor.execute("""
-        SELECT AVG(price_lbp) as avg_p, AVG(price_usd) as avg_u 
-        FROM cafe_items 
-        WHERE (is_coffee_bean_linked = 1 OR (is_coffee_bean_linked IS NULL AND name LIKE '%قهوة%')) AND name NOT LIKE '%دوبل%'
-    """)
-    cp_row = cursor.fetchone()
-    avg_cup_price_lbp = float(cp_row['avg_p'] or 70000.0) if cp_row and cp_row['avg_p'] else 70000.0
-    avg_cup_price_usd = float(cp_row['avg_u'] or 0.78) if cp_row and cp_row['avg_u'] else 0.78
-    conn.close()
+        # تكلفة الفنجان المستخرجة من الكيلو
+        unit_cup_cost_lbp = round(c_lbp / expected_yield, 2) if expected_yield > 0 else 25293.0
+        unit_cup_cost_usd = round(c_usd / expected_yield, 4) if expected_yield > 0 else 0.28
+        grams_per_cup = round(1000.0 / expected_yield, 1) if expected_yield > 0 else 21.7
+        progress_pct = min(100, int((tot / expected_yield) * 100)) if expected_yield > 0 else 0
 
-    d['prev_batch_id'] = prev_batch_id
-    d['prev_batch_code'] = prev_code
-    d['prev_batch_cups'] = int(expected_yield)
-    d['expected_cups_yield'] = expected_yield
+        d['initial_cup_cost_lbp'] = unit_cup_cost_lbp
+        d['initial_cup_cost_usd'] = unit_cup_cost_usd
+        d['benchmark_cup_cost_lbp'] = unit_cup_cost_lbp
+        d['benchmark_cup_cost_usd'] = unit_cup_cost_usd
+        d['current_cost_per_cup_lbp'] = unit_cup_cost_lbp
+        d['current_cost_per_cup_usd'] = unit_cup_cost_usd
+        d['grams_per_cup'] = grams_per_cup
+        d['progress_pct'] = progress_pct
 
-    # تكلفة الفنجان المستخرجة من الكيلو
-    unit_cup_cost_lbp = round(c_lbp / expected_yield, 2) if expected_yield > 0 else 25293.0
-    unit_cup_cost_usd = round(c_usd / expected_yield, 4) if expected_yield > 0 else 0.28
-    grams_per_cup = round(1000.0 / expected_yield, 1) if expected_yield > 0 else 21.7
-    progress_pct = min(100, int((tot / expected_yield) * 100)) if expected_yield > 0 else 0
+        # خسارة التلف المحسوبة بدقة فوراً
+        loss_dmg_lbp = round(damaged * unit_cup_cost_lbp, 2)
+        loss_dmg_usd = round(damaged * unit_cup_cost_usd, 4)
+        d['loss_from_damage_lbp'] = loss_dmg_lbp
+        d['loss_from_damage_usd'] = loss_dmg_usd
+        d['total_cups_now'] = tot
 
-    d['initial_cup_cost_lbp'] = unit_cup_cost_lbp
-    d['initial_cup_cost_usd'] = unit_cup_cost_usd
-    d['benchmark_cup_cost_lbp'] = unit_cup_cost_lbp
-    d['benchmark_cup_cost_usd'] = unit_cup_cost_usd
-    d['current_cost_per_cup_lbp'] = unit_cup_cost_lbp
-    d['current_cost_per_cup_usd'] = unit_cup_cost_usd
-    d['grams_per_cup'] = grams_per_cup
-    d['progress_pct'] = progress_pct
+        # ربح الفنجان الصافي وهامش الربح
+        d['avg_cup_price_lbp'] = avg_cup_price_lbp
+        d['avg_cup_price_usd'] = avg_cup_price_usd
+        profit_cup_lbp = max(0.0, round(avg_cup_price_lbp - unit_cup_cost_lbp, 2))
+        profit_cup_usd = max(0.0, round(avg_cup_price_usd - unit_cup_cost_usd, 4))
+        d['profit_per_cup_lbp'] = profit_cup_lbp
+        d['profit_per_cup_usd'] = profit_cup_usd
+        d['cup_margin_pct'] = round((profit_cup_lbp / avg_cup_price_lbp * 100), 1) if avg_cup_price_lbp > 0 else 64.0
 
-    # خسارة التلف المحسوبة بدقة فوراً
-    loss_dmg_lbp = round(damaged * unit_cup_cost_lbp, 2)
-    loss_dmg_usd = round(damaged * unit_cup_cost_usd, 4)
-    d['loss_from_damage_lbp'] = loss_dmg_lbp
-    d['loss_from_damage_usd'] = loss_dmg_usd
-    d['total_cups_now'] = tot
+        # نقطة التعادل والأرباح المتوقعة
+        d['breakeven_cups'] = int(c_lbp / avg_cup_price_lbp) + (1 if c_lbp % avg_cup_price_lbp > 0 else 0) if avg_cup_price_lbp > 0 else 17
+        d['expected_revenue_lbp'] = round(expected_yield * avg_cup_price_lbp, 2)
+        d['expected_revenue_usd'] = round(expected_yield * avg_cup_price_usd, 2)
+        d['expected_net_profit_lbp'] = round(d['expected_revenue_lbp'] - c_lbp, 2)
+        d['expected_net_profit_usd'] = round(d['expected_revenue_usd'] - c_usd, 2)
 
-    # ربح الفنجان الصافي وهامش الربح
-    d['avg_cup_price_lbp'] = avg_cup_price_lbp
-    d['avg_cup_price_usd'] = avg_cup_price_usd
-    profit_cup_lbp = max(0.0, round(avg_cup_price_lbp - unit_cup_cost_lbp, 2))
-    profit_cup_usd = max(0.0, round(avg_cup_price_usd - unit_cup_cost_usd, 4))
-    d['profit_per_cup_lbp'] = profit_cup_lbp
-    d['profit_per_cup_usd'] = profit_cup_usd
-    d['cup_margin_pct'] = round((profit_cup_lbp / avg_cup_price_lbp * 100), 1) if avg_cup_price_lbp > 0 else 64.0
-
-    # نقطة التعادل والأرباح المتوقعة
-    d['breakeven_cups'] = int(c_lbp / avg_cup_price_lbp) + (1 if c_lbp % avg_cup_price_lbp > 0 else 0) if avg_cup_price_lbp > 0 else 17
-    d['expected_revenue_lbp'] = round(expected_yield * avg_cup_price_lbp, 2)
-    d['expected_revenue_usd'] = round(expected_yield * avg_cup_price_usd, 2)
-    d['expected_net_profit_lbp'] = round(d['expected_revenue_lbp'] - c_lbp, 2)
-    d['expected_net_profit_usd'] = round(d['expected_revenue_usd'] - c_usd, 2)
-
-    return d
+        return d
+    except Exception as e:
+        logger.error(f"Error in get_active_coffee_batch: {e}")
+        return None
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def open_coffee_bag(cost_kg_lbp=None, cost_kg_usd=None, employee_name='كاشير', notes='', auto_close_previous=True):
     """
@@ -7071,7 +7324,6 @@ def open_coffee_bag(cost_kg_lbp=None, cost_kg_usd=None, employee_name='كاشي�
             """, (c_lbp, now_str, now_str))
 
         conn.commit()
-        conn.close()
         return True, {
             'batch_id': batch_id,
             'batch_code': batch_code,
@@ -7085,8 +7337,14 @@ def open_coffee_bag(cost_kg_lbp=None, cost_kg_usd=None, employee_name='كاشي�
             'closed_previous': closed_info
         }
     except Exception as e:
-        conn.close()
+        logger.error(f"Error in open_coffee_bag: {e}")
         return False, str(e)
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def record_coffee_cups_sold(qty: int, revenue_lbp: float = 0.0, revenue_usd: float = 0.0, item_name: str = 'قهوة'):
     """تحديث فوري لعداد فناجين القهوة المبيعة للكيلو المفتوح حالياً."""
@@ -7121,11 +7379,16 @@ def record_coffee_cups_sold(qty: int, revenue_lbp: float = 0.0, revenue_usd: flo
             WHERE id = ?
         """, (new_sold, total_cups, new_rev_lbp, new_rev_usd, net_prof_lbp, net_prof_usd, active_batch['id']))
         conn.commit()
-        conn.close()
         return True, "تم تسجيل بيع الفناجين بنجاح"
     except Exception as e:
-        conn.close()
+        logger.error(f"Error in record_coffee_cups_sold: {e}")
         return False, str(e)
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def record_coffee_waste(qty: int = 1, reason: str = 'تلف أثناء التحضير', employee_name: str = 'كاشير', notes: str = ''):
     """
@@ -7189,7 +7452,6 @@ def record_coffee_waste(qty: int = 1, reason: str = 'تلف أثناء التح�
             WHERE id = ?
         """, (new_damaged, total_cups, net_prof_lbp, net_prof_usd, active_batch['id']))
         conn.commit()
-        conn.close()
 
         return True, {
             'waste_id': waste_id,
@@ -7203,8 +7465,14 @@ def record_coffee_waste(qty: int = 1, reason: str = 'تلف أثناء التح�
             'prev_batch_code': active_batch.get('prev_batch_code')
         }
     except Exception as e:
-        conn.close()
+        logger.error(f"Error in record_coffee_waste: {e}")
         return False, str(e)
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def close_coffee_bag(batch_id=None, employee_name='كاشير', notes=''):
     """
@@ -7263,8 +7531,6 @@ def close_coffee_bag(batch_id=None, employee_name='كاشير', notes=''):
         """, (now_str, emp, total_cups, cost_cup_lbp, cost_cup_usd, net_prof_lbp, net_prof_usd, combined_notes, b_id))
 
         conn.commit()
-        conn.close()
-
         return True, {
             'batch_id': b_id,
             'batch_code': batch['batch_code'],
@@ -7283,8 +7549,14 @@ def close_coffee_bag(batch_id=None, employee_name='كاشير', notes=''):
             'loss_damaged_usd': loss_damaged_usd
         }
     except Exception as e:
-        conn.close()
+        logger.error(f"Error in close_coffee_bag: {e}")
         return False, str(e)
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def get_coffee_dashboard_summary():
     """كشف إحصائي وتحليلي شامل لنظام القهوة والبن مع تقييم واضح لنتائج كل كيلو."""

@@ -209,6 +209,12 @@
                 </div>
                 {% endif %}
 
+                <button type="button" onclick="openOwnerWithdrawModal()"
+                        class="bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white font-black px-4 py-2.5 rounded-xl text-xs transition shadow-md shadow-purple-600/30 flex items-center gap-1.5 cursor-pointer active:scale-95">
+                    <span>💰</span>
+                    <span>سحب أرباح المالك (نهاية الشهر)</span>
+                </button>
+
                 <button type="button" onclick="focusManualSafeForm()"
                         class="bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-white font-bold px-3.5 py-2.5 rounded-xl text-xs transition border border-amber-500/30 flex items-center gap-1.5 cursor-pointer shadow-sm">
                     <i class="fa-solid fa-plus-circle"></i>
@@ -474,12 +480,172 @@
             </div>
         </div>
 
+        <!-- ========================================================================= -->
+        <!-- 💰 OWNER DRAWINGS SECTION (سجل مسحوبات أرباح المالك وتوزيعات الشركاء) -->
+        <!-- ========================================================================= -->
+        <div class="lg:col-span-3 mt-4">
+            <div class="bg-slate-900 border-2 border-purple-500/40 rounded-3xl overflow-hidden shadow-2xl">
+                <div class="p-4 border-b border-purple-500/20 bg-gradient-to-r from-slate-950 via-purple-950/40 to-slate-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-300 flex items-center justify-center text-xl font-black">💰</span>
+                        <div>
+                            <h3 class="font-black text-white text-base">سجل مسحوبات أرباح المالك وتوزيعات الشركاء (نهاية الشهر)</h3>
+                            <span class="text-xs text-slate-400">سجل محاسبي معتمد (حساب 3030) - يخصم فوراً من كاش الدرج أو الخزنة دون التأثير على مصاريف التشغيل</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="openOwnerWithdrawModal()" class="bg-purple-600 hover:bg-purple-500 text-white font-black px-3.5 py-2 rounded-xl text-xs transition flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer">
+                            <i class="fa-solid fa-plus-circle"></i>
+                            <span>سحب أرباح جديد</span>
+                        </button>
+                        <span class="text-xs bg-purple-950 text-purple-300 border border-purple-700/60 px-3 py-1 rounded-full font-bold">
+                            {{ owner_drawings|length }} مسحوبات
+                        </span>
+                    </div>
+                </div>
+
+                {% if owner_drawings %}
+                <div class="overflow-x-auto max-h-[450px]">
+                    <table class="w-full text-right text-xs">
+                        <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 uppercase sticky top-0 font-bold text-[11px]">
+                            <tr>
+                                <th class="p-3.5">الفترة / الشهر</th>
+                                <th class="p-3.5">تاريخ السحب</th>
+                                <th class="p-3.5">المصدر</th>
+                                <th class="p-3.5">المبلغ (ل.ل)</th>
+                                <th class="p-3.5">المقابل ($)</th>
+                                <th class="p-3.5">المستلم / الساحب</th>
+                                <th class="p-3.5">البيان والملاحظات</th>
+                                <th class="p-3.5">الحالة</th>
+                                <th class="p-3.5 w-16 text-center">إجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60 font-mono">
+                            {% for d in owner_drawings %}
+                            <tr class="hover:bg-slate-800/40 transition">
+                                <td class="p-3.5 font-bold text-purple-300">{{ d.month_period or '—' }}</td>
+                                <td class="p-3.5 text-slate-300">{{ d.created_at[:16] if d.created_at else '—' }}</td>
+                                <td class="p-3.5">
+                                    {% if d.source == 'drawer' %}
+                                    <span class="bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">💵 درج الكاشير</span>
+                                    {% else %}
+                                    <span class="bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded text-[10px] font-bold">🏦 الخزنة الخاصة</span>
+                                    {% endif %}
+                                </td>
+                                <td class="p-3.5 font-black text-sm text-purple-400 font-mono">
+                                    -{{ d.amount_lbp|format_currency }} <span class="text-[9px] font-normal text-slate-400">ل.ل</span>
+                                </td>
+                                <td class="p-3.5 font-bold text-purple-300 font-mono">-${{ "{:,.2f}".format(d.amount_usd or 0) }}</td>
+                                <td class="p-3.5 text-slate-200 font-sans font-bold">{{ d.drawn_by or 'المالك' }}</td>
+                                <td class="p-3.5 text-slate-300 font-sans max-w-xs truncate">{{ d.notes or 'سحب أرباح' }}</td>
+                                <td class="p-3.5 font-sans">
+                                    <span class="bg-emerald-950/70 text-emerald-300 border border-emerald-800/50 px-2 py-0.5 rounded text-[10px] font-bold">✓ مخصومة ومعتمدة</span>
+                                </td>
+                                <td class="p-3.5 text-center font-sans">
+                                    <form action="{{ url_for('cancel_owner_drawing_route', drawing_id=d.id) }}" method="POST"
+                                          onsubmit="var r = prompt('يرجى كتابة سبب إلغاء هذا السحب:'); if(r===null||r.trim()===''){ alert('يجب كتابة سبب الإلغاء!'); return false; } this.querySelector('input[name=cancel_reason]').value = r; return true;">
+                                        <input type="hidden" name="cancel_reason" value="">
+                                        <button type="submit" class="text-slate-400 hover:text-rose-400 transition text-xs bg-slate-800/60 hover:bg-rose-950/40 px-2 py-1 rounded border border-slate-700/50" title="إلغاء السحب وإعادة الرصيد">
+                                            إلغاء 🚫
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-8 text-center text-slate-500">
+                    <span class="text-3xl block mb-2">💰</span>
+                    <p class="font-bold text-xs">لا توجد مسحوبات أرباح مسجلة في هذه الفترة.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
     </div>
 
 </div>
 
+<!-- OWNER WITHDRAW MODAL (مودال سحب أرباح المالك) -->
+<div id="ownerWithdrawModal" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border-2 border-purple-500/60 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 relative">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2.5">
+                <span class="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-xl font-black">💰</span>
+                <div>
+                    <h3 class="font-black text-sm sm:text-base text-white">سحب أرباح المالك (نهاية الشهر)</h3>
+                    <span class="text-[10px] text-slate-400">خصم فوري من الدرج أو الخزنة مع توثيق محاسبي</span>
+                </div>
+            </div>
+            <button type="button" onclick="closeOwnerWithdrawModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-sm transition">✕</button>
+        </div>
+
+        <div class="bg-slate-950 p-3.5 rounded-2xl border border-purple-500/30 space-y-2 text-xs">
+            <div class="flex items-center justify-between">
+                <span class="text-slate-400 font-bold">💼 كاش الدرج المتوفر:</span>
+                <span class="text-emerald-400 font-mono font-black">{{ (drawer_status.total_untransferred_lbp or 0)|format_currency }} ل.ل</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <span class="text-slate-400 font-bold">🏦 رصيد الخزنة الخاصة:</span>
+                <span class="text-amber-400 font-mono font-black">{{ (balance.total_lbp or 0)|format_currency }} ل.ل</span>
+            </div>
+        </div>
+
+        <form action="{{ url_for('owner_withdraw') }}" method="POST" class="space-y-3 text-xs" onsubmit="var b=this.querySelector('button[type=submit]'); b.disabled=true; b.innerHTML='⏳ جاري السحب...';">
+            <div>
+                <label class="block text-slate-300 font-bold mb-1">مصدر السحب:</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-700 cursor-pointer hover:border-purple-500 transition">
+                        <input type="radio" name="source" value="drawer" checked class="text-purple-600 focus:ring-0">
+                        <span class="text-white font-bold text-xs">💵 درج الكاشير</span>
+                    </label>
+                    <label class="flex items-center gap-2 bg-slate-950 p-2.5 rounded-xl border border-slate-700 cursor-pointer hover:border-purple-500 transition">
+                        <input type="radio" name="source" value="safe" class="text-purple-600 focus:ring-0">
+                        <span class="text-white font-bold text-xs">🏦 الخزنة الخاصة</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="block text-slate-300 font-bold mb-1">المبلغ (بالليرة ل.ل):</label>
+                    <input type="number" name="amount_lbp" id="withdrawAmountLBP" step="any" placeholder="مثال: 5000000" class="w-full bg-slate-950 border border-slate-700 text-purple-300 font-mono font-bold rounded-xl px-3 py-2 text-sm focus:border-purple-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-bold mb-1">أو بالدولار ($):</label>
+                    <input type="number" name="amount_usd" id="withdrawAmountUSD" step="any" placeholder="مثال: 50" class="w-full bg-slate-950 border border-slate-700 text-emerald-400 font-mono font-bold rounded-xl px-3 py-2 text-sm focus:border-purple-500 focus:outline-none">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-bold mb-1">عن شهر (فترة الأرباح):</label>
+                <input type="month" name="month_period" value="{{ today_str[:7] }}" class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:border-purple-500 focus:outline-none" style="color-scheme: dark;">
+            </div>
+
+            <div>
+                <label class="block text-slate-300 font-bold mb-1">البيان والملاحظات:</label>
+                <input type="text" name="notes" placeholder="مثال: سحب أرباح نهاية الشهر" value="سحب أرباح نهاية شهر {{ today_str[:7] }}" class="w-full bg-slate-950 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:border-purple-500 focus:outline-none">
+            </div>
+
+            <button type="submit" class="w-full bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white font-black py-3 rounded-2xl transition shadow-xl text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95">
+                <span>💰 تأكيد سحب الأرباح وخصمها فوراً</span>
+            </button>
+        </form>
+    </div>
+</div>
+
 <script>
 const EXCHANGE_RATE = {{ rate or 89500 }};
+
+function openOwnerWithdrawModal() {
+    document.getElementById('ownerWithdrawModal').classList.remove('hidden');
+}
+
+function closeOwnerWithdrawModal() {
+    document.getElementById('ownerWithdrawModal').classList.add('hidden');
+}
 
 function setOpType(type) {
     const hidden = document.getElementById('safeOpType');
@@ -535,5 +701,12 @@ function focusManualSafeForm(amountLBP, note) {
     if (form) form.scrollIntoView({ behavior: 'smooth' });
     if (input) input.focus();
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    if (localStorage.getItem('open_owner_withdraw_modal') === '1' || window.location.hash === '#ownerWithdrawModal') {
+        localStorage.removeItem('open_owner_withdraw_modal');
+        openOwnerWithdrawModal();
+    }
+});
 </script>
 {% endblock %}

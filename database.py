@@ -50,6 +50,11 @@ def get_db() -> sqlite3.Connection:
     os.makedirs(DB_DIR, exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA synchronous = NORMAL")
+    except Exception:
+        pass
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA busy_timeout = 30000")
     conn.execute("PRAGMA temp_store = MEMORY")
@@ -371,6 +376,33 @@ def init_db(seed_items=False):
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
+
+    # ── Owner Drawings (مسحوبات المالك وتوزيع الأرباح الشهرية من الدرج أو الخزنة) ─────
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS owner_drawings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount_lbp REAL NOT NULL DEFAULT 0.0,
+        amount_usd REAL NOT NULL DEFAULT 0.0,
+        source TEXT DEFAULT 'drawer', -- 'drawer' (من الدرج) أو 'safe' (من الخزنة)
+        drawing_type TEXT DEFAULT 'monthly_profit', -- 'monthly_profit' (أرباح شهرية), 'personal' (مسحوبات شخصية), 'capital' (استرداد رأس مال)
+        month_period TEXT DEFAULT '', -- مثل '2026-10'
+        drawn_by TEXT DEFAULT 'المدير',
+        notes TEXT DEFAULT '',
+        exchange_rate REAL DEFAULT 89500.0,
+        status TEXT DEFAULT 'active', -- 'active', 'cancelled'
+        cancelled_by TEXT,
+        cancelled_at TIMESTAMP,
+        cancel_reason TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    try:
+        cursor.execute("ALTER TABLE owner_drawings ADD COLUMN cancelled_by TEXT")
+        cursor.execute("ALTER TABLE owner_drawings ADD COLUMN cancelled_at TIMESTAMP")
+        cursor.execute("ALTER TABLE owner_drawings ADD COLUMN cancel_reason TEXT")
+    except Exception:
+        pass
 
     # ── Shift Closings (إغلاق ومطابقة الورديات اليومية) ─────────────
     cursor.execute("""
@@ -873,6 +905,7 @@ def _seed_chart_of_accounts(cursor):
         # Equity (حقوق الملكية)
         ('3010', 'Owner Capital', 'رأس المال التأسيسي', 'equity', 'حقوق ملكية الكافيه والمشروع والعهدة الأساسية'),
         ('3020', 'Retained Earnings', 'الأرباح المبقاة والمدورة', 'equity', 'صافي أرباح السنوات والفترات السابقة المدورة'),
+        ('3030', 'Owner Drawings & Profit Distribution', 'مسحوبات المالك وتوزيع الأرباح', 'equity', 'سحوبات المالك النقدية للأرباح الشهرية والمسحوبات الشخصية من الدرج أو الخزنة'),
         
         # Revenues & Contra-Revenues (الإيرادات والخصومات)
         ('4010', 'Cafe & Beverage Sales Revenue', 'إيرادات مبيعات القهوة والمشروبات', 'revenue', 'مبيعات المنتجات الجاهزة والمصنعة'),
